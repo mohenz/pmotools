@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이슈·리스크 관리 — PMO 통제 시스템</title>
+<style>
+  :root{
+    --navy-900:#131c2e;
+    --navy-800:#1b2a4a;
+    --navy-700:#243a63;
+    --steel-500:#3d5a80;
+    --steel-300:#7d95b8;
+    --bg:#f3f5f8;
+    --surface:#ffffff;
+    --line:#e3e7ee;
+    --text-1:#1a1f2b;
+    --text-2:#5b6474;
+    --text-3:#909aab;
+    --critical:#b83b3b;
+    --critical-bg:#fbeaea;
+    --major:#c07d24;
+    --major-bg:#faf1e2;
+    --minor:#3f8f5f;
+    --minor-bg:#e9f5ee;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--text-1);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{ display:flex; min-height:100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:220px; flex:none;
+    background:var(--navy-900);
+    color:#dfe6f2;
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh;
+  }
+  .sidebar-brand{
+    padding:22px 20px 18px;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  .sidebar-brand .mark{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.14em;
+    color:var(--steel-300); text-transform:uppercase;
+  }
+  .sidebar-brand .title{
+    font-size:16px; font-weight:700; margin-top:6px; color:#fff;
+  }
+  .sidebar-nav{ padding:14px 10px; flex:1; }
+  .nav-item{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px; border-radius:8px; cursor:pointer;
+    color:#b9c4d8; font-size:13.5px; font-weight:500;
+    margin-bottom:2px; transition:background .12s, color .12s;
+    user-select:none;
+  }
+  .nav-item:hover{ background:rgba(255,255,255,0.06); color:#fff; }
+  .nav-item.active{ background:var(--steel-500); color:#fff; }
+  .nav-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.55; flex:none; }
+  .sidebar-foot{
+    padding:16px 20px; border-top:1px solid rgba(255,255,255,0.08);
+    font-size:11px; color:var(--text-3); line-height:1.6;
+  }
+
+  /* ---------- Main ---------- */
+  .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  .topbar{
+    height:62px; flex:none; background:var(--surface);
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 28px; position:sticky; top:0; z-index:5;
+  }
+  .topbar h1{ font-size:16px; font-weight:700; }
+  .topbar .sub{ font-size:12px; color:var(--text-2); margin-top:2px; }
+  .btn{
+    font-family:var(--sans); font-size:13px; font-weight:600;
+    padding:9px 16px; border-radius:7px; border:1px solid transparent;
+    cursor:pointer; transition:transform .08s, background .12s;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn-primary{ background:var(--navy-800); color:#fff; }
+  .btn-primary:hover{ background:var(--navy-700); }
+  .btn-ghost{ background:transparent; border-color:var(--line); color:var(--text-1); }
+  .btn-ghost:hover{ background:var(--bg); }
+  .btn-danger{ background:var(--critical-bg); color:var(--critical); }
+
+  .content{ padding:26px 28px 60px; max-width:1240px; }
+
+  /* ---------- KPI cards ---------- */
+  .kpi-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+  .kpi-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px;
+  }
+  .kpi-card .label{ font-size:12px; color:var(--text-2); font-weight:600; }
+  .kpi-card .value{ font-family:var(--mono); font-size:28px; font-weight:700; margin-top:8px; }
+  .kpi-card .value.critical{ color:var(--critical); }
+  .kpi-card .foot{ font-size:11.5px; color:var(--text-3); margin-top:4px; }
+
+  /* ---------- Panels ---------- */
+  .panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:20px 22px; margin-bottom:20px;
+  }
+  .panel-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
+  .panel-head h2{ font-size:14.5px; font-weight:700; }
+  .panel-head .note{ font-size:11.5px; color:var(--text-3); }
+
+  /* ---------- Heatmap ---------- */
+  .heatmap-wrap{ display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
+  .heatmap{
+    display:grid; grid-template-columns:64px repeat(3, 92px);
+    grid-template-rows:24px repeat(3, 64px); gap:4px; flex:none;
+  }
+  .hm-axis-label{ font-size:11px; color:var(--text-3); font-weight:600; display:flex; align-items:center; justify-content:center; }
+  .hm-cell{
+    border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform .1s; font-family:var(--mono);
+  }
+  .hm-cell:hover{ transform:scale(1.04); }
+  .hm-cell .n{ font-size:20px; font-weight:700; }
+  .hm-cell .l{ font-size:9.5px; opacity:.75; margin-top:1px; }
+  .heatmap-legend{ font-size:12px; color:var(--text-2); max-width:280px; }
+  .heatmap-legend p{ margin-bottom:8px; }
+  .heatmap-legend .lg-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .lg-swatch{ width:12px; height:12px; border-radius:3px; flex:none; }
+
+  /* ---------- Category bars ---------- */
+  .cat-list{ display:flex; flex-direction:column; gap:10px; }
+  .cat-row{ display:flex; align-items:center; gap:12px; }
+  .cat-name{ width:92px; font-size:12.5px; color:var(--text-2); flex:none; }
+  .cat-track{ flex:1; height:8px; background:var(--bg); border-radius:5px; overflow:hidden; }
+  .cat-fill{ height:100%; border-radius:5px; }
+  .cat-count{ width:26px; text-align:right; font-family:var(--mono); font-size:12px; font-weight:700; flex:none; }
+
+  /* ---------- Badges ---------- */
+  .badge{
+    display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
+    padding:3px 9px; border-radius:20px; white-space:nowrap;
+  }
+  .badge-critical{ background:var(--critical-bg); color:var(--critical); }
+  .badge-major{ background:var(--major-bg); color:var(--major); }
+  .badge-minor{ background:var(--minor-bg); color:var(--minor); }
+  .badge-neutral{ background:var(--bg); color:var(--text-2); }
+  .badge-type-issue{ background:#eef1fb; color:#3d4d9e; }
+  .badge-type-risk{ background:#fdeef4; color:#a3336b; }
+
+  /* ---------- Table ---------- */
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    text-align:left; font-size:11.5px; color:var(--text-3); font-weight:700;
+    text-transform:uppercase; letter-spacing:.03em; padding:0 10px 10px; border-bottom:1px solid var(--line);
+  }
+  tbody td{ padding:12px 10px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:middle; }
+  tbody tr{ cursor:pointer; transition:background .1s; }
+  tbody tr:hover{ background:var(--bg); }
+  .id-mono{ font-family:var(--mono); font-size:12px; color:var(--text-2); }
+  .stale-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--critical); margin-right:6px; }
+  .title-cell{ font-weight:600; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ---------- Filters ---------- */
+  .filter-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  select, input[type=text], input[type=number], input[type=date], textarea{
+    font-family:var(--sans); font-size:13px; padding:8px 11px;
+    border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--text-1);
+  }
+  select:focus, input:focus, textarea:focus{ outline:2px solid var(--steel-300); outline-offset:1px; }
+
+  /* ---------- Form ---------- */
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-grid.full{ grid-template-columns:1fr; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:12.5px; font-weight:700; color:var(--text-2); }
+  .field .hint{ font-size:11px; color:var(--text-3); font-weight:400; margin-top:-2px; }
+  .radio-group, .chip-group{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{
+    padding:7px 13px; border-radius:20px; border:1px solid var(--line); font-size:12.5px;
+    cursor:pointer; font-weight:600; color:var(--text-2); background:var(--surface);
+  }
+  .chip.selected{ background:var(--navy-800); color:#fff; border-color:var(--navy-800); }
+  .suggest-box{
+    margin-top:6px; padding:12px 14px; border-radius:9px; background:var(--bg);
+    font-size:12.5px; color:var(--text-2); display:flex; align-items:center; gap:10px;
+  }
+
+  /* ---------- Drawer ---------- */
+  .overlay{ position:fixed; inset:0; background:rgba(19,28,46,0.35); z-index:20; display:none; }
+  .overlay.open{ display:block; }
+  .drawer{
+    position:fixed; top:0; right:-520px; width:500px; height:100vh; background:var(--surface);
+    z-index:21; box-shadow:-8px 0 30px rgba(0,0,0,0.12); transition:right .22s ease; overflow-y:auto;
+  }
+  .drawer.open{ right:0; }
+  .drawer-head{ padding:22px 24px 14px; border-bottom:1px solid var(--line); }
+  .drawer-body{ padding:20px 24px 40px; }
+  .drawer-close{ float:right; background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-3); }
+  .history-item{ padding:10px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
+  .history-item .meta{ color:var(--text-3); font-size:11px; margin-bottom:3px; }
+
+  .empty{ text-align:center; padding:50px 20px; color:var(--text-3); font-size:13px; }
+  .empty .big{ font-size:32px; margin-bottom:10px; }
+
+  ::placeholder{ color:var(--text-3); }
+  @media (max-width:900px){
+    .sidebar{ display:none; }
+    .kpi-row{ grid-template-columns:repeat(2,1fr); }
+    .form-grid{ grid-template-columns:1fr; }
+    .drawer{ width:100%; right:-100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============ 도메인 상수 (거버넌스 매뉴얼 6장 기준) ============ */
+const CATEGORIES = [
+  {key:'schedule', label:'일정', color:'#3d5a80'},
+  {key:'cost', label:'비용', color:'#b83b3b'},
+  {key:'quality', label:'품질', color:'#c07d24'},
+  {key:'org', label:'조직/정치', color:'#7d4fae'},
+  {key:'contract', label:'계약', color:'#1b2a4a'},
+  {key:'reputation', label:'대외 평판', color:'#a3336b'},
+];
+const TRACKS = ['Track A','Track B','Track C','Track D','공통/PMO'];
+const PROB = [{key:'low',label:'하',w:1},{key:'mid',label:'중',w:2},{key:'high',label:'상',w:3}];
+const IMPACT = [{key:'low',label:'하',w:1},{key:'mid',label:'중',w:2},{key:'high',label:'상',w:3}];
+const STATUS = ['등록','진행중','해결','보류'];
+const LEVELS = [
+  {key:'pm', label:'PM 레벨', badge:'badge-minor'},
+  {key:'dept', label:'본부장 레벨', badge:'badge-major'},
+  {key:'clevel', label:'C-Level 레벨', badge:'badge-critical'},
+];
+const STORE_KEY = 'issue-risk-records';
+
+/* ============ 상태 ============ */
+let records = [];
+let loaded = false;
+let view = 'dashboard';
+let filters = { type:'all', status:'all', category:'all', q:'' };
+let drawerId = null;
+let heatmapFilter = null; // {prob,impact}
+
+/* ============ 저장소 ============ */
+async function loadRecords(){
+  try{
+    const res = await window.storage.get(STORE_KEY, true);
+    records = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){
+    records = [];
+  }
+  loaded = true;
+}
+async function saveRecords(){
+  try{
+    await window.storage.set(STORE_KEY, JSON.stringify(records), true);
+  }catch(e){
+    console.error('저장 실패', e);
+  }
+}
+
+/* ============ 유틸 ============ */
+function uid(){
+  const n = records.length + 1;
+  return 'IR-' + String(n).padStart(4,'0') + '-' + Math.random().toString(36).slice(2,5).toUpperCase();
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function daysSince(dateStr){
+  const d = new Date(dateStr); const now = new Date();
+  return Math.floor((now - d) / (1000*60*60*24));
+}
+function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[0]; }
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function probLabel(key){ return (PROB.find(p=>p.key===key)||{}).label || '-'; }
+function impactLabel(key){ return (IMPACT.find(p=>p.key===key)||{}).label || '-'; }
+function levelInfo(key){ return LEVELS.find(l=>l.key===key) || LEVELS[0]; }
+function isOpen(r){ return r.status==='등록' || r.status==='진행중'; }
+function isStale(r){ return isOpen(r) && daysSince(r.updatedAt) >= 3; }
+
+function suggestLevel(probKey, impactKey, type){
+  const pw = type==='issue' ? 3 : ((PROB.find(p=>p.key===probKey)||{}).w || 1);
+  const iw = (IMPACT.find(p=>p.key===impactKey)||{}).w || 1;
+  const score = pw * iw;
+  if(score >= 7) return 'clevel';
+  if(score >= 4) return 'dept';
+  return 'pm';
+}
+
+/* ============ 렌더 루트 ============ */
+function render(){
+  const active = document.activeElement;
+  let activeSel = null, selStart = null, selEnd = null;
+  if(active && active.dataset){
+    if(active.dataset.filter) activeSel = `[data-filter="${active.dataset.filter}"]`;
+    else if(active.dataset.field) activeSel = `[data-field="${active.dataset.field}"]`;
+    if(typeof active.selectionStart === 'number'){ selStart = active.selectionStart; selEnd = active.selectionEnd; }
+  }
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    ${renderSidebar()}
+    <div class="main">
+      ${renderTopbar()}
+      <div class="content">
+        ${!loaded ? renderLoading() : (
+          view==='dashboard' ? renderDashboard() :
+          view==='register' ? renderRegisterForm() :
+          renderList()
+        )}
+      </div>
+    </div>
+    ${renderDrawer()}
+  `;
+  bindEvents();
+
+  if(activeSel){
+    const el = document.querySelector(activeSel);
+    if(el){
+      el.focus();
+      if(selStart!=null && el.setSelectionRange){ try{ el.setSelectionRange(selStart, selEnd); }catch(e){} }
+    }
+  }
+}
+
+function renderLoading(){
+  return `<div class="empty"><div class="big">⋯</div>데이터를 불러오는 중입니다</div>`;
+}
+
+/* ============ Sidebar ============ */
+function renderSidebar(){
+  const items = [
+    {key:'dashboard', label:'대시보드'},
+    {key:'register', label:'이슈·리스크 등록'},
+    {key:'list', label:'전체 목록'},
+  ];
+  return `
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">PMO CONTROL</div>
+      <div class="title">이슈·리스크 관리</div>
+    </div>
+    <div class="sidebar-nav">
+      ${items.map(it => `
+        <div class="nav-item ${view===it.key?'active':''}" data-nav="${it.key}">
+          <span class="nav-dot"></span>${it.label}
+        </div>`).join('')}
+    </div>
+    <div class="sidebar-foot">
+      전체 인력 100명+ / 멀티벤더 프로젝트<br>
+      3영업일 미해결 시 자동 에스컬레이션 표시
+    </div>
+  </div>`;
+}
+
+/* ============ Topbar ============ */
+function renderTopbar(){
+  const titles = {
+    dashboard: ['대시보드', '이슈/리스크 현황 요약 및 리스크 매트릭스'],
+    register: ['이슈·리스크 등록', '유형/확률/영향도 입력 시 에스컬레이션 레벨을 자동 제안합니다'],
+    list: ['전체 목록', '등록된 모든 이슈·리스크를 조회·필터링합니다'],
+  };
+  const [t, s] = titles[view];
+  return `
+  <div class="topbar">
+    <div><h1>${t}</h1><div class="sub">${s}</div></div>
+    <button class="btn btn-primary" data-nav="register">+ 신규 등록</button>
+  </div>`;
+}
+
+/* ============ Dashboard ============ */
+function renderDashboard(){
+  const open = records.filter(isOpen);
+  const openIssues = open.filter(r=>r.type==='issue').length;
+  const openRisks = open.filter(r=>r.type==='risk').length;
+  const staleCount = records.filter(isStale).length;
+
+  const catCounts = CATEGORIES.map(c => ({...c, count: open.filter(r=>r.category===c.key).length}));
+  const maxCat = Math.max(1, ...catCounts.map(c=>c.count));
+
+  const grid = {};
+  PROB.slice().reverse().forEach(p => IMPACT.forEach(i => grid[p.key+'|'+i.key] = 0));
+  open.forEach(r => {
+    const pk = r.type==='issue' ? 'high' : (r.probability||'mid');
+    const ik = r.impact || 'mid';
+    const k = pk+'|'+ik;
+    if(k in grid) grid[k]++;
+  });
+  function cellColor(count){
+    if(count===0) return {bg:'#eef1f5', fg:'#a7b0bf'};
+    if(count<=1) return {bg:'var(--minor-bg)', fg:'var(--minor)'};
+    if(count<=3) return {bg:'var(--major-bg)', fg:'var(--major)'};
+    return {bg:'var(--critical-bg)', fg:'var(--critical)'};
+  }
+
+  return `
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="label">전체 등록 건수</div><div class="value">${records.length}</div><div class="foot">이슈+리스크 누적</div></div>
+    <div class="kpi-card"><div class="label">미해결 이슈</div><div class="value">${openIssues}</div><div class="foot">등록/진행중 상태</div></div>
+    <div class="kpi-card"><div class="label">미해결 리스크</div><div class="value">${openRisks}</div><div class="foot">등록/진행중 상태</div></div>
+    <div class="kpi-card"><div class="label">3일 이상 정체</div><div class="value ${staleCount>0?'critical':''}">${staleCount}</div><div class="foot">에스컬레이션 대상</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>리스크 매트릭스 (확률 × 영향)</h2><div class="note">셀 클릭 시 해당 조건으로 목록 필터링</div></div>
+    <div class="heatmap-wrap">
+      <div class="heatmap">
+        <div></div>
+        ${IMPACT.map(i=>`<div class="hm-axis-label">영향 ${i.label}</div>`).join('')}
+        ${PROB.slice().reverse().map(p => `
+          <div class="hm-axis-label">확률 ${p.label}</div>
+          ${IMPACT.map(i=>{
+            const count = grid[p.key+'|'+i.key];
+            const c = cellColor(count);
+            return `<div class="hm-cell" style="background:${c.bg};color:${c.fg}" data-heatcell="${p.key}|${i.key}">
+              <div class="n">${count}</div><div class="l">건</div>
+            </div>`;
+          }).join('')}
+        `).join('')}
+      </div>
+      <div class="heatmap-legend">
+        <p>확률 × 영향 점수가 높을수록(우상단) 에스컬레이션 레벨이 자동으로 C-Level까지 상향 제안됩니다. 이슈는 이미 발생한 사안이므로 확률을 '상' 고정으로 집계합니다.</p>
+        <div class="lg-row"><span class="lg-swatch" style="background:var(--minor-bg);border:1px solid var(--minor)"></span>1건 이하 — 낮음</div>
+        <div class="lg-row"><span class="lg-swatch" style="background:var(--major-bg);border:1px solid var(--major)"></span>2~3건 — 주의</div>
+        <div class="lg-row"><span class="lg-swatch" style="background:var(--critical-bg);border:1px solid var(--critical)"></span>4건 이상 — 위험 집중</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>유형별 미해결 현황</h2><div class="note">6.2 분류체계 기준</div></div>
+    <div class="cat-list">
+      ${catCounts.map(c => `
+        <div class="cat-row">
+          <div class="cat-name">${c.label}</div>
+          <div class="cat-track"><div class="cat-fill" style="width:${(c.count/maxCat*100)||0}%;background:${c.color}"></div></div>
+          <div class="cat-count">${c.count}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  ${staleCount>0 ? `
+  <div class="panel">
+    <div class="panel-head"><h2>⚠ 에스컬레이션 대상 (3영업일 이상 미해결)</h2></div>
+    ${renderTable(records.filter(isStale).slice(0,8))}
+  </div>` : ''}
+  `;
+}
+
+/* ============ Register Form ============ */
+let formState = { type:'issue', category:'schedule', title:'', desc:'', track:TRACKS[0],
+  probability:'mid', impact:'mid', amount:'', owner:'', level:null };
+
+function renderRegisterForm(){
+  const suggested = suggestLevel(formState.probability, formState.impact, formState.type);
+  const lv = levelInfo(formState.level || suggested);
+  return `
+  <div class="panel" style="max-width:760px">
+    <form id="reg-form">
+      <div class="form-grid full" style="margin-bottom:16px">
+        <div class="field">
+          <label>구분</label>
+          <div class="chip-group" data-chipgroup="type">
+            <div class="chip ${formState.type==='issue'?'selected':''}" data-chip="issue">이슈 (이미 발생)</div>
+            <div class="chip ${formState.type==='risk'?'selected':''}" data-chip="risk">리스크 (잠재 사안)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="field">
+          <label>유형</label>
+          <select data-field="category">
+            ${CATEGORIES.map(c=>`<option value="${c.key}" ${formState.category===c.key?'selected':''}>${c.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>관련 Track</label>
+          <select data-field="track">
+            ${TRACKS.map(t=>`<option ${formState.track===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid full" style="margin-bottom:16px">
+        <div class="field">
+          <label>제목</label>
+          <input type="text" data-field="title" placeholder="예: 결제 PG 연동 응답 지연" value="${esc(formState.title)}">
+        </div>
+      </div>
+      <div class="form-grid full" style="margin-bottom:16px">
+        <div class="field">
+          <label>상세 내용</label>
+          <textarea data-field="desc" rows="3" placeholder="현황, 원인, 파급 범위를 구체적으로 기술">${esc(formState.desc)}</textarea>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="field">
+          <label>발생 확률 ${formState.type==='issue'?'<span class="hint">(이슈는 상 고정)</span>':''}</label>
+          <div class="chip-group" data-chipgroup="probability">
+            ${PROB.map(p=>`<div class="chip ${formState.probability===p.key?'selected':''} ${formState.type==='issue'?'':''}" data-chip="${p.key}">${p.label}</div>`).join('')}
+          </div>
+        </div>
+        <div class="field">
+          <label>Financial/Schedule Exposure</label>
+          <div class="chip-group" data-chipgroup="impact">
+            ${IMPACT.map(i=>`<div class="chip ${formState.impact===i.key?'selected':''}" data-chip="${i.key}">${i.label}</div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:6px">
+        <div class="field">
+          <label>예상 손실액/영향 (자유 기술)</label>
+          <input type="text" data-field="amount" placeholder="예: 약 5천만원 / 일정 2주 지연" value="${esc(formState.amount)}">
+        </div>
+        <div class="field">
+          <label>담당자</label>
+          <input type="text" data-field="owner" placeholder="이름 / 소속" value="${esc(formState.owner)}">
+        </div>
+      </div>
+
+      <div class="suggest-box">
+        <span class="badge ${lv.badge}">${lv.label}</span>
+        <span>확률×영향 기준 제안된 에스컬레이션 레벨입니다. 필요 시 아래에서 직접 조정하세요.</span>
+      </div>
+      <div class="field" style="margin-top:10px; margin-bottom:20px">
+        <label>에스컬레이션 레벨 (수동 조정)</label>
+        <div class="chip-group" data-chipgroup="level">
+          ${LEVELS.map(l=>`<div class="chip ${(formState.level||suggested)===l.key?'selected':''}" data-chip="${l.key}">${l.label}</div>`).join('')}
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">등록하기</button>
+    </form>
+  </div>`;
+}
+
+/* ============ List ============ */
+function renderList(){
+  let rows = records.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  if(filters.type!=='all') rows = rows.filter(r=>r.type===filters.type);
+  if(filters.status!=='all') rows = rows.filter(r=>r.status===filters.status);
+  if(filters.category!=='all') rows = rows.filter(r=>r.category===filters.category);
+  if(filters.q) rows = rows.filter(r => (r.title+r.desc+r.owner).toLowerCase().includes(filters.q.toLowerCase()));
+  if(heatmapFilter){
+    rows = rows.filter(r => {
+      const pk = r.type==='issue' ? 'high' : (r.probability||'mid');
+      return pk===heatmapFilter.prob && (r.impact||'mid')===heatmapFilter.impact;
+    });
+  }
+  return `
+  <div class="filter-row">
+    <input type="text" placeholder="검색 (제목/내용/담당자)" data-filter="q" value="${esc(filters.q)}" style="min-width:220px">
+    <select data-filter="type">
+      <option value="all">전체 구분</option>
+      <option value="issue" ${filters.type==='issue'?'selected':''}>이슈</option>
+      <option value="risk" ${filters.type==='risk'?'selected':''}>리스크</option>
+    </select>
+    <select data-filter="category">
+      <option value="all">전체 유형</option>
+      ${CATEGORIES.map(c=>`<option value="${c.key}" ${filters.category===c.key?'selected':''}>${c.label}</option>`).join('')}
+    </select>
+    <select data-filter="status">
+      <option value="all">전체 상태</option>
+      ${STATUS.map(s=>`<option ${filters.status===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    ${heatmapFilter ? `<button class="btn btn-ghost" id="clear-heat">매트릭스 필터 해제 ×</button>` : ''}
+  </div>
+  <div class="panel" style="padding:14px 18px">
+    ${rows.length ? renderTable(rows) : `<div class="empty"><div class="big">＋</div>조건에 맞는 이슈·리스크가 없습니다</div>`}
+  </div>`;
+}
+
+function renderTable(rows){
+  return `
+  <table>
+    <thead><tr>
+      <th>ID</th><th>구분</th><th>유형</th><th>제목</th><th>Track</th>
+      <th>확률/영향</th><th>레벨</th><th>상태</th><th>담당</th><th>최종갱신</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r => {
+        const lv = levelInfo(r.level);
+        const stale = isStale(r);
+        return `
+        <tr data-open="${r.id}">
+          <td class="id-mono">${r.id}</td>
+          <td><span class="badge ${r.type==='issue'?'badge-type-issue':'badge-type-risk'}">${r.type==='issue'?'이슈':'리스크'}</span></td>
+          <td>${catInfo(r.category).label}</td>
+          <td class="title-cell">${esc(r.title)||'(제목 없음)'}</td>
+          <td>${r.track}</td>
+          <td class="id-mono">${r.type==='issue'?'상':probLabel(r.probability)} / ${impactLabel(r.impact)}</td>
+          <td><span class="badge ${lv.badge}">${lv.label}</span></td>
+          <td>${r.status}</td>
+          <td>${esc(r.owner)||'-'}</td>
+          <td>${stale?'<span class="stale-dot"></span>':''}${daysSince(r.updatedAt)}일 전</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+/* ============ Drawer (상세) ============ */
+function renderDrawer(){
+  const r = records.find(x=>x.id===drawerId);
+  if(!r) return `<div class="overlay"></div><div class="drawer"></div>`;
+  const lv = levelInfo(r.level);
+  return `
+  <div class="overlay open" id="drawer-overlay"></div>
+  <div class="drawer open">
+    <div class="drawer-head">
+      <button class="drawer-close" id="drawer-close">×</button>
+      <div class="id-mono" style="color:var(--text-3);font-size:12px">${r.id}</div>
+      <div style="font-size:17px;font-weight:700;margin-top:4px">${esc(r.title)||'(제목 없음)'}</div>
+      <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap">
+        <span class="badge ${r.type==='issue'?'badge-type-issue':'badge-type-risk'}">${r.type==='issue'?'이슈':'리스크'}</span>
+        <span class="badge badge-neutral">${catInfo(r.category).label}</span>
+        <span class="badge badge-neutral">${r.track}</span>
+        <span class="badge ${lv.badge}">${lv.label}</span>
+        ${isStale(r) ? '<span class="badge badge-critical">에스컬레이션 대상</span>' : ''}
+      </div>
+    </div>
+    <div class="drawer-body">
+      <div class="field" style="margin-bottom:16px">
+        <label>상세 내용</label>
+        <div style="font-size:13px;color:var(--text-2);white-space:pre-wrap">${esc(r.desc)||'-'}</div>
+      </div>
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="field"><label>확률 / 영향</label><div>${r.type==='issue'?'상':probLabel(r.probability)} / ${impactLabel(r.impact)}</div></div>
+        <div class="field"><label>예상 손실/영향</label><div>${esc(r.amount)||'-'}</div></div>
+      </div>
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="field"><label>담당자</label><div>${esc(r.owner)||'-'}</div></div>
+        <div class="field"><label>등록일</label><div>${r.createdAt}</div></div>
+      </div>
+
+      <div class="field" style="margin-bottom:16px">
+        <label>상태 변경</label>
+        <div class="chip-group" data-drawer-chip="status">
+          ${STATUS.map(s=>`<div class="chip ${r.status===s?'selected':''}" data-val="${s}">${s}</div>`).join('')}
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:20px">
+        <label>에스컬레이션 레벨 변경</label>
+        <div class="chip-group" data-drawer-chip="level">
+          ${LEVELS.map(l=>`<div class="chip ${r.level===l.key?'selected':''}" data-val="${l.key}">${l.label}</div>`).join('')}
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:10px">
+        <label>이력 / 코멘트 추가</label>
+        <textarea id="hist-input" rows="2" placeholder="조치 내용, 논의 결과 등을 기록하세요"></textarea>
+        <button class="btn btn-ghost" id="hist-add" style="align-self:flex-start;margin-top:6px">기록 추가</button>
+      </div>
+
+      <div>
+        <label style="font-size:12.5px;font-weight:700;color:var(--text-2)">이력</label>
+        ${(r.history||[]).slice().reverse().map(h => `
+          <div class="history-item">
+            <div class="meta">${h.date}</div>
+            ${esc(h.note)}
+          </div>`).join('') || '<div class="history-item" style="color:var(--text-3)">기록된 이력이 없습니다</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============ 이벤트 바인딩 ============ */
+function bindEvents(){
+  document.querySelectorAll('[data-nav]').forEach(el => {
+    el.addEventListener('click', () => { view = el.dataset.nav; heatmapFilter=null; render(); });
+  });
+
+  // form field 입력
+  document.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', () => { formState[el.dataset.field] = el.value; });
+  });
+
+  // chip 선택 (등록 폼)
+  document.querySelectorAll('[data-chipgroup]').forEach(group => {
+    group.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const key = group.dataset.chipgroup;
+        formState[key] = chip.dataset.chip;
+        if(key==='type' && chip.dataset.chip==='issue') formState.probability='high';
+        formState.level = null; // 재제안
+        render();
+      });
+    });
+  });
+
+  const form = document.getElementById('reg-form');
+  if(form){
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const now = todayStr();
+      const suggested = suggestLevel(formState.probability, formState.impact, formState.type);
+      const rec = {
+        id: uid(), type: formState.type, category: formState.category, title: formState.title,
+        desc: formState.desc, track: formState.track,
+        probability: formState.type==='issue' ? 'high' : formState.probability,
+        impact: formState.impact, amount: formState.amount, owner: formState.owner,
+        level: formState.level || suggested, status:'등록',
+        createdAt: now, updatedAt: now,
+        history: [{date:now, note:'최초 등록'}],
+      };
+      records.push(rec);
+      await saveRecords();
+      formState = { type:'issue', category:'schedule', title:'', desc:'', track:TRACKS[0],
+        probability:'mid', impact:'mid', amount:'', owner:'', level:null };
+      view = 'list';
+      render();
+    });
+  }
+
+  // 목록 필터
+  document.querySelectorAll('[data-filter]').forEach(el => {
+    el.addEventListener('input', () => { filters[el.dataset.filter] = el.value; render(); });
+    el.addEventListener('change', () => { filters[el.dataset.filter] = el.value; render(); });
+  });
+
+  // 히트맵 클릭
+  document.querySelectorAll('[data-heatcell]').forEach(el => {
+    el.addEventListener('click', () => {
+      const [prob, impact] = el.dataset.heatcell.split('|');
+      heatmapFilter = {prob, impact};
+      view = 'list';
+      filters = {type:'all', status:'all', category:'all', q:''};
+      render();
+    });
+  });
+  const clearHeat = document.getElementById('clear-heat');
+  if(clearHeat) clearHeat.addEventListener('click', () => { heatmapFilter=null; render(); });
+
+  // 테이블 행 클릭 -> 상세
+  document.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', () => { drawerId = el.dataset.open; render(); });
+  });
+  const closeBtn = document.getElementById('drawer-close');
+  if(closeBtn) closeBtn.addEventListener('click', () => { drawerId=null; render(); });
+  const overlay = document.getElementById('drawer-overlay');
+  if(overlay) overlay.addEventListener('click', () => { drawerId=null; render(); });
+
+  // 상세 drawer 내부 상태/레벨 변경
+  document.querySelectorAll('[data-drawer-chip]').forEach(group => {
+    group.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', async () => {
+        const r = records.find(x=>x.id===drawerId);
+        if(!r) return;
+        const field = group.dataset.drawerChip;
+        r[field] = chip.dataset.val;
+        r.updatedAt = todayStr();
+        r.history = r.history || [];
+        r.history.push({date: todayStr(), note: `${field==='status'?'상태':'에스컬레이션 레벨'} → ${chip.textContent} 변경`});
+        await saveRecords();
+        render();
+      });
+    });
+  });
+
+  const histAdd = document.getElementById('hist-add');
+  if(histAdd){
+    histAdd.addEventListener('click', async () => {
+      const input = document.getElementById('hist-input');
+      if(!input.value.trim()) return;
+      const r = records.find(x=>x.id===drawerId);
+      if(!r) return;
+      r.history = r.history || [];
+      r.history.push({date: todayStr(), note: input.value.trim()});
+      r.updatedAt = todayStr();
+      await saveRecords();
+      render();
+    });
+  }
+}
+
+/* ============ 초기화 ============ */
+(async function init(){
+  render(); // loading 표시
+  await loadRecords();
+  render();
+})();
+</script>
+</body>
+</html>

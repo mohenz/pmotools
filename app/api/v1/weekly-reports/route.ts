@@ -1,0 +1,3 @@
+import { NextRequest,NextResponse } from "next/server";import { getLocalContext } from "@/lib/server/context";import { listWeeklyReports,saveWeeklyReport } from "@/lib/server/work-management";import { mutationErrorResponse } from "@/lib/server/http";
+export async function GET(req:NextRequest){const {projectId}=getLocalContext();return NextResponse.json({data:await listWeeklyReports(projectId,req.nextUrl.searchParams.get("week")??undefined)});}
+export async function POST(req:NextRequest){const {projectId,userId}=getLocalContext();try{return NextResponse.json({data:await saveWeeklyReport(projectId,userId,await req.json())},{status:201});}catch(e){return mutationErrorResponse(e);}}

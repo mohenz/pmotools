@@ -1,0 +1,2 @@
+import { NextRequest,NextResponse } from "next/server";import { getLocalContext } from "@/lib/server/context";import { updateProjectWeekStatus } from "@/lib/server/work-management";import { mutationErrorResponse } from "@/lib/server/http";
+export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){const {projectId}=getLocalContext();try{const body=await req.json();return NextResponse.json({data:await updateProjectWeekStatus(projectId,(await params).id,body.status)});}catch(e){return mutationErrorResponse(e);}}

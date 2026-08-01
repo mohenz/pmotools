@@ -1,0 +1,3 @@
+import { NextRequest,NextResponse } from "next/server";import { getLocalContext } from "@/lib/server/context";import { createCalendarEvent,listCalendarEvents } from "@/lib/server/calendar";import { mutationErrorResponse } from "@/lib/server/http";
+export async function GET(req:NextRequest){const {projectId}=getLocalContext(),p=req.nextUrl.searchParams;return NextResponse.json({data:await listCalendarEvents(projectId,p.get("from")??new Date().toISOString().slice(0,10),p.get("to")??new Date().toISOString().slice(0,10))});}
+export async function POST(req:NextRequest){const {projectId,userId}=getLocalContext();try{return NextResponse.json({data:await createCalendarEvent(projectId,userId,await req.json())},{status:201});}catch(e){return mutationErrorResponse(e);}}

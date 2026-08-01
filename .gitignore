@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.local/
+.env.local
+database/.env.admin.local
+npm-debug.log*
+playwright-report/
+test-results/
+*.tsbuildinfo
