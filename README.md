@@ -27,6 +27,7 @@
 - 프로젝트 일정 등록·수정 및 목표일·이슈 통합 조회
 - 주간보고·실적·인력변동 Excel용 CSV 내보내기
 - 프로젝트정보 설정: 오픈 방식, 수행기간, 오픈일정, 발주·수행 조직, PMO 인원과 프로젝트 등급 관리
+- Supabase 원격 초기 스키마와 Vercel 서버리스 PostgreSQL 연결 설정
 
 ## 로컬 실행
 
@@ -42,6 +43,10 @@ npm.cmd run local
 
 `npm run local`은 필요한 경우 프로젝트 전용 DB를 생성하고 모든 migration을 적용한 뒤 웹 서버를 실행합니다. 로컬 비밀번호와 데이터는 Git에서 제외됩니다.
 
+## Supabase 준비
+
+원격 Supabase 프로젝트 생성 절차와 실행할 SQL은 [`supabase/README.md`](supabase/README.md)에 정리되어 있습니다. 애플리케이션 코드는 `DATABASE_URL`만 교체하면 로컬 PostgreSQL과 Supabase를 동일한 쿼리 계층으로 사용할 수 있습니다.
+
 ## 주요 명령
 
 ```powershell
@@ -56,5 +61,4 @@ npm.cmd run build
 ## 다음 개발 범위
 
 - Supabase Auth/RLS 어댑터
-- Supabase migration 호환성 검증
 - Vercel Preview/Production 환경 분리
