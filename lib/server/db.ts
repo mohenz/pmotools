@@ -25,15 +25,20 @@ function createPool() {
   });
 }
 
-export const db = globalForDb.projectToolPool ?? createPool();
-if (process.env.NODE_ENV !== "production") globalForDb.projectToolPool = db;
+function getPool() {
+  if (!globalForDb.projectToolPool) {
+    globalForDb.projectToolPool = createPool();
+  }
+
+  return globalForDb.projectToolPool;
+}
 
 export async function query<T extends QueryResultRow>(text: string, values: unknown[] = []) {
-  return db.query<T>(text, values);
+  return getPool().query<T>(text, values);
 }
 
 export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>) {
-  const client = await db.connect();
+  const client = await getPool().connect();
   try {
     await client.query("begin");
     const result = await work(client);

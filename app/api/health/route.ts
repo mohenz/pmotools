@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/server/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     await query("select 1");
@@ -9,4 +11,3 @@ export async function GET() {
     return NextResponse.json({ status: "error", database: "unavailable" }, { status: 503 });
   }
 }
-
