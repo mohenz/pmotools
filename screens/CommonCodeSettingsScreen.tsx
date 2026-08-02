@@ -71,10 +71,10 @@ export function CommonCodeSettingsScreen({ groups, selectedGroup, codes }: Props
           </nav>
           <form className="group-add" onSubmit={createGroup}>
             <h3>그룹 추가</h3>
-            <input name="code" aria-label="신규 그룹 코드" placeholder="그룹 코드" pattern="[A-Za-z][A-Za-z0-9_-]*" required maxLength={50} />
-            <input name="label" aria-label="신규 그룹 명칭" placeholder="그룹 명칭" required maxLength={100} />
-            <input name="description" aria-label="신규 그룹 설명" placeholder="설명 (선택)" maxLength={300} />
-            <input name="sortOrder" aria-label="신규 그룹 순서" type="number" min="0" max="9999" defaultValue="99" required />
+            <label>그룹 코드<input name="code" placeholder="예: category" pattern="[A-Za-z][A-Za-z0-9_-]*" required maxLength={50} /></label>
+            <label>그룹 명칭<input name="label" placeholder="예: 이슈 유형" required maxLength={100} /></label>
+            <label>설명<input name="description" placeholder="설명 (선택)" maxLength={300} /></label>
+            <label>표시 순서<input name="sortOrder" type="number" min="0" max="9999" defaultValue="99" required /></label>
             <button className="button secondary" type="submit" disabled={!!pending}>{pending === "create-group" ? "추가 중…" : "+ 그룹 추가"}</button>
           </form>
         </aside>
@@ -94,6 +94,9 @@ export function CommonCodeSettingsScreen({ groups, selectedGroup, codes }: Props
 
           <section className="panel code-group">
             <div className="panel-head"><div><h2>소속 코드</h2><p>이 그룹에서 사용할 코드만 한 곳에서 관리합니다.</p></div><span>{codes.length}개</span></div>
+            {codes.length > 0 && <div className={`code-row code-row-head ${escalation ? "with-score" : ""}`} aria-hidden="true">
+              <span>코드</span><span>명칭</span><span>순서</span>{escalation && <span>최소 점수</span>}<span>활성</span><span />
+            </div>}
             <div className={`code-list ${escalation ? "with-score" : ""}`}>
               {codes.map((code) => <form className={`code-row ${code.isActive ? "" : "inactive"}`} onSubmit={(event) => updateCode(event, code)} key={code.id}>
                 <span className="mono code-value">{code.code}</span>

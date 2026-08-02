@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CalendarDays, FileText, LayoutDashboard, Settings, ShieldAlert, TrendingUp, Users } from "lucide-react";
 
 export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
   const pathname = usePathname();
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   const tools = [
-    { href: "/portfolio", mark: "DB", label: "통합 현황", sub: "Portfolio", active: pathname.startsWith("/portfolio") },
-    { href: "/calendar", mark: "CL", label: "캘린더", sub: "Calendar", active: pathname.startsWith("/calendar") },
-    { href: "/", mark: "IR", label: "이슈 관리", sub: "Issue & Risk", active: pathname === "/" || pathname.startsWith("/items") },
-    { href: "/weekly-reports", mark: "WR", label: "주간보고", sub: "Weekly Report", active: pathname.startsWith("/weekly-reports") },
-    { href: "/weekly-progress", mark: "PR", label: "주간실적", sub: "Progress", active: pathname.startsWith("/weekly-progress") },
-    { href: "/staff-changes", mark: "ST", label: "인력변동", sub: "Staff", active: pathname.startsWith("/staff-changes") },
+    { href: "/portfolio", icon: LayoutDashboard, label: "통합 현황", sub: "Portfolio", active: pathname.startsWith("/portfolio") },
+    { href: "/calendar", icon: CalendarDays, label: "캘린더", sub: "Calendar", active: pathname.startsWith("/calendar") },
+    { href: "/", icon: ShieldAlert, label: "이슈 관리", sub: "Issue & Risk", active: pathname === "/" || pathname.startsWith("/items") },
+    { href: "/weekly-reports", icon: FileText, label: "주간보고", sub: "Weekly Report", active: pathname.startsWith("/weekly-reports") },
+    { href: "/weekly-progress", icon: TrendingUp, label: "주간실적", sub: "Progress", active: pathname.startsWith("/weekly-progress") },
+    { href: "/staff-changes", icon: Users, label: "인력변동", sub: "Staff", active: pathname.startsWith("/staff-changes") },
   ];
 
   if (area === "sidebar") {
@@ -21,7 +22,7 @@ export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
         <span className="sidebar-label">TOOLS</span>
         <nav className="tool-nav" aria-label="프로젝트 관리 도구">
           {tools.map((tool) => <Link className={tool.active ? "active" : ""} aria-current={tool.active ? "page" : undefined} href={tool.href} key={tool.href}>
-            <span className="tool-mark">{tool.mark}</span><span><strong>{tool.label}</strong><small>{tool.sub}</small></span>
+            <span className="tool-mark"><tool.icon aria-hidden="true" /></span><span><strong>{tool.label}</strong><small>{tool.sub}</small></span>
           </Link>)}
         </nav>
       </div>
@@ -29,7 +30,7 @@ export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
         <span className="sidebar-label">GLOBAL</span>
         <nav className="global-nav settings-tree" aria-label="설정 메뉴">
           <Link className={`settings-parent ${settingsActive ? "active" : ""}`} href="/settings/system">
-            <span className="tool-mark">ST</span><span>설정</span>
+            <span className="tool-mark"><Settings aria-hidden="true" /></span><span>설정</span>
           </Link>
         </nav>
       </div>

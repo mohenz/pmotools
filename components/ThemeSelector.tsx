@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 type ThemePreference = "light" | "dark" | "system";
 
-const options: { value: ThemePreference; label: string; description: string; mark: string }[] = [
-  { value: "light", label: "화이트 모드", description: "항상 밝은 업무 화면을 사용합니다.", mark: "☀" },
-  { value: "dark", label: "다크 모드", description: "항상 어두운 업무 화면을 사용합니다.", mark: "◐" },
-  { value: "system", label: "시스템 모드", description: "운영체제의 화면 모드를 자동으로 따릅니다.", mark: "A" },
+const options: { value: ThemePreference; label: string; description: string; icon: typeof Sun }[] = [
+  { value: "light", label: "화이트 모드", description: "항상 밝은 업무 화면을 사용합니다.", icon: Sun },
+  { value: "dark", label: "다크 모드", description: "항상 어두운 업무 화면을 사용합니다.", icon: Moon },
+  { value: "system", label: "시스템 모드", description: "운영체제의 화면 모드를 자동으로 따릅니다.", icon: Monitor },
 ];
 
 function resolveTheme(preference: ThemePreference) {
@@ -56,7 +57,7 @@ export function ThemeSelector() {
       <legend className="sr-only">화면 모드 선택</legend>
       {options.map((option) => <label className={`theme-option ${preference === option.value ? "selected" : ""}`} key={option.value}>
         <input type="radio" name="theme" value={option.value} checked={preference === option.value} onChange={() => selectTheme(option.value)} />
-        <span className="theme-mark" aria-hidden="true">{option.mark}</span>
+        <span className="theme-mark" aria-hidden="true"><option.icon /></span>
         <span><strong>{option.label}</strong><small>{option.description}</small></span>
       </label>)}
     </fieldset>

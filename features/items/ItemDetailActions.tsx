@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { impacts, probabilities, statusLabels } from "@/lib/domain/items";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ItemRow } from "@/lib/server/items";
@@ -43,7 +44,6 @@ export function ItemDetailActions({ item, options }: { item: ItemRow; options: O
   }
 
   async function archive() {
-    if (!window.confirm("이 항목을 목록에서 보관 처리하시겠습니까?")) return;
     if (await mutate(`/api/v1/items/${item.id}/archive`, "POST", {}, "archive")) router.push("/items");
   }
 
@@ -65,6 +65,21 @@ export function ItemDetailActions({ item, options }: { item: ItemRow; options: O
 
     <section className="panel comment-panel"><div className="panel-head"><h2>코멘트 추가</h2><span>조치 내용·논의 결과</span></div><form onSubmit={addComment}><textarea name="body" required maxLength={5000} rows={3} placeholder="조치 내용이나 논의 결과를 기록하세요." /><button className="button secondary" type="submit" disabled={!!pending}>{pending === "comment" ? "기록 중…" : "기록 추가"}</button></form></section>
     {message && <p className="form-error action-message" role="alert">{message}</p>}
-    <section className="danger-zone"><div><strong>항목 보관</strong><p>보관된 항목은 일반 목록과 대시보드에서 제외됩니다.</p></div><button className="button danger" type="button" disabled={!!pending} onClick={archive}>{pending === "archive" ? "처리 중…" : "보관 처리"}</button></section>
+    <section className="danger-zone"><div><strong>항목 보관</strong><p>보관된 항목은 일반 목록과 대시보드에서 제외됩니다.</p></div>
+      <AlertDialog.Root>
+        <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={!!pending}>{pending === "archive" ? "처리 중…" : "보관 처리"}</button></AlertDialog.Trigger>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="calendar-modal-backdrop" />
+          <AlertDialog.Content className="alert-dialog">
+            <AlertDialog.Title asChild><h2>이 항목을 보관 처리하시겠습니까?</h2></AlertDialog.Title>
+            <AlertDialog.Description asChild><p>보관하면 일반 목록과 대시보드에서 제외됩니다. 이후 필요 시 관리자가 복원할 수 있습니다.</p></AlertDialog.Description>
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+              <AlertDialog.Action asChild><button className="button danger" type="button" onClick={archive}>보관 처리</button></AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+    </section>
   </>;
 }

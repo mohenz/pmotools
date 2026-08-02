@@ -14,6 +14,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ko" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
+        <a className="skip-link" href="#main-content">본문 바로가기</a>
         <div className="app-shell">
           <aside className="sidebar">
             <Link className="brand" href="/portfolio" aria-label="PMO CONTROL 통합 현황으로 이동">
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <AppNavigation area="sidebar" />
             <div className="sidebar-foot">FIREBASE APP HOSTING<br />CLOUD FIRESTORE</div>
           </aside>
-          <main className="main"><AppNavigation area="workspace" />{children}</main>
+          <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" />{children}</main>
         </div>
       </body>
     </html>
