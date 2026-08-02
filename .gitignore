@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-ci/
 .local/
 .env.local
 database/.env.admin.local

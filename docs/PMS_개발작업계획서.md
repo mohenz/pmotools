@@ -1,5 +1,7 @@
 # PMS 개발작업계획서
 
+> **기술 기준 변경:** 기능 범위는 유지하되, 현재 운영 기술 기준은 Firebase App Hosting과 Cloud Firestore입니다. `FIREBASE_FIRESTORE_ARCHITECTURE.md`를 우선 적용합니다.
+
 > 프로젝트명: EPMS 프로젝트관리 시스템(PMS)  
 > 문서 버전: v1.0  
 > 작성일: 2026-07-31  

@@ -1,5 +1,7 @@
 # PMS 개발환경 아키텍처
 
+> **보관 문서:** 이 문서는 이전 Vercel/Supabase 검토안입니다. 현재 기준은 `FIREBASE_FIRESTORE_ARCHITECTURE.md`입니다.
+
 > 프로젝트: EPMS 프로젝트관리 시스템(PMS)  
 > 문서 버전: v1.0  
 > 작성일: 2026-07-31  
@@ -510,4 +512,3 @@ DB 마이그레이션과 애플리케이션은 하위 호환 순서로 배포한
 - [Vercel 환경변수](https://vercel.com/docs/environment-variables)
 - [Vercel 배포 환경](https://vercel.com/docs/deployments/environments)
 - [Vercel Functions 연결 풀링](https://examples.vercel.com/kb/guide/connection-pooling-with-functions)
-

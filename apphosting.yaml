@@ -1,18 +1,6 @@
 env:
-  - variable: DATABASE_URL
-    secret: DATABASE_URL
-    availability:
-      - RUNTIME
-  - variable: DATABASE_SSL
-    value: require
-    availability:
-      - RUNTIME
-  - variable: DATABASE_POOL_MAX
-    value: "3"
-    availability:
-      - RUNTIME
-  - variable: DATABASE_CONNECTION_TIMEOUT_MS
-    value: "10000"
+  - variable: FIRESTORE_DATABASE_ID
+    value: projectmgmtdb
     availability:
       - RUNTIME
   - variable: LOCAL_USER_ID

@@ -1,427 +1,46 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
 import { z } from "zod";
 import { riskScore } from "@/lib/domain/items";
-import { query, withTransaction } from "@/lib/server/db";
+import { businessDaysSince, getDb, getDocument, listDocuments, nowIso, projectCollection, projectRef, writeAuditLog } from "@/lib/server/db";
 
-const kindSchema = z.enum(["issue", "risk"]);
-const categorySchema = z.enum(["schedule", "cost", "quality", "organization", "contract", "reputation"]);
-const probabilitySchema = z.enum(["low", "medium", "high"]);
-const statusSchema = z.enum(["registered", "in_progress", "resolved", "on_hold"]);
-const escalationSchema = z.enum(["pm", "department_head", "c_level"]);
+const kindSchema=z.enum(["issue","risk"]),probabilitySchema=z.enum(["low","medium","high"]),statusSchema=z.enum(["registered","in_progress","resolved","on_hold"]);
+export const createItemSchema=z.object({kind:kindSchema,categoryCodeId:z.string().uuid(),trackCodeId:z.string().uuid(),title:z.string().trim().min(1).max(200),description:z.string().trim().max(10000).default(""),probability:probabilitySchema,impact:probabilitySchema,exposureText:z.string().trim().max(500).optional(),ownerText:z.string().trim().max(100).optional(),escalationCodeId:z.string().uuid().optional()});
+export const updateItemSchema=createItemSchema.omit({kind:true,escalationCodeId:true}).extend({version:z.number().int().positive()});
+export const statusUpdateSchema=z.object({status:statusSchema,version:z.number().int().positive()});
+export const escalationUpdateSchema=z.object({escalationCodeId:z.string().uuid(),version:z.number().int().positive()});
+export const commentSchema=z.object({body:z.string().trim().min(1).max(5000),version:z.number().int().positive()});
+export const archiveSchema=z.object({version:z.number().int().positive()});
 
-export const createItemSchema = z.object({
-  kind: kindSchema,
-  categoryCodeId: z.string().uuid(),
-  trackCodeId: z.string().uuid(),
-  title: z.string().trim().min(1).max(200),
-  description: z.string().trim().max(10_000).default(""),
-  probability: probabilitySchema,
-  impact: probabilitySchema,
-  exposureText: z.string().trim().max(500).optional(),
-  ownerText: z.string().trim().max(100).optional(),
-  escalationCodeId: z.string().uuid().optional(),
-});
+export class DomainError extends Error{constructor(public code:"FORBIDDEN"|"NOT_FOUND"|"VERSION_CONFLICT"|"DUPLICATE_CODE"|"LAST_ACTIVE_CODE"|"INVALID_CODE",message:string){super(message);}}
+export type ItemRow={id:string;displayId:string;projectId:string;trackCodeId:string;kind:"issue"|"risk";categoryCodeId:string;categoryCode:string;categoryLabel:string;title:string;description:string;probability:"low"|"medium"|"high";impact:"low"|"medium"|"high";exposureText:string|null;ownerText:string|null;escalationCodeId:string;escalationCode:string;escalationLabel:string;status:"registered"|"in_progress"|"resolved"|"on_hold";trackName:string;trackCode:string;ownerName:string|null;createdAt:string;updatedAt:string;resolvedAt:string|null;businessDaysIdle:number;isStale:boolean;version:number};
+export type ItemEventRow={id:string;eventType:"created"|"comment"|"status_changed"|"level_changed"|"edited"|"archived";actorName:string;body:string|null;beforeData:Record<string,unknown>|null;afterData:Record<string,unknown>|null;createdAt:string};
+export type ItemFilters={q?:string;kind?:string;status?:string;category?:string;probability?:string;impact?:string;open?:boolean;stale?:boolean;page?:number;pageSize?:number};
+type StoredItem={id:string;displayId:string;projectId:string;trackCodeId:string;kind:"issue"|"risk";categoryCodeId:string;title:string;description:string;probability:"low"|"medium"|"high";impact:"low"|"medium"|"high";exposureText:string|null;ownerText:string|null;ownerUserId:string|null;escalationCodeId:string;status:"registered"|"in_progress"|"resolved"|"on_hold";createdBy:string;version:number;createdAt:string;updatedAt:string;resolvedAt:string|null;archivedAt:string|null};
+type StoredCode={id:string;groupId:string;groupCode:string;code:string;label:string;sortOrder:number;isActive:boolean;minScore:number|null};
+type StoredEvent=ItemEventRow&{itemId:string;actorId:string};
 
-export const updateItemSchema = createItemSchema.omit({ kind: true, escalationCodeId: true }).extend({ version: z.number().int().positive() });
-export const statusUpdateSchema = z.object({ status: statusSchema, version: z.number().int().positive() });
-export const escalationUpdateSchema = z.object({ escalationCodeId: z.string().uuid(), version: z.number().int().positive() });
-export const commentSchema = z.object({ body: z.string().trim().min(1).max(5_000), version: z.number().int().positive() });
-export const archiveSchema = z.object({ version: z.number().int().positive() });
+async function projectConfig(projectId:string){const snapshot=await projectRef(projectId).get();return {staleBusinessDays:Number(snapshot.data()?.staleBusinessDays??3)};}
+async function enrich(projectId:string,items:StoredItem[]){const [codes,config]=await Promise.all([listDocuments<StoredCode>(projectId,"commonCodes"),projectConfig(projectId)]),codeMap=new Map(codes.map(code=>[code.id,code]));return items.map(item=>{const category=codeMap.get(item.categoryCodeId),track=codeMap.get(item.trackCodeId),escalation=codeMap.get(item.escalationCodeId),idle=businessDaysSince(item.updatedAt);return {id:item.id,displayId:item.displayId,projectId:item.projectId,trackCodeId:item.trackCodeId,kind:item.kind,categoryCodeId:item.categoryCodeId,categoryCode:category?.code??"",categoryLabel:category?.label??"-",title:item.title,description:item.description,probability:item.kind==="issue"?"high":item.probability,impact:item.impact,exposureText:item.exposureText,ownerText:item.ownerText,escalationCodeId:item.escalationCodeId,escalationCode:escalation?.code??"",escalationLabel:escalation?.label??"-",status:item.status,trackName:track?.label??"-",trackCode:track?.code??"",ownerName:item.ownerText,createdAt:item.createdAt,updatedAt:item.updatedAt,resolvedAt:item.resolvedAt,businessDaysIdle:idle,isStale:["registered","in_progress"].includes(item.status)&&idle>=config.staleBusinessDays,version:item.version} satisfies ItemRow;});}
+function filterItems(items:ItemRow[],filters:ItemFilters){const query=filters.q?.trim().toLocaleLowerCase("ko");return items.filter(item=>(!filters.kind||!kindSchema.options.includes(filters.kind as never)||item.kind===filters.kind)&&(!filters.status||!statusSchema.options.includes(filters.status as never)||item.status===filters.status)&&(!filters.category?.trim()||item.categoryCode===filters.category.trim())&&(!filters.probability||!probabilitySchema.options.includes(filters.probability as never)||item.probability===filters.probability)&&(!filters.impact||!probabilitySchema.options.includes(filters.impact as never)||item.impact===filters.impact)&&(!filters.open||["registered","in_progress"].includes(item.status))&&(!filters.stale||item.isStale)&&(!query||`${item.title} ${item.description} ${item.ownerName??""}`.toLocaleLowerCase("ko").includes(query)));}
 
-export class DomainError extends Error {
-  constructor(public code: "FORBIDDEN" | "NOT_FOUND" | "VERSION_CONFLICT" | "DUPLICATE_CODE" | "LAST_ACTIVE_CODE" | "INVALID_CODE", message: string) {
-    super(message);
-  }
-}
+export async function listTracks(projectId:string){const codes=await listDocuments<StoredCode>(projectId,"commonCodes");return codes.filter(code=>code.groupCode==="track"&&code.isActive).sort((a,b)=>a.sortOrder-b.sortOrder||a.label.localeCompare(b.label,"ko")).map(code=>({id:code.id,name:code.label}));}
+export async function listItems(projectId:string,filters:ItemFilters={}){const stored=(await listDocuments<StoredItem>(projectId,"items")).filter(item=>!item.archivedAt),items=filterItems(await enrich(projectId,stored),filters).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),pageSize=Math.min(100,Math.max(10,filters.pageSize??30)),total=items.length,totalPages=Math.max(1,Math.ceil(total/pageSize)),page=Math.min(Math.max(1,filters.page??1),totalPages);return {items:items.slice((page-1)*pageSize,page*pageSize),total,page,pageSize,totalPages};}
+export async function listItemsForExport(projectId:string,filters:ItemFilters={}){const stored=(await listDocuments<StoredItem>(projectId,"items")).filter(item=>!item.archivedAt);return filterItems(await enrich(projectId,stored),filters).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,10000);}
+export async function getItemDetail(projectId:string,itemId:string){const item=await getDocument<StoredItem>(projectId,"items",itemId);if(!item||item.archivedAt)return null;const [enriched,events]=await Promise.all([enrich(projectId,[item]),listDocuments<StoredEvent>(projectId,"itemEvents")]);return {item:enriched[0],events:events.filter(event=>event.itemId===itemId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(({itemId:_itemId,actorId:_actorId,...event})=>event)};}
+export async function getDashboard(projectId:string){const all=(await listDocuments<StoredItem>(projectId,"items")).filter(item=>!item.archivedAt),items=await enrich(projectId,all),open=items.filter(item=>["registered","in_progress"].includes(item.status)),codes=await listDocuments<StoredCode>(projectId,"commonCodes"),categories=codes.filter(code=>code.groupCode==="category"&&code.isActive).sort((a,b)=>a.sortOrder-b.sortOrder).map(code=>({category:code.code,label:code.label,count:open.filter(item=>item.categoryCodeId===code.id).length})),matrix=Array.from(open.reduce((map,item)=>{const key=`${item.probability}:${item.impact}`,current=map.get(key)??{probability:item.probability,impact:item.impact,count:0};current.count+=1;map.set(key,current);return map;},new Map<string,{probability:string;impact:string;count:number}>()).values());return {summary:{total:items.length,openIssues:open.filter(item=>item.kind==="issue").length,openRisks:open.filter(item=>item.kind==="risk").length,stale:open.filter(item=>item.isStale).length},matrix,categories,staleItems:open.filter(item=>item.isStale).sort((a,b)=>a.updatedAt.localeCompare(b.updatedAt)).slice(0,8)};}
 
-export type ItemRow = {
-  id: string;
-  displayId: string;
-  projectId: string;
-  trackCodeId: string;
-  kind: "issue" | "risk";
-  categoryCodeId: string;
-  categoryCode: string;
-  categoryLabel: string;
-  title: string;
-  description: string;
-  probability: "low" | "medium" | "high";
-  impact: "low" | "medium" | "high";
-  exposureText: string | null;
-  ownerText: string | null;
-  escalationCodeId: string;
-  escalationCode: string;
-  escalationLabel: string;
-  status: "registered" | "in_progress" | "resolved" | "on_hold";
-  trackName: string;
-  trackCode: string;
-  ownerName: string | null;
-  createdAt: string;
-  updatedAt: string;
-  resolvedAt: string | null;
-  businessDaysIdle: number;
-  isStale: boolean;
-  version: number;
-};
+async function assertWritePermission(projectId:string,userId:string,itemId?:string,requirePm=false){const [member,item]=await Promise.all([projectRef(projectId).collection("members").doc(userId).get(),itemId?getDocument<StoredItem>(projectId,"items",itemId):Promise.resolve(null)]),role=member.data()?.role,isManager=["pm","pmo_admin"].includes(role),owns=item?item.createdBy===userId||item.ownerUserId===userId:false;if(!member.exists||(requirePm?!isManager:!(isManager||(role==="member"&&(!itemId||owns)))))throw new DomainError("FORBIDDEN","이 작업을 수행할 권한이 없습니다.");}
+async function assertCommonCode(projectId:string,codeId:string,groupCode:string){const code=await getDocument<StoredCode>(projectId,"commonCodes",codeId);if(!code||code.groupCode!==groupCode||!code.isActive)throw new DomainError("INVALID_CODE","선택한 공통코드를 사용할 수 없습니다.");return code;}
+async function suggestedEscalationId(projectId:string,kind:"issue"|"risk",probability:"low"|"medium"|"high",impact:"low"|"medium"|"high"){const score=riskScore(kind,probability,impact),codes=await listDocuments<StoredCode>(projectId,"commonCodes"),match=codes.filter(code=>code.groupCode==="escalation_level"&&code.isActive&&(code.minScore??1)<=score).sort((a,b)=>(b.minScore??1)-(a.minScore??1)||b.sortOrder-a.sortOrder)[0];if(!match)throw new DomainError("INVALID_CODE","적용 가능한 에스컬레이션 공통코드가 없습니다.");return match.id;}
+function mutationError(item:StoredItem|null,version:number){if(!item||item.archivedAt)throw new DomainError("NOT_FOUND","항목을 찾을 수 없습니다.");if(item.version!==version)throw new DomainError("VERSION_CONFLICT","다른 사용자가 먼저 수정했습니다. 최신 내용을 다시 확인해 주세요.");}
+function asRecord(value:unknown){return value as Record<string,unknown>;}
 
-export type ItemEventRow = {
-  id: string;
-  eventType: "created" | "comment" | "status_changed" | "level_changed" | "edited" | "archived";
-  actorName: string;
-  body: string | null;
-  beforeData: Record<string, unknown> | null;
-  afterData: Record<string, unknown> | null;
-  createdAt: string;
-};
-
-export type ItemFilters = {
-  q?: string;
-  kind?: string;
-  status?: string;
-  category?: string;
-  probability?: string;
-  impact?: string;
-  open?: boolean;
-  stale?: boolean;
-  page?: number;
-  pageSize?: number;
-};
-
-const itemSelect = `
-  select item.id,
-         item.display_id as "displayId",
-         item.project_id as "projectId",
-         item.track_code_id as "trackCodeId",
-         item.kind,
-         item.category_code_id as "categoryCodeId",
-         category_code.code as "categoryCode",
-         category_code.label as "categoryLabel",
-         item.title,
-         item.description,
-         item.probability,
-         item.impact,
-         item.exposure_text as "exposureText",
-         item.owner_text as "ownerText",
-         item.escalation_code_id as "escalationCodeId",
-         escalation_code.code as "escalationCode",
-         escalation_code.label as "escalationLabel",
-         item.status,
-         track_code.label as "trackName",
-         track_code.code as "trackCode",
-         coalesce(owner.name, item.owner_text) as "ownerName",
-         item.created_at::text as "createdAt",
-         item.updated_at::text as "updatedAt",
-         item.resolved_at::text as "resolvedAt",
-         project_tool.business_days_since(item.updated_at, project.timezone) as "businessDaysIdle",
-         (item.status in ('registered', 'in_progress') and project_tool.business_days_since(item.updated_at, project.timezone) >= project.stale_business_days) as "isStale",
-         item.version
-  from project_tool.issue_risks item
-  join project_tool.projects project on project.id = item.project_id
-  join project_tool.common_codes category_code on category_code.id = item.category_code_id
-  join project_tool.common_codes track_code on track_code.id = item.track_code_id
-  join project_tool.common_codes escalation_code on escalation_code.id = item.escalation_code_id
-  left join project_tool.profiles owner on owner.id = item.owner_user_id
-`;
-
-function buildItemWhere(projectId: string, filters: ItemFilters) {
-  const values: unknown[] = [projectId];
-  const where = ["item.project_id = $1", "item.archived_at is null"];
-  const addEnum = (column: string, value: string | undefined, allowed: readonly string[]) => {
-    if (value && allowed.includes(value)) {
-      values.push(value);
-      where.push(`${column} = $${values.length}`);
-    }
-  };
-
-  addEnum("item.kind", filters.kind, kindSchema.options);
-  addEnum("item.status", filters.status, statusSchema.options);
-  if (filters.category?.trim()) {
-    values.push(filters.category.trim());
-    where.push(`category_code.code = $${values.length}`);
-  }
-  addEnum("case when item.kind = 'issue' then 'high' else item.probability::text end", filters.probability, probabilitySchema.options);
-  addEnum("item.impact", filters.impact, probabilitySchema.options);
-  if (filters.open) where.push("item.status in ('registered', 'in_progress')");
-  if (filters.stale) where.push("item.status in ('registered', 'in_progress') and project_tool.business_days_since(item.updated_at, project.timezone) >= project.stale_business_days");
-  if (filters.q?.trim()) {
-    values.push(`%${filters.q.trim()}%`);
-    where.push(`(item.title ilike $${values.length} or item.description ilike $${values.length} or coalesce(owner.name, item.owner_text, '') ilike $${values.length})`);
-  }
-  return { values, where };
-}
-
-export async function listTracks(projectId: string) {
-  const result = await query<{ id: string; name: string }>(
-    `select code.id,code.label as name from project_tool.common_codes code
-     join project_tool.common_code_groups group_master on group_master.id=code.group_id
-     where group_master.project_id=$1 and group_master.code='track' and group_master.is_active and code.is_active
-     order by code.sort_order,code.label`,
-    [projectId],
-  );
-  return result.rows;
-}
-
-export async function listItems(projectId: string, filters: ItemFilters = {}) {
-  const { values, where } = buildItemWhere(projectId, filters);
-  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 30));
-  const requestedPage = Math.max(1, filters.page ?? 1);
-  const countResult = await query<{ count: number }>(
-    `select count(*)::int as count ${itemSelect.slice(itemSelect.indexOf("from"))} where ${where.join(" and ")}`,
-    values,
-  );
-  const total = countResult.rows[0].count;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(requestedPage, totalPages);
-  values.push(pageSize, (page - 1) * pageSize);
-  const result = await query<ItemRow>(
-    `${itemSelect} where ${where.join(" and ")} order by item.updated_at desc limit $${values.length - 1} offset $${values.length}`,
-    values,
-  );
-  return { items: result.rows, total, page, pageSize, totalPages };
-}
-
-export async function listItemsForExport(projectId: string, filters: ItemFilters = {}) {
-  const { values, where } = buildItemWhere(projectId, filters);
-  const result = await query<ItemRow>(`${itemSelect} where ${where.join(" and ")} order by item.updated_at desc limit 10000`, values);
-  return result.rows;
-}
-
-export async function getItemDetail(projectId: string, itemId: string) {
-  const [itemResult, eventResult] = await Promise.all([
-    query<ItemRow>(`${itemSelect} where item.project_id = $1 and item.id = $2 and item.archived_at is null`, [projectId, itemId]),
-    query<ItemEventRow>(
-      `select event.id, event.event_type as "eventType", actor.name as "actorName", event.body,
-              event.before_data as "beforeData", event.after_data as "afterData", event.created_at::text as "createdAt"
-       from project_tool.item_events event
-       join project_tool.issue_risks item on item.id = event.item_id
-       join project_tool.profiles actor on actor.id = event.actor_id
-       where item.project_id = $1 and event.item_id = $2
-       order by event.created_at desc, event.id desc`,
-      [projectId, itemId],
-    ),
-  ]);
-  const item = itemResult.rows[0];
-  return item ? { item, events: eventResult.rows } : null;
-}
-
-export async function getDashboard(projectId: string) {
-  const [summary, matrix, categoryCounts, staleItems] = await Promise.all([
-    query<{ total: number; openIssues: number; openRisks: number; stale: number }>(
-      `select count(*)::int as total,
-              count(*) filter (where kind = 'issue' and status in ('registered','in_progress'))::int as "openIssues",
-              count(*) filter (where kind = 'risk' and status in ('registered','in_progress'))::int as "openRisks",
-              count(*) filter (where status in ('registered','in_progress') and project_tool.business_days_since(item.updated_at, project.timezone) >= project.stale_business_days)::int as stale
-       from project_tool.issue_risks item join project_tool.projects project on project.id = item.project_id
-       where item.project_id = $1 and item.archived_at is null`,
-      [projectId],
-    ),
-    query<{ probability: string; impact: string; count: number }>(
-      `select case when kind = 'issue' then 'high' else probability::text end as probability,
-              impact::text, count(*)::int as count
-       from project_tool.issue_risks
-       where project_id = $1 and archived_at is null and status in ('registered','in_progress')
-       group by 1, 2`, [projectId],
-    ),
-    query<{ category: string; label: string; count: number }>(
-      `select code.code as category, code.label, count(item.id)::int as count
-       from project_tool.common_codes code join project_tool.common_code_groups group_master on group_master.id=code.group_id
-       left join project_tool.issue_risks item on item.category_code_id=code.id and item.archived_at is null and item.status in ('registered','in_progress')
-       where group_master.project_id=$1 and group_master.code='category' and group_master.is_active and code.is_active
-       group by code.id,code.code,code.label,code.sort_order order by code.sort_order,code.label`, [projectId],
-    ),
-    query<ItemRow>(
-      `${itemSelect} where item.project_id = $1 and item.archived_at is null
-       and item.status in ('registered','in_progress')
-       and project_tool.business_days_since(item.updated_at, project.timezone) >= project.stale_business_days
-       order by item.updated_at asc limit 8`, [projectId],
-    ),
-  ]);
-  return { summary: summary.rows[0], matrix: matrix.rows, categories: categoryCounts.rows, staleItems: staleItems.rows };
-}
-
-async function getPermission(client: PoolClient, projectId: string, userId: string, itemId?: string) {
-  const result = await client.query<{ role: string; owns: boolean }>(
-    `select member.role::text,
-            case when $3::uuid is null then false else exists(
-              select 1 from project_tool.issue_risks item
-              where item.id = $3 and item.project_id = $1 and (item.created_by = $2 or item.owner_user_id = $2)
-            ) end as owns
-     from project_tool.project_members member
-     where member.project_id = $1 and member.user_id = $2`,
-    [projectId, userId, itemId ?? null],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function assertWritePermission(client: PoolClient, projectId: string, userId: string, itemId?: string, requirePm = false) {
-  const permission = await getPermission(client, projectId, userId, itemId);
-  const isManager = permission && ["pm", "pmo_admin"].includes(permission.role);
-  if (!permission || (requirePm ? !isManager : !(isManager || (permission.role === "member" && (!itemId || permission.owns))))) {
-    throw new DomainError("FORBIDDEN", "이 작업을 수행할 권한이 없습니다.");
-  }
-}
-
-async function setAuditContext(client: PoolClient, userId: string, requestId: string) {
-  await client.query(`select set_config('app.actor_id', $1, true), set_config('app.request_id', $2, true)`, [userId, requestId]);
-}
-
-async function assertCommonCode(client: PoolClient, projectId: string, codeId: string, groupCode: string) {
-  const result = await client.query(
-    `select 1 from project_tool.common_codes code join project_tool.common_code_groups group_master on group_master.id=code.group_id
-     where code.id=$1 and group_master.project_id=$2 and group_master.code=$3 and group_master.is_active and code.is_active`,
-    [codeId, projectId, groupCode],
-  );
-  if (!result.rowCount) throw new DomainError("INVALID_CODE", "선택한 공통코드를 사용할 수 없습니다.");
-}
-
-async function suggestedEscalationId(client: PoolClient, projectId: string, kind: "issue" | "risk", probability: "low" | "medium" | "high", impact: "low" | "medium" | "high") {
-  const score = riskScore(kind, probability, impact);
-  const result = await client.query<{ id: string }>(
-    `select code.id from project_tool.common_codes code join project_tool.common_code_groups group_master on group_master.id=code.group_id
-     where group_master.project_id=$1 and group_master.code='escalation_level' and group_master.is_active and code.is_active
-       and coalesce((code.metadata->>'minScore')::int,1) <= $2
-     order by coalesce((code.metadata->>'minScore')::int,1) desc,code.sort_order desc limit 1`,
-    [projectId, score],
-  );
-  if (!result.rowCount) throw new DomainError("INVALID_CODE", "적용 가능한 에스컬레이션 공통코드가 없습니다.");
-  return result.rows[0].id;
-}
-
-async function throwMutationFailure(client: PoolClient, projectId: string, itemId: string) {
-  const exists = await client.query(`select 1 from project_tool.issue_risks where project_id = $1 and id = $2 and archived_at is null`, [projectId, itemId]);
-  if (!exists.rowCount) throw new DomainError("NOT_FOUND", "항목을 찾을 수 없습니다.");
-  throw new DomainError("VERSION_CONFLICT", "다른 사용자가 먼저 수정했습니다. 최신 내용을 다시 확인해 주세요.");
-}
-
-export async function createItem(projectId: string, userId: string, input: unknown) {
-  const data = createItemSchema.parse(input);
-  const probability = data.kind === "issue" ? "high" : data.probability;
-  const requestId = randomUUID();
-  return withTransaction(async (client) => {
-    await assertWritePermission(client, projectId, userId);
-    await assertCommonCode(client, projectId, data.categoryCodeId, "category");
-    await assertCommonCode(client, projectId, data.trackCodeId, "track");
-    const escalationCodeId = data.escalationCodeId ?? await suggestedEscalationId(client, projectId, data.kind, probability, data.impact);
-    await assertCommonCode(client, projectId, escalationCodeId, "escalation_level");
-    await setAuditContext(client, userId, requestId);
-    const inserted = await client.query<{ id: string; displayId: string }>(
-      `insert into project_tool.issue_risks(project_id, track_code_id, category_code_id, escalation_code_id, kind, title, description, probability, impact,
-       exposure_text, owner_text, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-       returning id, display_id as "displayId"`,
-      [projectId, data.trackCodeId, data.categoryCodeId, escalationCodeId, data.kind, data.title, data.description, probability, data.impact,
-       data.exposureText || null, data.ownerText || null, userId],
-    );
-    await client.query(`insert into project_tool.item_events(item_id, event_type, actor_id, body) values ($1, 'created', $2, '신규 등록')`, [inserted.rows[0].id, userId]);
-    return { ...inserted.rows[0], requestId };
-  });
-}
-
-export async function updateItem(projectId: string, userId: string, itemId: string, input: unknown) {
-  const data = updateItemSchema.parse(input);
-  const requestId = randomUUID();
-  return withTransaction(async (client) => {
-    await assertWritePermission(client, projectId, userId, itemId);
-    await assertCommonCode(client, projectId, data.categoryCodeId, "category");
-    await assertCommonCode(client, projectId, data.trackCodeId, "track");
-    await setAuditContext(client, userId, requestId);
-    const before = await client.query(`select to_jsonb(item) as data from project_tool.issue_risks item where id = $1 and project_id = $2`, [itemId, projectId]);
-    const result = await client.query<{ version: number }>(
-      `update project_tool.issue_risks set track_code_id=$1, category_code_id=$2, title=$3, description=$4,
-       probability=case when kind='issue' then 'high' else $5::project_tool.probability_level end,
-       impact=$6, exposure_text=$7, owner_text=$8
-       where id=$9 and project_id=$10 and version=$11 and archived_at is null returning version`,
-      [data.trackCodeId, data.categoryCodeId, data.title, data.description, data.probability, data.impact,
-       data.exposureText || null, data.ownerText || null, itemId, projectId, data.version],
-    );
-    if (!result.rowCount) await throwMutationFailure(client, projectId, itemId);
-    const after = await client.query(`select to_jsonb(item) as data from project_tool.issue_risks item where id = $1`, [itemId]);
-    await client.query(`insert into project_tool.item_events(item_id,event_type,actor_id,body,before_data,after_data) values ($1,'edited',$2,'기본 정보 수정',$3,$4)`, [itemId, userId, before.rows[0]?.data, after.rows[0]?.data]);
-    return { version: result.rows[0].version, requestId };
-  });
-}
-
-export async function updateStatus(projectId: string, userId: string, itemId: string, input: unknown) {
-  const data = statusUpdateSchema.parse(input);
-  return updateSingleField(projectId, userId, itemId, data.version, "status", data.status, "status_changed", false);
-}
-
-export async function updateEscalation(projectId: string, userId: string, itemId: string, input: unknown) {
-  const data = escalationUpdateSchema.parse(input);
-  return withTransaction(async (client) => {
-    await assertWritePermission(client, projectId, userId, itemId, true);
-    await assertCommonCode(client, projectId, data.escalationCodeId, "escalation_level");
-    const requestId = randomUUID();
-    await setAuditContext(client, userId, requestId);
-    const labels = await client.query<{ beforeLabel: string; afterLabel: string }>(
-      `select current_code.label as "beforeLabel",new_code.label as "afterLabel"
-       from project_tool.issue_risks item join project_tool.common_codes current_code on current_code.id=item.escalation_code_id
-       join project_tool.common_codes new_code on new_code.id=$3 where item.id=$1 and item.project_id=$2`,
-      [itemId, projectId, data.escalationCodeId],
-    );
-    const result = await client.query<{ version: number }>(
-      `update project_tool.issue_risks set escalation_code_id=$1 where id=$2 and project_id=$3 and version=$4 and archived_at is null returning version`,
-      [data.escalationCodeId, itemId, projectId, data.version],
-    );
-    if (!result.rowCount) await throwMutationFailure(client, projectId, itemId);
-    await client.query(`insert into project_tool.item_events(item_id,event_type,actor_id,body,before_data,after_data) values($1,'level_changed',$2,'에스컬레이션 레벨 변경',$3,$4)`,
-      [itemId, userId, { value: labels.rows[0]?.beforeLabel }, { value: labels.rows[0]?.afterLabel }]);
-    return { version: result.rows[0].version, requestId };
-  });
-}
-
-async function updateSingleField(
-  projectId: string, userId: string, itemId: string, version: number,
-  field: "status", value: string, eventType: "status_changed", requirePm: boolean,
-) {
-  const requestId = randomUUID();
-  return withTransaction(async (client) => {
-    await assertWritePermission(client, projectId, userId, itemId, requirePm);
-    await setAuditContext(client, userId, requestId);
-    const before = await client.query<{ value: string }>(`select ${field}::text as value from project_tool.issue_risks where id=$1 and project_id=$2`, [itemId, projectId]);
-    const result = await client.query<{ version: number }>(
-      `update project_tool.issue_risks set ${field}=$1 where id=$2 and project_id=$3 and version=$4 and archived_at is null returning version`,
-      [value, itemId, projectId, version],
-    );
-    if (!result.rowCount) await throwMutationFailure(client, projectId, itemId);
-    await client.query(
-      `insert into project_tool.item_events(item_id,event_type,actor_id,body,before_data,after_data) values ($1,$2,$3,$4,$5,$6)`,
-      [itemId, eventType, userId, "상태 변경", { value: before.rows[0]?.value }, { value }],
-    );
-    return { version: result.rows[0].version, requestId };
-  });
-}
-
-export async function addComment(projectId: string, userId: string, itemId: string, input: unknown) {
-  const data = commentSchema.parse(input);
-  const requestId = randomUUID();
-  return withTransaction(async (client) => {
-    await assertWritePermission(client, projectId, userId, itemId);
-    await setAuditContext(client, userId, requestId);
-    const touched = await client.query<{ version: number }>(
-      `update project_tool.issue_risks set updated_at=now() where id=$1 and project_id=$2 and version=$3 and archived_at is null returning version`,
-      [itemId, projectId, data.version],
-    );
-    if (!touched.rowCount) await throwMutationFailure(client, projectId, itemId);
-    await client.query(`insert into project_tool.item_events(item_id,event_type,actor_id,body) values ($1,'comment',$2,$3)`, [itemId, userId, data.body]);
-    return { version: touched.rows[0].version, requestId };
-  });
-}
-
-export async function archiveItem(projectId: string, userId: string, itemId: string, input: unknown) {
-  const data = archiveSchema.parse(input);
-  const requestId = randomUUID();
-  return withTransaction(async (client) => {
-    await assertWritePermission(client, projectId, userId, itemId, true);
-    await setAuditContext(client, userId, requestId);
-    const result = await client.query<{ version: number }>(
-      `update project_tool.issue_risks set archived_at=now() where id=$1 and project_id=$2 and version=$3 and archived_at is null returning version`,
-      [itemId, projectId, data.version],
-    );
-    if (!result.rowCount) await throwMutationFailure(client, projectId, itemId);
-    await client.query(`insert into project_tool.item_events(item_id,event_type,actor_id,body) values ($1,'archived',$2,'항목 보관')`, [itemId, userId]);
-    return { version: result.rows[0].version, requestId };
-  });
-}
+export async function createItem(projectId:string,userId:string,input:unknown){const data=createItemSchema.parse(input),probability=data.kind==="issue"?"high":data.probability,requestId=randomUUID();await assertWritePermission(projectId,userId);await Promise.all([assertCommonCode(projectId,data.categoryCodeId,"category"),assertCommonCode(projectId,data.trackCodeId,"track")]);const escalationCodeId=data.escalationCodeId??await suggestedEscalationId(projectId,data.kind,probability,data.impact);await assertCommonCode(projectId,escalationCodeId,"escalation_level");const id=randomUUID(),timestamp=nowIso(),itemRef=projectCollection(projectId,"items").doc(id),eventRef=projectCollection(projectId,"itemEvents").doc(randomUUID()),counterRef=projectCollection(projectId,"meta").doc("itemSequence");let displayId="";await getDb().runTransaction(async tx=>{const counter=await tx.get(counterRef),next=Number(counter.data()?.value??0)+1;displayId=`IR-${new Date().getUTCFullYear()}-${String(next).padStart(6,"0")}`;tx.set(counterRef,{value:next});tx.set(itemRef,{displayId,projectId,trackCodeId:data.trackCodeId,kind:data.kind,categoryCodeId:data.categoryCodeId,title:data.title,description:data.description,probability,impact:data.impact,exposureText:data.exposureText||null,ownerText:data.ownerText||null,ownerUserId:null,escalationCodeId,status:"registered",createdBy:userId,version:1,createdAt:timestamp,updatedAt:timestamp,resolvedAt:null,archivedAt:null});tx.set(eventRef,{itemId:id,eventType:"created",actorId:userId,actorName:"PMO 관리자",body:"신규 등록",beforeData:null,afterData:null,createdAt:timestamp});});await writeAuditLog(projectId,userId,"ITEM_INSERT",null,{id,displayId,title:data.title});return {id,displayId,requestId};}
+export async function updateItem(projectId:string,userId:string,itemId:string,input:unknown){const data=updateItemSchema.parse(input),requestId=randomUUID();await assertWritePermission(projectId,userId,itemId);await Promise.all([assertCommonCode(projectId,data.categoryCodeId,"category"),assertCommonCode(projectId,data.trackCodeId,"track")]);const ref=projectCollection(projectId,"items").doc(itemId),eventRef=projectCollection(projectId,"itemEvents").doc(randomUUID());let before:StoredItem|null=null,version=0;await getDb().runTransaction(async tx=>{const snapshot=await tx.get(ref);before=snapshot.exists?({id:snapshot.id,...snapshot.data()} as StoredItem):null;mutationError(before,data.version);version=data.version+1;const update={trackCodeId:data.trackCodeId,categoryCodeId:data.categoryCodeId,title:data.title,description:data.description,probability:before!.kind==="issue"?"high":data.probability,impact:data.impact,exposureText:data.exposureText||null,ownerText:data.ownerText||null,version,updatedAt:nowIso()};tx.update(ref,update);tx.set(eventRef,{itemId,eventType:"edited",actorId:userId,actorName:"PMO 관리자",body:"기본 정보 수정",beforeData:before,afterData:update,createdAt:nowIso()});});await writeAuditLog(projectId,userId,"ITEM_UPDATE",asRecord(before),{version});return {version,requestId};}
+export async function updateStatus(projectId:string,userId:string,itemId:string,input:unknown){const data=statusUpdateSchema.parse(input);return updateSingleField(projectId,userId,itemId,data.version,data.status);}
+async function updateSingleField(projectId:string,userId:string,itemId:string,expectedVersion:number,status:"registered"|"in_progress"|"resolved"|"on_hold"){const requestId=randomUUID();await assertWritePermission(projectId,userId,itemId);const ref=projectCollection(projectId,"items").doc(itemId),eventRef=projectCollection(projectId,"itemEvents").doc(randomUUID());let before:StoredItem|null=null,version=0;await getDb().runTransaction(async tx=>{const snapshot=await tx.get(ref);before=snapshot.exists?({id:snapshot.id,...snapshot.data()} as StoredItem):null;mutationError(before,expectedVersion);version=expectedVersion+1;const update={status,version,updatedAt:nowIso(),resolvedAt:status==="resolved"?nowIso():null};tx.update(ref,update);tx.set(eventRef,{itemId,eventType:"status_changed",actorId:userId,actorName:"PMO 관리자",body:"상태 변경",beforeData:{value:before!.status},afterData:{value:status},createdAt:nowIso()});});await writeAuditLog(projectId,userId,"ITEM_UPDATE",asRecord(before),{status,version});return {version,requestId};}
+export async function updateEscalation(projectId:string,userId:string,itemId:string,input:unknown){const data=escalationUpdateSchema.parse(input),requestId=randomUUID();await assertWritePermission(projectId,userId,itemId,true);const nextCode=await assertCommonCode(projectId,data.escalationCodeId,"escalation_level"),ref=projectCollection(projectId,"items").doc(itemId),eventRef=projectCollection(projectId,"itemEvents").doc(randomUUID());let before:StoredItem|null=null,version=0;await getDb().runTransaction(async tx=>{const snapshot=await tx.get(ref);before=snapshot.exists?({id:snapshot.id,...snapshot.data()} as StoredItem):null;mutationError(before,data.version);const currentCode=await tx.get(projectCollection(projectId,"commonCodes").doc(before!.escalationCodeId));version=data.version+1;const update={escalationCodeId:data.escalationCodeId,version,updatedAt:nowIso()};tx.update(ref,update);tx.set(eventRef,{itemId,eventType:"level_changed",actorId:userId,actorName:"PMO 관리자",body:"에스컬레이션 레벨 변경",beforeData:{value:currentCode.data()?.label??"-"},afterData:{value:nextCode.label},createdAt:nowIso()});});await writeAuditLog(projectId,userId,"ITEM_UPDATE",asRecord(before),{escalationCodeId:data.escalationCodeId,version});return {version,requestId};}
+export async function addComment(projectId:string,userId:string,itemId:string,input:unknown){const data=commentSchema.parse(input),requestId=randomUUID();await assertWritePermission(projectId,userId,itemId);const ref=projectCollection(projectId,"items").doc(itemId),eventRef=projectCollection(projectId,"itemEvents").doc(randomUUID());let version=0;await getDb().runTransaction(async tx=>{const snapshot=await tx.get(ref),item=snapshot.exists?({id:snapshot.id,...snapshot.data()} as StoredItem):null;mutationError(item,data.version);version=data.version+1;tx.update(ref,{version,updatedAt:nowIso()});tx.set(eventRef,{itemId,eventType:"comment",actorId:userId,actorName:"PMO 관리자",body:data.body,beforeData:null,afterData:null,createdAt:nowIso()});});return {version,requestId};}
+export async function archiveItem(projectId:string,userId:string,itemId:string,input:unknown){const data=archiveSchema.parse(input),requestId=randomUUID();await assertWritePermission(projectId,userId,itemId,true);const ref=projectCollection(projectId,"items").doc(itemId),eventRef=projectCollection(projectId,"itemEvents").doc(randomUUID());let before:StoredItem|null=null,version=0;await getDb().runTransaction(async tx=>{const snapshot=await tx.get(ref);before=snapshot.exists?({id:snapshot.id,...snapshot.data()} as StoredItem):null;mutationError(before,data.version);version=data.version+1;const update={archivedAt:nowIso(),updatedAt:nowIso(),version};tx.update(ref,update);tx.set(eventRef,{itemId,eventType:"archived",actorId:userId,actorName:"PMO 관리자",body:"항목 보관",beforeData:null,afterData:null,createdAt:nowIso()});});await writeAuditLog(projectId,userId,"ITEM_UPDATE",asRecord(before),{archivedAt:nowIso(),version});return {version,requestId};}
