@@ -4,24 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3020",
-    "local": "npm run db:setup && next dev --port 3020",
-    "db:setup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/setup-database.ps1",
-    "db:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/stop-database.ps1",
+    "local": "next dev --port 3020",
     "build": "next build",
     "start": "next start --port 3020",
     "lint": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "firebase-admin": "^14.2.0",
     "next": "15.5.22",
-    "pg": "8.22.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "@types/pg": "8.15.6",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "typescript": "5.9.3",
@@ -29,6 +26,7 @@
   },
   "overrides": {
     "postcss": "8.5.25",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "uuid": "11.1.1"
   }
 }

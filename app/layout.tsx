@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <strong>PMO CONTROL</strong>
             </Link>
             <AppNavigation area="sidebar" />
-            <div className="sidebar-foot">LOCAL DEVELOPMENT<br />PostgreSQL 연결</div>
+            <div className="sidebar-foot">FIREBASE APP HOSTING<br />CLOUD FIRESTORE</div>
           </aside>
           <main className="main"><AppNavigation area="workspace" />{children}</main>
         </div>

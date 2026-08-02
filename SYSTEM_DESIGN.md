@@ -1,5 +1,7 @@
 # 이슈·리스크 관리 시스템 설계서
 
+> **보관 문서:** 이 문서의 Supabase/PostgreSQL 구성은 이전 설계안입니다. 현재 구현 기준은 `docs/FIREBASE_FIRESTORE_ARCHITECTURE.md`입니다.
+
 ## 1. 설계 목표
 
 현재 단일 HTML 프로토타입을 여러 사용자가 동시에 사용하는 서버 기반 PMO 웹 애플리케이션으로 전환한다.
