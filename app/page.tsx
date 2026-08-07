@@ -5,7 +5,7 @@ import { DashboardScreen } from "@/screens/DashboardScreen";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const { projectId } = getLocalContext();
+  const { projectId } = await getLocalContext();
   const data = await getDashboard(projectId);
   return <DashboardScreen data={data} />;
 }

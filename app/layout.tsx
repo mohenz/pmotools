@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AppNavigation } from "@/components/AppNavigation";
+import { AuthSessionProvider } from "@/components/AuthSessionProvider";
+import { UserMenu } from "@/components/UserMenu";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,18 +16,20 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ko" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
-        <a className="skip-link" href="#main-content">본문 바로가기</a>
-        <div className="app-shell">
-          <aside className="sidebar">
-            <Link className="brand" href="/portfolio" aria-label="PMO CONTROL 통합 현황으로 이동">
-              <span>PROJECT MANAGEMENT</span>
-              <strong>PMO CONTROL</strong>
-            </Link>
-            <AppNavigation area="sidebar" />
-            <div className="sidebar-foot">FIREBASE APP HOSTING<br />CLOUD FIRESTORE</div>
-          </aside>
-          <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" />{children}</main>
-        </div>
+        <AuthSessionProvider>
+          <a className="skip-link" href="#main-content">본문 바로가기</a>
+          <div className="app-shell">
+            <aside className="sidebar">
+              <Link className="brand" href="/portfolio" aria-label="PMO CONTROL 통합 현황으로 이동">
+                <span>PROJECT MANAGEMENT</span>
+                <strong>PMO CONTROL</strong>
+              </Link>
+              <AppNavigation area="sidebar" />
+              <div className="sidebar-foot"><UserMenu />VERCEL · SUPABASE POSTGRES</div>
+            </aside>
+            <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" />{children}</main>
+          </div>
+        </AuthSessionProvider>
       </body>
     </html>
   );

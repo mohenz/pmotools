@@ -1,6 +1,7 @@
 # 이슈·리스크 관리 시스템 설계서
 
-> **보관 문서:** 이 문서의 Supabase/PostgreSQL 구성은 이전 설계안입니다. 현재 구현 기준은 `docs/FIREBASE_FIRESTORE_ARCHITECTURE.md`입니다.
+> **보관 문서:** 이 문서는 Firebase 전환 이전의 초기 설계안입니다(Prisma 미사용 등 세부 스택은 최신이 아님).
+> 현재 구현 기준은 `docs/PMS_캘린더기반_재개발계획서.md`입니다 — Supabase/PostgreSQL로 되돌아왔지만 스택 세부 사항(ORM=Prisma, 인증=Auth.js)이 다릅니다.
 
 ## 1. 설계 목표
 

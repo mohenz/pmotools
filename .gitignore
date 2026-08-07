@@ -9,3 +9,13 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 docs/project_setting.md
+.vercel
+.env*
+
+/lib/generated/prisma
+
+# prisma init 부수 설치물(AI 에이전트 스킬 문서) / 로컬 세션 설정 — 프로젝트 산출물 아님
+.claude/
+.agents/
+.windsurf/
+skills-lock.json

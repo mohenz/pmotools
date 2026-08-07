@@ -5,7 +5,7 @@ import { CommonCodeSettingsScreen } from "@/screens/CommonCodeSettingsScreen";
 export const dynamic = "force-dynamic";
 
 export default async function CommonCodeSettingsPage({ searchParams }: { searchParams: Promise<{ group?: string }> }) {
-  const { projectId } = getLocalContext();
+  const { projectId } = await getLocalContext();
   const groups = await listCommonCodeGroups(projectId);
   const requested = (await searchParams).group;
   const selectedGroup = groups.find((group) => group.id === requested) ?? groups[0] ?? null;

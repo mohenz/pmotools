@@ -1,6 +1,9 @@
 # PMO CONTROL Firebase·Firestore 아키텍처
 
-## 현재 운영 기준
+> **보관 문서:** Firebase(Firestore/App Hosting)에서 Supabase(PostgreSQL)+Prisma로 전환 완료했습니다.
+> 현재 구현 기준은 `docs/PMS_캘린더기반_재개발계획서.md`입니다.
+
+## 과거 운영 기준 (참고용)
 
 - 웹 프레임워크: Next.js 15
 - 호스팅: Firebase App Hosting

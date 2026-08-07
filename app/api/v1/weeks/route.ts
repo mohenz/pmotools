@@ -1,3 +1,3 @@
 import { NextRequest,NextResponse } from "next/server";import { getLocalContext } from "@/lib/server/context";import { createProjectWeek,listProjectWeeks } from "@/lib/server/work-management";import { mutationErrorResponse } from "@/lib/server/http";
-export async function GET(){const {projectId}=getLocalContext();return NextResponse.json({data:await listProjectWeeks(projectId)});}
-export async function POST(req:NextRequest){const {projectId}=getLocalContext();try{return NextResponse.json({data:await createProjectWeek(projectId,await req.json())},{status:201});}catch(e){return mutationErrorResponse(e);}}
+export async function GET(){const {projectId}=await getLocalContext();return NextResponse.json({data:await listProjectWeeks(projectId)});}
+export async function POST(req:NextRequest){const {projectId}=await getLocalContext();try{return NextResponse.json({data:await createProjectWeek(projectId,await req.json())},{status:201});}catch(e){return mutationErrorResponse(e);}}

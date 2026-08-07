@@ -1,0 +1,568 @@
+// PMS 통합 스키마 — Firebase Firestore를 대체하는 단일 Postgres(Supabase) 스키마.
+// 매핑 근거: docs/PMS_캘린더기반_재개발계획서.md 3장
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// 인증 / 사용자
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  MEMBER
+}
+
+enum ThemeMode {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  userId       String     @unique // 로그인 ID
+  name         String
+  passwordHash String
+  email        String?
+  department   String?
+  role         UserRole   @default(MEMBER)
+  theme        ThemeMode  @default(SYSTEM)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  memberships         ProjectMember[]
+  groupMemberships    UserGroupMap[]
+  createdItems        Item[]               @relation("ItemCreator")
+  ownedItems          Item[]               @relation("ItemOwner")
+  itemEvents          ItemEvent[]
+  assignedEvents      EventAssignee[]
+  notificationSetting NotificationSetting?
+  sentMessages        Message[]            @relation("MessageSender")
+  receivedMessages    Message[]            @relation("MessageReceiver")
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      UserRole @default(MEMBER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// ---------------------------------------------------------------------------
+// 프로젝트
+// ---------------------------------------------------------------------------
+
+enum OpenMethod {
+  phased
+  big_bang
+}
+
+enum ProjectGrade {
+  A
+  B
+  C
+}
+
+model Project {
+  id                String       @id @default(uuid())
+  code              String       @unique
+  name              String
+  openMethod        OpenMethod   @default(phased)
+  startDate         DateTime?    @db.Date
+  endDate           DateTime?    @db.Date
+  firstOpenDate     DateTime?    @db.Date
+  secondOpenDate    DateTime?    @db.Date
+  goLiveDate        DateTime?    @db.Date
+  description       String       @default("")
+  customerName      String       @default("")
+  vendorName        String       @default("")
+  customerPm        String       @default("")
+  customerPmoCount  Int          @default(0)
+  vendorPm          String       @default("")
+  vendorPmoCount    Int          @default(0)
+  projectGrade      ProjectGrade @default(B)
+  timezone          String       @default("Asia/Seoul")
+  staleBusinessDays Int          @default(3)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  members          ProjectMember[]
+  groups           Groups[]
+  commonCodeGroups CommonCodeGroup[]
+  commonCodes      CommonCode[]
+  items            Item[]
+  weeks            Week[]
+  calendarEvents   CalendarEvent[]
+  auditLogs        AuditLog[]
+  itemSequence     ItemSequence?
+
+  @@map("projects")
+}
+
+// ---------------------------------------------------------------------------
+// 그룹 (조직그룹 + 업무모듈 통합 — 기존 Track 흡수)
+// ---------------------------------------------------------------------------
+
+enum GroupType {
+  WORK_MODULE
+  COMPANY
+}
+
+model Groups {
+  id        String    @id @default(uuid())
+  projectId String
+  groupType GroupType
+  code      String
+  label     String
+  color     String?
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userMap        UserGroupMap[]
+  items          Item[]
+  weeklyReports  WeeklyReport[]
+  weeklyProgress WeeklyProgress[]
+  staffChanges   StaffChange[]
+  calendarEvents CalendarEvent[]
+  eventTags      EventGroupTag[]
+
+  @@unique([projectId, groupType, code])
+  @@map("groups")
+}
+
+model UserGroupMap {
+  userId  String
+  groupId String
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@map("user_group_map")
+}
+
+// ---------------------------------------------------------------------------
+// 공통코드 (유형 / 에스컬레이션 — 그룹 개념과 무관, 기존 체계 유지)
+// ---------------------------------------------------------------------------
+
+model CommonCodeGroup {
+  id          String   @id @default(uuid())
+  projectId   String
+  code        String
+  label       String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  codes   CommonCode[]
+
+  @@unique([projectId, code])
+  @@map("common_code_groups")
+}
+
+model CommonCode {
+  id        String   @id @default(uuid())
+  projectId String
+  groupId   String
+  groupCode String
+  code      String
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  minScore  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group             CommonCodeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  itemsByCategory   Item[]          @relation("ItemCategory")
+  itemsByEscalation Item[]          @relation("ItemEscalation")
+
+  @@unique([groupId, code])
+  @@map("common_codes")
+}
+
+// ---------------------------------------------------------------------------
+// 이슈 · 리스크
+// ---------------------------------------------------------------------------
+
+enum ItemKind {
+  issue
+  risk
+}
+
+enum ProbabilityLevel {
+  low
+  medium
+  high
+}
+
+enum ItemStatus {
+  registered
+  in_progress
+  resolved
+  on_hold
+}
+
+enum ItemEventType {
+  created
+  comment
+  status_changed
+  level_changed
+  edited
+  archived
+}
+
+model Item {
+  id               String           @id @default(uuid())
+  displayId        String           @unique
+  projectId        String
+  groupId          String // 기존 trackCodeId
+  kind             ItemKind
+  categoryCodeId   String
+  title            String
+  description      String           @default("")
+  probability      ProbabilityLevel
+  impact           ProbabilityLevel
+  exposureText     String?
+  ownerText        String?
+  ownerUserId      String?
+  escalationCodeId String
+  status           ItemStatus       @default(registered)
+  createdBy        String
+  version          Int              @default(1)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  resolvedAt       DateTime?
+  archivedAt       DateTime?
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group      Groups      @relation(fields: [groupId], references: [id])
+  category   CommonCode  @relation("ItemCategory", fields: [categoryCodeId], references: [id])
+  escalation CommonCode  @relation("ItemEscalation", fields: [escalationCodeId], references: [id])
+  creator    User        @relation("ItemCreator", fields: [createdBy], references: [id])
+  owner      User?       @relation("ItemOwner", fields: [ownerUserId], references: [id])
+  events     ItemEvent[]
+
+  @@index([projectId, status])
+  @@index([projectId, archivedAt])
+  @@map("items")
+}
+
+model ItemSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("item_sequences")
+}
+
+model ItemEvent {
+  id         String        @id @default(uuid())
+  itemId     String
+  eventType  ItemEventType
+  actorId    String?
+  actorName  String?
+  body       String?
+  beforeData Json?
+  afterData  Json?
+  createdAt  DateTime      @default(now())
+
+  item  Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([itemId, createdAt])
+  @@map("item_events")
+}
+
+// ---------------------------------------------------------------------------
+// 주차 / 주간보고 / 주간실적 / 인력변동
+// ---------------------------------------------------------------------------
+
+enum WeekStatus {
+  open
+  closed
+}
+
+enum ChangeType {
+  join
+  leave
+}
+
+model Week {
+  id        String     @id @default(uuid())
+  projectId String
+  weekKey   String
+  label     String
+  startDate DateTime   @db.Date
+  endDate   DateTime   @db.Date
+  status    WeekStatus @default(open)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reports      WeeklyReport[]
+  progress     WeeklyProgress[]
+  staffChanges StaffChange[]
+
+  @@unique([projectId, weekKey])
+  @@map("weeks")
+}
+
+model WeeklyReport {
+  id           String   @id @default(uuid())
+  weekId       String
+  groupId      String
+  achievements String   @default("")
+  nextPlan     String   @default("")
+  issues       String   @default("")
+  decisions    String   @default("")
+  notes        String   @default("")
+  createdBy    String
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  week  Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id])
+
+  @@unique([weekId, groupId])
+  @@map("weekly_reports")
+}
+
+model WeeklyProgress {
+  id             String    @id @default(uuid())
+  weekId         String
+  groupId        String
+  taskName       String
+  planDetail     String    @default("")
+  planTargetDate DateTime? @db.Date
+  actualDetail   String    @default("")
+  actualDate     DateTime? @db.Date
+  progress       Int       @default(0)
+  nextPlan       String    @default("")
+  nextTargetDate DateTime? @db.Date
+  notes          String    @default("")
+  createdBy      String
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  week  Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id])
+
+  @@map("weekly_progress")
+}
+
+model StaffChange {
+  id           String     @id @default(uuid())
+  weekId       String
+  groupId      String
+  changeType   ChangeType
+  currentCount Int
+  nextCount    Int
+  notes        String     @default("")
+  createdBy    String
+  version      Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  week  Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id])
+
+  @@unique([weekId, groupId, changeType])
+  @@map("staff_changes")
+}
+
+// ---------------------------------------------------------------------------
+// 캘린더
+// ---------------------------------------------------------------------------
+
+enum CalendarEventType {
+  meeting
+  milestone
+  work
+  other
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ExceptionType {
+  MODIFIED
+  DELETED
+}
+
+model CalendarEvent {
+  id             String            @id @default(uuid())
+  projectId      String
+  title          String
+  description    String            @default("")
+  eventType      CalendarEventType @default(other)
+  startAt        DateTime
+  endAt          DateTime
+  allDay         Boolean           @default(false)
+  priority       Priority          @default(MEDIUM)
+  isMilestone    Boolean           @default(false)
+  groupId        String?
+  location       String            @default("")
+  memo           String            @default("")
+  recurrenceRule String?
+  createdBy      String
+  updatedBy      String?
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group       Groups?           @relation(fields: [groupId], references: [id])
+  exceptions  EventException[]
+  assignees   EventAssignee[]
+  groupTags   EventGroupTag[]
+  attachments EventAttachment[]
+
+  @@index([projectId, startAt, endAt])
+  @@index([projectId, isMilestone])
+  @@map("calendar_events")
+}
+
+model EventException {
+  id            String        @id @default(uuid())
+  eventId       String
+  exceptionDate DateTime      @db.Date
+  type          ExceptionType
+  overrideData  Json?
+  createdAt     DateTime      @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, exceptionDate])
+  @@map("event_exceptions")
+}
+
+model EventAssignee {
+  eventId String
+  userId  String
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@map("event_assignees")
+}
+
+model EventGroupTag {
+  eventId String
+  groupId String
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  group Groups        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, groupId])
+  @@map("event_group_tags")
+}
+
+model EventAttachment {
+  id          String   @id @default(uuid())
+  eventId     String
+  fileName    String
+  storagePath String // Supabase Storage 버킷 경로
+  fileSize    Int
+  uploadedAt  DateTime @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_attachments")
+}
+
+// ---------------------------------------------------------------------------
+// 쪽지 / 알림 설정
+// ---------------------------------------------------------------------------
+
+model Message {
+  id               String   @id @default(uuid())
+  senderId         String
+  receiverId       String
+  contentEncrypted String
+  contentIv        String
+  viewPasswordHash String
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, isRead])
+  @@map("messages")
+}
+
+model NotificationSetting {
+  userId                String  @id
+  emailEnabled          Boolean @default(false)
+  reminderMinutesBefore Int     @default(60)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_settings")
+}
+
+// ---------------------------------------------------------------------------
+// 감사 로그
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  projectId   String
+  actorId     String?
+  actorName   String?
+  action      String
+  targetTable String?
+  targetId    String?
+  beforeData  Json?
+  afterData   Json?
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@index([targetTable, targetId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("audit_logs")
+}

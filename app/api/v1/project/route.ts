@@ -1,3 +1,3 @@
 import { NextRequest,NextResponse } from "next/server";import { getLocalContext } from "@/lib/server/context";import { getProjectInformation,updateProjectInformation } from "@/lib/server/project-information";import { mutationErrorResponse } from "@/lib/server/http";
-export async function GET(){const {projectId}=getLocalContext();return NextResponse.json({data:await getProjectInformation(projectId)});}
-export async function PATCH(req:NextRequest){const {projectId}=getLocalContext();try{return NextResponse.json({data:await updateProjectInformation(projectId,await req.json())});}catch(e){return mutationErrorResponse(e);}}
+export async function GET(){const {projectId}=await getLocalContext();return NextResponse.json({data:await getProjectInformation(projectId)});}
+export async function PATCH(req:NextRequest){const {projectId}=await getLocalContext();try{return NextResponse.json({data:await updateProjectInformation(projectId,await req.json())});}catch(e){return mutationErrorResponse(e);}}

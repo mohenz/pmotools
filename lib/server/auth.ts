@@ -1,0 +1,61 @@
+import "server-only";
+
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { compare } from "bcryptjs";
+import { getPrisma } from "@/lib/server/db-pg";
+import { DEFAULT_PROJECT_ID } from "@/lib/domain/constants";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
+  providers: [
+    Credentials({
+      credentials: {
+        userId: { label: "아이디", type: "text" },
+        password: { label: "비밀번호", type: "password" },
+      },
+      async authorize(credentials) {
+        const userId = typeof credentials?.userId === "string" ? credentials.userId.trim() : "";
+        const password = typeof credentials?.password === "string" ? credentials.password : "";
+        if (!userId || !password) return null;
+
+        const prisma = getPrisma();
+        const user = await prisma.user.findUnique({ where: { userId } });
+        if (!user || user.status === "LOCKED") return null;
+        const valid = await compare(password, user.passwordHash);
+        if (!valid) return null;
+
+        const membership = await prisma.projectMember.findUnique({
+          where: { projectId_userId: { projectId: DEFAULT_PROJECT_ID, userId: user.id } },
+        });
+
+        return {
+          id: user.id,
+          name: user.name,
+          loginId: user.userId,
+          role: membership?.role ?? user.role,
+          projectId: DEFAULT_PROJECT_ID,
+        };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.userId = user.id;
+        token.loginId = (user as { loginId: string }).loginId;
+        token.role = (user as { role: string }).role;
+        token.projectId = (user as { projectId: string }).projectId;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.user.id = token.userId as string;
+      session.user.loginId = token.loginId as string;
+      session.user.role = token.role as "ADMIN" | "OPERATOR" | "MEMBER";
+      session.user.projectId = token.projectId as string;
+      return session;
+    },
+  },
+});

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { projectId } = getLocalContext();
+  const { projectId } = await getLocalContext();
   const [detail, options] = await Promise.all([getItemDetail(projectId, id), getCodeOptions(projectId)]);
   if (!detail) notFound();
   return <ItemDetailScreen detail={detail} options={options} />;

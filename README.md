@@ -1,11 +1,15 @@
 # Project Tool
 
-프로젝트 이슈·리스크와 PMO 업무를 통합 관리하는 Firebase 기반 웹 애플리케이션입니다.
+프로젝트 이슈·리스크와 PMO 업무를 통합 관리하는 웹 애플리케이션입니다.
+
+> Firebase(Firestore)에서 Supabase(PostgreSQL) + Prisma로 데이터·인증을 전환 완료했습니다.
+> 자세한 내용은 `docs/PMS_캘린더기반_재개발계획서.md` 참고. 다음 단계는 캘린더 고도화(반복일정/마일스톤/다중담당자 등)입니다.
 
 ## 현재 구현
 
-- Firebase App Hosting과 Cloud Firestore(`projectmgmtdb`) 기반 서버 데이터 저장
-- 프로젝트, 사용자, 권한, Track, 이슈·리스크, 업무 이력, 감사 로그 스키마
+- Supabase PostgreSQL + Prisma 기반 서버 데이터 저장
+- Auth.js(Credentials) 기반 로그인/회원가입/비밀번호 변경, 세션 기반 역할(ADMIN/OPERATOR/MEMBER) 접근 제어
+- 프로젝트, 사용자, 그룹(조직/업무모듈), 이슈·리스크, 업무 이력, 감사 로그 스키마
 - 서버 기반 대시보드 집계와 3영업일 정체 판정
 - 전체 목록 검색/필터
 - 이슈·리스크 등록 API와 화면
@@ -15,9 +19,9 @@
 - 기본 정보, 상태, 에스컬레이션 레벨 변경
 - 코멘트와 전체 변경 이력
 - 낙관적 잠금을 통한 동시 수정 충돌 방지
-- PM 이상 권한의 항목 보관 처리
+- 운영자 이상 권한의 항목 보관 처리
 - 코드 그룹 마스터와 그룹별 소속 코드 통합 관리
-- 유형·관련 Track·에스컬레이션 레벨 시스템 그룹 설정
+- 유형·에스컬레이션 레벨 시스템 그룹 설정, 업무모듈(Track)은 그룹(Groups) 테이블로 통합 관리
 - 에스컬레이션 최소 점수, 표시 순서, 활성 상태 관리
 - 등록일 요일 표기와 고위험 행 강조
 - 프로젝트 주차 생성과 주간보고 입력·조회·인쇄
@@ -27,7 +31,6 @@
 - 프로젝트 일정 등록·수정 및 목표일·이슈 통합 조회
 - 주간보고·실적·인력변동 Excel용 CSV 내보내기
 - 프로젝트정보 설정: 오픈 방식, 수행기간, 오픈일정, 발주·수행 조직, PMO 인원과 프로젝트 등급 관리
-- Firebase Admin SDK와 App Hosting 기본 서비스 계정 연결
 
 ## 로컬 실행
 
@@ -39,13 +42,9 @@ npm.cmd run local
 - 웹: `http://127.0.0.1:3020`
 - 공통코드 설정: `http://127.0.0.1:3020/settings/common-codes`
 - 상태 확인: `http://127.0.0.1:3020/api/health`
-- Firestore 데이터베이스: `projectmgmtdb`
+- 최초 로그인 후 반드시 비밀번호를 변경하세요. seed 계정은 `prisma/seed.ts` 참고.
 
-`npm run local`은 개발 서버를 실행합니다. 로컬에서 Firestore에 연결하려면 Google Application Default Credentials 또는 Firestore Emulator를 구성해야 합니다.
-
-## Firestore 준비
-
-Firebase 프로젝트 `projectmgmt-e7dfd`의 Firestore 데이터베이스 ID `projectmgmtdb`를 사용합니다. 최초 요청 시 기준 프로젝트, 공통코드와 예시 업무 데이터가 식별자 기준으로 안전하게 초기화됩니다.
+로컬에서 DB에 연결하려면 `vercel env pull .env.local`로 Supabase 연결값을 받아오거나, `.env.example`을 참고해 `.env.local`을 직접 구성하세요.
 
 ## 주요 명령
 
@@ -55,10 +54,12 @@ npm.cmd run dev
 npm.cmd run lint
 npm.cmd test
 npm.cmd run build
+npx prisma migrate dev   # 스키마 변경 시
+npx tsx prisma/seed.ts   # 데모 데이터 시드
 ```
 
 ## 다음 개발 범위
 
-- Firebase Authentication 및 역할 기반 접근 제어
-- Firebase App Hosting 환경별 백엔드 분리
-- Cloud Firestore 백업·복구 및 보존 정책 확정
+- 캘린더 고도화: 우선순위/마일스톤, 반복일정(RRULE), 다중 담당자·그룹 태깅, 년간/모바일 Agenda 뷰
+- 엑셀 업/다운로드, 첨부파일(Supabase Storage), 쪽지 기능
+- Supabase Connection Pooling·RLS·백업(PITR) 운영 정책 확정

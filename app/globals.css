@@ -84,6 +84,8 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .settings-tree .settings-parent { display: flex; align-items: center; gap: 8px; padding: 8px 9px; font-size: 13px; }
 .settings-tree .settings-parent.active { background: var(--sidebar-accent); color: white; }
 .sidebar-foot { padding: 10px 16px 12px; border-top: 1px solid var(--sidebar-border); color: #6c7995; font: 9px/1.5 var(--font-mono); }
+.user-menu { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: #d3dcea; font: 12px/1.4 var(--font-sans); }
+.user-menu .button { padding: 4px 10px; font-size: 11px; }
 .main { min-width: 0; flex: 1; }
 .workspace-nav { position: sticky; z-index: 10; top: 0; display: flex; min-height: 44px; align-items: center; gap: 18px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--card); }
 .workspace-tool-name { flex: none; font-size: 13px; font-weight: 700; }
@@ -330,6 +332,9 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .calendar-event.event-progress { border-color: var(--warning); background: var(--warning-bg); }
 .calendar-event.event-next_plan { border-color: var(--success); background: var(--success-bg); }
 .calendar-event.event-issue { border-color: var(--destructive); background: var(--destructive-bg); }
+.calendar-event.event-schedule.priority-high { border-color: var(--destructive); background: var(--destructive-bg); }
+.calendar-event.event-schedule.priority-medium { border-color: var(--warning); background: var(--warning-bg); }
+.calendar-event.event-schedule.priority-low { border-color: var(--success); background: var(--success-bg); }
 .calendar-more { color: var(--primary); font-size: 10px; font-weight: 700; }
 .calendar-period { display: grid; min-width: 760px; grid-template-columns: repeat(7,minmax(100px,1fr)); border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
 .calendar-period.day { min-width: 0; grid-template-columns: 1fr; }
@@ -344,6 +349,35 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .calendar-legend span { display: flex; align-items: center; gap: 5px; }
 .calendar-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--primary); }
 .calendar-legend i.progress { background: var(--warning); }.calendar-legend i.next_plan { background: var(--success); }.calendar-legend i.issue { background: var(--destructive); }
+.calendar-legend i.priority-high { background: var(--destructive); }.calendar-legend i.priority-medium { background: var(--warning); }.calendar-legend i.priority-low { background: var(--success); }
+.milestone-list { display: grid; gap: 8px; }
+.milestone-row { display: grid; grid-template-columns: 90px 1fr 80px; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+.milestone-row .d-day { font: 700 13px var(--font-mono); color: var(--primary); }
+.milestone-row .d-day.past { color: var(--muted-foreground); }
+.milestone-row .kind-project { color: var(--muted-foreground); font-size: 11px; }
+.field-label { display: block; margin-bottom: 6px; color: var(--foreground); font-size: 14px; font-weight: 500; }
+.checkbox-chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.checkbox-chip { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--muted); font-size: 12px; cursor: pointer; }
+.checkbox-chip:has(input:checked) { border-color: var(--primary); background: var(--info-bg); color: var(--primary); }
+.attachment-list { display: grid; gap: 6px; margin-bottom: 8px; }
+.attachment-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--muted); font-size: 12px; }
+.attachment-row a { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); }
+.attachment-row span { color: var(--muted-foreground); }
+.message-list { display: grid; gap: 8px; }
+.message-row { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); overflow: hidden; }
+.message-row.unread { border-color: var(--primary); }
+.message-row-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; cursor: pointer; font-size: 13px; }
+.message-row-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.message-content { margin: 10px 0 0; padding: 10px; border-radius: var(--radius-sm); background: var(--muted); white-space: pre-wrap; font-size: 13px; }
+.nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; margin-left: auto; padding: 0 5px; border-radius: var(--radius-full); background: var(--destructive); color: white; font: 700 10px var(--font-mono); }
+.calendar-year { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.calendar-year-cell { display: grid; gap: 6px; padding: 18px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); text-align: center; }
+.calendar-year-cell:hover { border-color: var(--primary); }
+.calendar-year-cell strong { font-size: 18px; }
+.calendar-year-cell span { color: var(--muted-foreground); font-size: 12px; }
+.calendar-agenda { display: grid; gap: 14px; }
+.calendar-agenda-day header { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; }
+.calendar-agenda-day > div { display: grid; gap: 4px; }
 .print-report { max-width: 900px; margin: 24px auto; padding: 30px; background: white; }
 .print-report header { margin-bottom: 20px; text-align: center; }
 .print-report section { margin: 18px 0; page-break-inside: avoid; }
@@ -462,6 +496,7 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
   .calendar-toolbar h2 { grid-row: 1; }
   .calendar-nav,.calendar-views { justify-content: center; }
   .calendar-modal-backdrop { padding: 10px; place-items: start center; }
+  .calendar-year { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .calendar-modal { max-height: calc(100vh - 20px); }
   .group-editor-form .wide { grid-column: auto; }
   .code-row { grid-template-columns: 1fr 1fr; padding: 14px 0; }

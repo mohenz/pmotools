@@ -1,2 +1,2 @@
 import { NextRequest,NextResponse } from "next/server";import { getLocalContext } from "@/lib/server/context";import { updateProgress } from "@/lib/server/work-management";import { mutationErrorResponse } from "@/lib/server/http";
-export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){const {projectId}=getLocalContext();try{return NextResponse.json({data:await updateProgress(projectId,(await params).id,await req.json())});}catch(e){return mutationErrorResponse(e);}}
+export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){const {projectId}=await getLocalContext();try{return NextResponse.json({data:await updateProgress(projectId,(await params).id,await req.json())});}catch(e){return mutationErrorResponse(e);}}

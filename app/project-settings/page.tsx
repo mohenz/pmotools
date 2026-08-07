@@ -1,3 +1,3 @@
 import { getLocalContext } from "@/lib/server/context";import { getProjectInformation } from "@/lib/server/project-information";import { ProjectInformationForm } from "@/features/project/ProjectInformationForm";
 export const dynamic="force-dynamic";
-export default async function ProjectSettingsPage(){const {projectId}=getLocalContext();const project=await getProjectInformation(projectId);return <><header className="topbar"><div><h1>프로젝트정보 설정</h1><p>프로젝트 기간, 오픈 방식과 수행 조직 정보를 관리합니다.</p></div></header><div className="content settings-content"><ProjectInformationForm project={project}/></div></>}
+export default async function ProjectSettingsPage(){const {projectId}=await getLocalContext();const project=await getProjectInformation(projectId);return <><header className="topbar"><div><h1>프로젝트정보 설정</h1><p>프로젝트 기간, 오픈 방식과 수행 조직 정보를 관리합니다.</p></div></header><div className="content settings-content"><ProjectInformationForm project={project}/></div></>}

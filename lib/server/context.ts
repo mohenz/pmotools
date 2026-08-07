@@ -1,9 +1,22 @@
 import "server-only";
 
-export function getLocalContext() {
-  const userId = process.env.LOCAL_USER_ID || "10000000-0000-4000-8000-000000000001";
-  const projectId = process.env.DEFAULT_PROJECT_ID || "20000000-0000-4000-8000-000000000001";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/server/auth";
 
-  // Firebase Authentication을 적용할 때 검증된 사용자와 프로젝트 범위로 교체합니다.
-  return { userId, projectId };
+export async function getLocalContext() {
+  const session = await auth();
+  if (!session?.user) throw new Error("인증되지 않은 요청입니다.");
+  return { userId: session.user.id, projectId: session.user.projectId, role: session.user.role };
+}
+
+export async function requireAdminContext() {
+  const context = await getLocalContext();
+  if (context.role !== "ADMIN") redirect("/");
+  return context;
+}
+
+export async function requireManagerContext() {
+  const context = await getLocalContext();
+  if (context.role !== "ADMIN" && context.role !== "OPERATOR") redirect("/calendar");
+  return context;
 }

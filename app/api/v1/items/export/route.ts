@@ -5,7 +5,7 @@ import { getLocalContext } from "@/lib/server/context";
 import { listItemsForExport } from "@/lib/server/items";
 
 export async function GET(request: NextRequest) {
-  const { projectId } = getLocalContext();
+  const { projectId } = await getLocalContext();
   const params = request.nextUrl.searchParams;
   const items = await listItemsForExport(projectId, {
     q: params.get("q") ?? undefined, kind: params.get("kind") ?? undefined,

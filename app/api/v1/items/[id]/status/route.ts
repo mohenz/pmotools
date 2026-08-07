@@ -5,7 +5,7 @@ import { updateStatus } from "@/lib/server/items";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { projectId, userId } = getLocalContext();
+  const { projectId, userId } = await getLocalContext();
   try {
     const result = await updateStatus(projectId, userId, id, await request.json());
     return NextResponse.json({ data: result, requestId: result.requestId });

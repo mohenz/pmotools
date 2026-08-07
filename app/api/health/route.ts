@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { DEFAULT_PROJECT_ID, FIRESTORE_DATABASE_ID, ensureFirestoreSeeded, projectRef } from "@/lib/server/db";
+import { getPrisma } from "@/lib/server/db-pg";
+import { DEFAULT_PROJECT_ID } from "@/lib/domain/constants";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await ensureFirestoreSeeded(DEFAULT_PROJECT_ID);
-    const project = await projectRef(DEFAULT_PROJECT_ID).get();
-    if (!project.exists) throw new Error("Default project is unavailable.");
-    return NextResponse.json({ status: "ok", database: "connected", provider: "firestore", databaseId: FIRESTORE_DATABASE_ID });
+    const project = await getPrisma().project.findUnique({ where: { id: DEFAULT_PROJECT_ID } });
+    if (!project) throw new Error("Default project is unavailable.");
+    return NextResponse.json({ status: "ok", database: "connected", provider: "postgres" });
   } catch (error) {
-    console.error("Firestore health check failed", error);
-    return NextResponse.json({ status: "error", database: "unavailable", provider: "firestore" }, { status: 503 });
+    console.error("Postgres health check failed", error);
+    return NextResponse.json({ status: "error", database: "unavailable", provider: "postgres" }, { status: 503 });
   }
 }

@@ -4,7 +4,7 @@ import { createItem, listItems } from "@/lib/server/items";
 import { mutationErrorResponse } from "@/lib/server/http";
 
 export async function GET(request: NextRequest) {
-  const { projectId } = getLocalContext();
+  const { projectId } = await getLocalContext();
   const params = request.nextUrl.searchParams;
   const items = await listItems(projectId, {
     q: params.get("q") ?? undefined,
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { projectId, userId } = getLocalContext();
+  const { projectId, userId } = await getLocalContext();
   try {
     const item = await createItem(projectId, userId, await request.json());
     return NextResponse.json({ data: item, requestId: item.requestId }, { status: 201 });

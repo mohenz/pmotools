@@ -18,7 +18,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     stale: params.stale === "true",
     page: typeof params.page === "string" ? Number(params.page) || 1 : 1,
   };
-  const { projectId } = getLocalContext();
+  const { projectId } = await getLocalContext();
   const [result, options] = await Promise.all([listItems(projectId, filters), getCodeOptions(projectId)]);
   return <ItemListScreen result={result} filters={filters} options={options} />;
 }
