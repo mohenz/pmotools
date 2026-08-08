@@ -72,16 +72,21 @@ Firestore는 LIKE·복합 필터·집계가 불가능해 "전부 읽어서 애�
 
 ## 3. 배포 파이프라인 복구 (이번 작업의 최대 발견)
 
-배포를 시도하는 과정에서 **이 저장소의 Vercel 배포가 최근 전부 실패해 왔음**을 확인했다.
-Preview뿐 아니라 **8/7 프로덕션 배포(`0807140`, Supabase 전환 커밋)도 실패** —
-즉 Firebase→Supabase 전환이 프로덕션에 반영된 적이 한 번도 없었다.
+배포를 시도하는 과정에서 **GitHub 연동 자동배포가 최근 전부 실패해 왔음**을 확인했다.
+Preview뿐 아니라 8/7 프로덕션 커밋(`0807140`, Supabase 전환)의 GitHub 트리거 배포도 실패 상태였다.
+
+당시 프로덕션이 정상 동작했던 것은 `vercel deploy --prod` **CLI 수동 배포**로 올렸기 때문이다
+(로컬에는 `lib/generated/prisma` 생성물이 있어 빌드가 성공). 즉 서비스는 살아 있었지만
+**GitHub push만으로 배포하는 경로는 계속 끊겨 있었다.**
 
 **원인**: `lib/generated/prisma`가 `.gitignore` 대상이라 저장소에 존재하지 않는데
 빌드 과정에 `prisma generate`가 없어 신규 체크아웃에서 모듈 해석에 실패했다.
 로컬은 생성물이 남아 있어 성공하고 Vercel만 실패하는 형태였다.
 
 **조치**: `package.json`에 `"postinstall": "prisma generate"` 추가 (커밋 `afddc6c`).
-→ Preview 배포 성공 → main 머지 → **프로덕션 배포 성공**(첫 성공 사례).
+→ Preview 배포 성공 → main 머지 → **GitHub 트리거 프로덕션 배포 성공**(자동배포 경로 첫 성공).
+
+이후로는 CLI 수동 배포 없이 **main push만으로 배포된다.**
 
 ---
 
