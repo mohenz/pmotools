@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { DomainError } from "@/lib/server/items";
+import { DomainError } from "@/lib/server/errors";
 
 export function mutationErrorResponse(error: unknown) {
   if (error instanceof ZodError) {

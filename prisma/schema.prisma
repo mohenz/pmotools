@@ -46,19 +46,24 @@ model User {
 
   memberships          ProjectMember[]
   groupMemberships     UserGroupMap[]
-  createdItems         Item[]               @relation("ItemCreator")
-  ownedItems           Item[]               @relation("ItemOwner")
+  createdItems         Item[]                        @relation("ItemCreator")
+  ownedItems           Item[]                        @relation("ItemOwner")
   itemEvents           ItemEvent[]
   assignedEvents       EventAssignee[]
-  createdEvents        CalendarEvent[]      @relation("CalendarEventCreator")
-  updatedEvents        CalendarEvent[]      @relation("CalendarEventUpdater")
-  createdWeeklyReports WeeklyReport[]       @relation("WeeklyReportCreator")
-  createdProgress      WeeklyProgress[]     @relation("WeeklyProgressCreator")
-  createdStaffChanges  StaffChange[]        @relation("StaffChangeCreator")
+  createdEvents        CalendarEvent[]               @relation("CalendarEventCreator")
+  updatedEvents        CalendarEvent[]               @relation("CalendarEventUpdater")
+  createdWeeklyReports WeeklyReport[]                @relation("WeeklyReportCreator")
+  createdProgress      WeeklyProgress[]              @relation("WeeklyProgressCreator")
+  createdStaffChanges  StaffChange[]                 @relation("StaffChangeCreator")
   notificationSetting  NotificationSetting?
-  sentMessages         Message[]            @relation("MessageSender")
-  receivedMessages     Message[]            @relation("MessageReceiver")
+  sentMessages         Message[]                     @relation("MessageSender")
+  receivedMessages     Message[]                     @relation("MessageReceiver")
   auditLogs            AuditLog[]
+  meetingReservations  MeetingReservation[]
+  recurringMeetings    RecurringMeetingReservation[] @relation("RecurringApplicant")
+  reviewedMeetings     RecurringMeetingReservation[] @relation("RecurringReviewer")
+  meetingChangeLogs    MeetingReservationChangeLog[]
+  meetingAttendances   MeetingReservationAttendee[]
 
   @@map("users")
 }
@@ -117,15 +122,18 @@ model Project {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  members          ProjectMember[]
-  groups           Groups[]
-  commonCodeGroups CommonCodeGroup[]
-  commonCodes      CommonCode[]
-  items            Item[]
-  weeks            Week[]
-  calendarEvents   CalendarEvent[]
-  auditLogs        AuditLog[]
-  itemSequence     ItemSequence?
+  members             ProjectMember[]
+  groups              Groups[]
+  commonCodeGroups    CommonCodeGroup[]
+  commonCodes         CommonCode[]
+  items               Item[]
+  weeks               Week[]
+  calendarEvents      CalendarEvent[]
+  auditLogs           AuditLog[]
+  itemSequence        ItemSequence?
+  meetingRooms        MeetingRoom[]
+  meetingReservations MeetingReservation[]
+  recurringMeetings   RecurringMeetingReservation[]
 
   @@map("projects")
 }
@@ -576,4 +584,147 @@ model AuditLog {
   @@index([targetTable, targetId, createdAt])
   @@index([projectId, createdAt])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// 회의실 예약
+// ---------------------------------------------------------------------------
+
+enum MeetingRoomType {
+  LARGE
+  SMALL
+}
+
+enum MeetingReservationStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum RecurringMeetingPattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum RecurringMeetingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MeetingChangeAction {
+  CREATE
+  CANCEL
+  EXTEND
+  SHORTEN
+}
+
+model MeetingRoom {
+  id        String          @id @default(uuid())
+  projectId String
+  name      String
+  roomType  MeetingRoomType
+  capacity  Int
+  floor     String?
+  equipment String[]        @default([])
+  isActive  Boolean         @default(true)
+  deletedAt DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  project      Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reservations MeetingReservation[]
+  recurring    RecurringMeetingReservation[]
+
+  @@unique([projectId, name])
+  @@index([projectId, isActive, deletedAt])
+  @@map("meeting_rooms")
+}
+
+model MeetingReservation {
+  id          String                   @id @default(uuid())
+  projectId   String
+  roomId      String
+  userId      String
+  recurringId String?
+  startAt     DateTime
+  endAt       DateTime
+  purpose     String
+  status      MeetingReservationStatus @default(CONFIRMED)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  project   Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  room      MeetingRoom                   @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  user      User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  recurring RecurringMeetingReservation?  @relation(fields: [recurringId], references: [id], onDelete: Restrict)
+  logs      MeetingReservationChangeLog[]
+  attendees MeetingReservationAttendee[]
+
+  @@unique([recurringId, startAt])
+  @@index([projectId, startAt, endAt])
+  @@index([roomId, startAt])
+  @@index([userId, startAt])
+  @@map("meeting_reservations")
+}
+
+model RecurringMeetingReservation {
+  id            String                  @id @default(uuid())
+  projectId     String
+  roomId        String
+  applicantId   String
+  patternType   RecurringMeetingPattern
+  patternDetail Json
+  startMinutes  Int
+  endMinutes    Int
+  periodStart   DateTime                @db.Date
+  periodEnd     DateTime                @db.Date
+  purpose       String
+  status        RecurringMeetingStatus  @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  room         MeetingRoom          @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  applicant    User                 @relation("RecurringApplicant", fields: [applicantId], references: [id], onDelete: Restrict)
+  reviewer     User?                @relation("RecurringReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  reservations MeetingReservation[]
+
+  @@index([projectId, status, createdAt])
+  @@index([roomId, periodStart, periodEnd])
+  @@map("recurring_meeting_reservations")
+}
+
+model MeetingReservationChangeLog {
+  id            String              @id @default(uuid())
+  reservationId String
+  actorId       String
+  action        MeetingChangeAction
+  beforeStart   DateTime?
+  beforeEnd     DateTime?
+  afterStart    DateTime?
+  afterEnd      DateTime?
+  createdAt     DateTime            @default(now())
+
+  reservation MeetingReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  actor       User               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([reservationId, createdAt])
+  @@map("meeting_reservation_change_logs")
+}
+
+model MeetingReservationAttendee {
+  reservationId String
+  userId        String
+  createdAt     DateTime @default(now())
+
+  reservation MeetingReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([reservationId, userId])
+  @@index([userId, createdAt])
+  @@map("meeting_reservation_attendees")
 }

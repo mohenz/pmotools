@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { CalendarDays, FileText, LayoutDashboard, Mail, Settings, ShieldAlert, TrendingUp, Users } from "lucide-react";
+import { Building2, CalendarDays, FileText, LayoutDashboard, Mail, Settings, ShieldAlert, TrendingUp, Users } from "lucide-react";
 
 export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
   const pathname = usePathname();
@@ -19,6 +19,7 @@ export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
   const tools = [
     { href: "/portfolio", icon: LayoutDashboard, label: "통합 현황", sub: "Portfolio", active: pathname.startsWith("/portfolio") },
     { href: "/calendar", icon: CalendarDays, label: "캘린더", sub: "Calendar", active: pathname.startsWith("/calendar") },
+    { href: "/meetrooms", icon: Building2, label: "회의실", sub: "Meeting Rooms", active: pathname.startsWith("/meetrooms") },
     { href: "/", icon: ShieldAlert, label: "이슈 관리", sub: "Issue & Risk", active: pathname === "/" || pathname.startsWith("/items") },
     { href: "/weekly-reports", icon: FileText, label: "주간보고", sub: "Weekly Report", active: pathname.startsWith("/weekly-reports") },
     { href: "/weekly-progress", icon: TrendingUp, label: "주간실적", sub: "Progress", active: pathname.startsWith("/weekly-progress") },
@@ -70,6 +71,7 @@ export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},{href:"/portfolio",label:"공정률 현황"},{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
       "/staff-changes": [{href:"/staff-changes",label:"투입·철수 관리"},{href:"/api/v1/work-export?type=staff",label:"Excel용 CSV"}],
       "/calendar": [{href:"/calendar",label:"통합 캘린더"},{href:"/calendar/milestones",label:"주요 이벤트"}],
+      "/meetrooms": [{href:"/meetrooms",label:"예약·관리"}],
       "/messages": [{href:"/messages",label:"쪽지함"}],
     };
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;

@@ -1,12 +1,13 @@
 import { config } from "dotenv";
-config({ path: ".env.local" });
+config({ path: ".env" });
+config({ path: ".env.local", override: false });
 
 import { hashSync } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 
-const rawConnectionString = process.env.POSTGRES_URL_NON_POOLING;
-if (!rawConnectionString) throw new Error("POSTGRES_URL_NON_POOLING is not set.");
+const rawConnectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL_NON_POOLING;
+if (!rawConnectionString) throw new Error("DATABASE_URL is not set.");
 const connectionString = rawConnectionString.replace(/sslmode=require/, "sslmode=no-verify");
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
@@ -44,6 +45,17 @@ const ESCALATION_CODE_IDS = {
 async function main() {
   const existing = await prisma.project.findUnique({ where: { id: PROJECT_ID } });
   if (existing) {
+    await prisma.meetingRoom.createMany({
+      data: [
+        { projectId: PROJECT_ID, name: "대회의실", roomType: "LARGE", capacity: 20, floor: "3F", equipment: ["빔프로젝터", "화상회의"] },
+        { projectId: PROJECT_ID, name: "소회의실 A", roomType: "SMALL", capacity: 6, floor: "3F", equipment: ["모니터"] },
+        { projectId: PROJECT_ID, name: "소회의실 B", roomType: "SMALL", capacity: 6, floor: "3F", equipment: ["모니터"] },
+        { projectId: PROJECT_ID, name: "소회의실 C", roomType: "SMALL", capacity: 6, floor: "4F", equipment: ["화이트보드"] },
+        { projectId: PROJECT_ID, name: "소회의실 D", roomType: "SMALL", capacity: 6, floor: "4F", equipment: [] },
+        { projectId: PROJECT_ID, name: "소회의실 E", roomType: "SMALL", capacity: 6, floor: "4F", equipment: ["모니터", "화상회의"] },
+      ],
+      skipDuplicates: true,
+    });
     console.log("Seed data already present — skipping.");
     return;
   }
@@ -84,6 +96,17 @@ async function main() {
 
   await prisma.projectMember.create({
     data: { projectId: PROJECT_ID, userId: ADMIN_USER_ID, role: "ADMIN" },
+  });
+
+  await prisma.meetingRoom.createMany({
+    data: [
+      { projectId: PROJECT_ID, name: "대회의실", roomType: "LARGE", capacity: 20, floor: "3F", equipment: ["빔프로젝터", "화상회의"] },
+      { projectId: PROJECT_ID, name: "소회의실 A", roomType: "SMALL", capacity: 6, floor: "3F", equipment: ["모니터"] },
+      { projectId: PROJECT_ID, name: "소회의실 B", roomType: "SMALL", capacity: 6, floor: "3F", equipment: ["모니터"] },
+      { projectId: PROJECT_ID, name: "소회의실 C", roomType: "SMALL", capacity: 6, floor: "4F", equipment: ["화이트보드"] },
+      { projectId: PROJECT_ID, name: "소회의실 D", roomType: "SMALL", capacity: 6, floor: "4F", equipment: [] },
+      { projectId: PROJECT_ID, name: "소회의실 E", roomType: "SMALL", capacity: 6, floor: "4F", equipment: ["모니터", "화상회의"] },
+    ],
   });
 
   await prisma.groups.createMany({

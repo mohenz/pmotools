@@ -2,6 +2,7 @@ node_modules/
 .next/
 .next-ci/
 .local/
+.local-postgres/
 .env.local
 database/.env.admin.local
 npm-debug.log*

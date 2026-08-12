@@ -1,5 +1,18 @@
 # Project Tool
 
+## 로컬 실행
+
+회의실 예약 기능은 프로젝트 전용 PostgreSQL 18(`localhost:55432`)을 사용합니다.
+
+```powershell
+npm run db:local:start
+npx prisma migrate dev
+npx prisma db seed
+npm run dev
+```
+
+`http://localhost:3020/meetrooms`에서 이용할 수 있습니다. DB 상태 확인과 중지는 각각 `npm run db:local:status`, `npm run db:local:stop`을 사용합니다.
+
 프로젝트 이슈·리스크와 PMO 업무를 통합 관리하는 웹 애플리케이션입니다.
 
 > Firebase(Firestore)에서 Supabase(PostgreSQL) + Prisma로 데이터·인증을 전환 완료했습니다.
