@@ -1,6 +1,9 @@
 import "server-only";
 import { z } from "zod";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+
+const projectInfoTag = (projectId: string) => `project-info:${projectId}`;
 
 export type ProjectInformation = { id: string; code: string; name: string; openMethod: "phased" | "big_bang"; startDate: string | null; endDate: string | null; firstOpenDate: string | null; secondOpenDate: string | null; goLiveDate: string | null; durationMonths: number; durationDays: number; customerName: string; vendorName: string; customerPm: string; customerPmoCount: number; vendorPm: string; vendorPmoCount: number; projectGrade: "A" | "B" | "C"; timezone: string; staleBusinessDays: number };
 const schema = z.object({ name: z.string().trim().min(1).max(150), openMethod: z.enum(["phased", "big_bang"]), startDate: z.string().date(), endDate: z.string().date(), firstOpenDate: z.string().date().nullable(), secondOpenDate: z.string().date().nullable(), goLiveDate: z.string().date().nullable(), customerName: z.string().trim().min(1).max(150), vendorName: z.string().trim().min(1).max(150), customerPm: z.string().trim().min(1).max(100), customerPmoCount: z.number().int().min(0).max(999), vendorPm: z.string().trim().min(1).max(100), vendorPmoCount: z.number().int().min(0).max(999), projectGrade: z.enum(["A", "B", "C"]), timezone: z.string().trim().min(1).max(50), staleBusinessDays: z.number().int().min(1).max(30) }).superRefine((d, ctx) => {
@@ -25,7 +28,7 @@ function duration(startDate: string | null, endDate: string | null) {
 }
 function dateStr(value: Date | null) { return value ? value.toISOString().slice(0, 10) : null; }
 
-export async function getProjectInformation(projectId: string): Promise<ProjectInformation> {
+async function loadProjectInformation(projectId: string): Promise<ProjectInformation> {
   const project = await getPrisma().project.findUnique({ where: { id: projectId } });
   if (!project) throw new Error("Project not found.");
   const startDate = dateStr(project.startDate), endDate = dateStr(project.endDate);
@@ -36,6 +39,11 @@ export async function getProjectInformation(projectId: string): Promise<ProjectI
     customerName: project.customerName, vendorName: project.vendorName, customerPm: project.customerPm, customerPmoCount: project.customerPmoCount,
     vendorPm: project.vendorPm, vendorPmoCount: project.vendorPmoCount, projectGrade: project.projectGrade, timezone: project.timezone, staleBusinessDays: project.staleBusinessDays,
   };
+}
+
+// 프로젝트 기본정보는 변경 빈도가 낮고 여러 화면에서 조회되므로 30초 캐시하고, 저장 시 revalidateTag로 즉시 무효화한다.
+export function getProjectInformation(projectId: string): Promise<ProjectInformation> {
+  return unstable_cache(loadProjectInformation, ["project-information"], { tags: [projectInfoTag(projectId)], revalidate: 30 })(projectId);
 }
 
 export async function updateProjectInformation(projectId: string, input: unknown) {
@@ -55,5 +63,6 @@ export async function updateProjectInformation(projectId: string, input: unknown
     },
   });
   await writeAuditLog(projectId, null, "PROJECT_UPDATE", "projects", projectId, before, updated);
+  revalidateTag(projectInfoTag(projectId));
   return getProjectInformation(updated.id);
 }

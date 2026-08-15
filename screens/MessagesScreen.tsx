@@ -5,8 +5,10 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MessageSummary } from "@/lib/server/messages";
 import type { ProjectMemberOption } from "@/lib/server/users";
+import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 
 function MessageRow({ message }: { message: MessageSummary }) {
+  const { refresh: refreshUnreadCount } = useUnreadMessageCount();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [content, setContent] = useState<string | null>(null);
@@ -21,6 +23,7 @@ function MessageRow({ message }: { message: MessageSummary }) {
     setPending(false);
     if (!response.ok) { setError(payload?.error?.message ?? "조회에 실패했습니다."); return; }
     setContent(payload.data.content);
+    if (message.direction === "received" && !message.isRead) refreshUnreadCount();
   }
 
   return <div className={`message-row ${message.isRead ? "" : "unread"}`}>

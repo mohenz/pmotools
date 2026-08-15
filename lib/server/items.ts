@@ -1,12 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
+import { revalidateTag } from "next/cache";
 import { riskScore } from "@/lib/domain/items";
 import { businessDaysSince, staleCutoff } from "@/lib/domain/business-days";
 import { actorNameOf, getPrisma, nowIso, writeAuditLog } from "@/lib/server/db-pg";
 import { getMemberRole, isManagerRole } from "@/lib/server/permissions";
 import type { Item as PrismaItem, Prisma } from "@/lib/generated/prisma/client";
 import { DomainError } from "@/lib/server/errors";
+import { portfolioTag } from "@/lib/server/cache-tags";
 
 export { DomainError };
 
@@ -180,6 +182,7 @@ export async function createItem(projectId: string, userId: string, input: unkno
     return { item, displayId };
   });
   await writeAuditLog(projectId, userId, "ITEM_INSERT", "items", item.id, null, { id: item.id, displayId, title: data.title });
+  revalidateTag(portfolioTag(projectId));
   return { id: item.id, displayId, requestId };
 }
 export async function updateItem(projectId: string, userId: string, itemId: string, input: unknown) {
@@ -218,6 +221,7 @@ async function updateSingleField(projectId: string, userId: string, itemId: stri
     return { before, version };
   });
   await writeAuditLog(projectId, userId, "ITEM_UPDATE", "items", itemId, before, { status, version });
+  revalidateTag(portfolioTag(projectId));
   return { version, requestId };
 }
 export async function updateEscalation(projectId: string, userId: string, itemId: string, input: unknown) {
@@ -267,5 +271,6 @@ export async function archiveItem(projectId: string, userId: string, itemId: str
     return { before, version };
   });
   await writeAuditLog(projectId, userId, "ITEM_UPDATE", "items", itemId, before, { archivedAt: nowIso(), version });
+  revalidateTag(portfolioTag(projectId));
   return { version, requestId };
 }

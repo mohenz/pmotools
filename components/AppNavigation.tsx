@@ -1,20 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Building2, CalendarDays, FileText, LayoutDashboard, Mail, Settings, ShieldAlert, TrendingUp, Users } from "lucide-react";
+import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 
 export function AppNavigation({ area }: { area: "sidebar" | "workspace" }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const [unread, setUnread] = useState(0);
-  useEffect(() => {
-    if (!session?.user) return;
-    fetch("/api/v1/messages/unread-count").then((r) => r.json()).then((p) => setUnread(p?.data?.count ?? 0)).catch(() => {});
-  }, [session?.user, pathname]);
+  const { count: unread } = useUnreadMessageCount();
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   const tools = [
     { href: "/portfolio", icon: LayoutDashboard, label: "통합 현황", sub: "Portfolio", active: pathname.startsWith("/portfolio") },

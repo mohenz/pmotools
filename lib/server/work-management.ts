@@ -1,9 +1,13 @@
 import "server-only";
 import { z } from "zod";
+import { unstable_cache, revalidateTag } from "next/cache";
 import type { CommonCode } from "@/lib/server/common-codes";
 import { getCodeOptions } from "@/lib/server/common-codes";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/items";
+import { portfolioTag } from "@/lib/server/cache-tags";
+
+const weeksTag = (projectId: string) => `weeks:${projectId}`;
 
 export type ProjectWeek = { id: string; weekKey: string; label: string; startDate: string; endDate: string; status: "open" | "closed" };
 export type WeeklyReport = { id: string; weekId: string; weekLabel: string; areaCodeId: string; areaLabel: string; achievements: string; nextPlan: string; issues: string; decisions: string; notes: string; version: number };
@@ -16,9 +20,14 @@ const dateStr = (value: Date | null) => (value ? value.toISOString().slice(0, 10
 const toProjectWeek = (week: { id: string; weekKey: string; label: string; startDate: Date; endDate: Date; status: "open" | "closed" }): ProjectWeek =>
   ({ id: week.id, weekKey: week.weekKey, label: week.label, startDate: dateStr(week.startDate)!, endDate: dateStr(week.endDate)!, status: week.status });
 
-export async function listProjectWeeks(projectId: string): Promise<ProjectWeek[]> {
+async function loadProjectWeeks(projectId: string): Promise<ProjectWeek[]> {
   const weeks = await getPrisma().week.findMany({ where: { projectId }, orderBy: { startDate: "desc" } });
   return weeks.map(toProjectWeek);
+}
+
+// 주차 목록은 캘린더·업무 폼 등에서 반복 조회하는 읽기 중심 데이터라 30초 캐시하고, 등록/마감 시 즉시 무효화한다.
+export function listProjectWeeks(projectId: string): Promise<ProjectWeek[]> {
+  return unstable_cache(loadProjectWeeks, ["project-weeks"], { tags: [weeksTag(projectId)], revalidate: 30 })(projectId);
 }
 export async function getWorkOptions(projectId: string) {
   const [weeks, codes] = await Promise.all([listProjectWeeks(projectId), getCodeOptions(projectId)]);
@@ -32,6 +41,7 @@ export async function createProjectWeek(projectId: string, input: unknown) {
   if (existing) throw new DomainError("DUPLICATE_CODE", "동일한 주차 코드가 이미 존재합니다.");
   const week = await prisma.week.create({ data: { projectId, weekKey: data.weekKey, label: data.label, startDate: new Date(data.startDate), endDate: new Date(data.endDate), status: "open" } });
   await writeAuditLog(projectId, null, "PROJECT_WEEKS_INSERT", "weeks", week.id, null, week);
+  revalidateTag(weeksTag(projectId));
   return { id: week.id, weekKey: week.weekKey, label: week.label, startDate: data.startDate, endDate: data.endDate, status: "open" as const };
 }
 export async function updateProjectWeekStatus(projectId: string, id: string, status: unknown) {
@@ -41,6 +51,7 @@ export async function updateProjectWeekStatus(projectId: string, id: string, sta
   if (!current || current.projectId !== projectId) throw new DomainError("NOT_FOUND", "프로젝트 주차를 찾을 수 없습니다.");
   const updated = await prisma.week.update({ where: { id }, data: { status: value } });
   await writeAuditLog(projectId, null, "PROJECT_WEEKS_UPDATE", "weeks", id, current, updated);
+  revalidateTag(weeksTag(projectId));
   return { id, weekKey: current.weekKey, label: current.label, startDate: dateStr(current.startDate)!, endDate: dateStr(current.endDate)!, status: value };
 }
 export type ActivityLogFilters = { table?: string; targetId?: string; from?: string; to?: string };
@@ -80,6 +91,7 @@ export async function saveWeeklyReport(projectId: string, userId: string, input:
     ? await prisma.weeklyReport.update({ where: { id: existing.id }, data: { achievements: data.achievements, nextPlan: data.nextPlan, issues: data.issues, decisions: data.decisions, notes: data.notes, version: { increment: 1 } } })
     : await prisma.weeklyReport.create({ data: { weekId: data.weekId, groupId: data.areaCodeId, achievements: data.achievements, nextPlan: data.nextPlan, issues: data.issues, decisions: data.decisions, notes: data.notes, createdBy: userId } });
   await writeAuditLog(projectId, userId, `WEEKLY_REPORTS_${existing ? "UPDATE" : "INSERT"}`, "weekly_reports", saved.id, existing ?? null, saved);
+  revalidateTag(portfolioTag(projectId));
   return { id: saved.id };
 }
 
@@ -96,6 +108,7 @@ export async function createProgress(projectId: string, userId: string, input: u
   const data = progressSchema.parse(input);
   const row = await getPrisma().weeklyProgress.create({ data: { weekId: data.weekId, groupId: data.areaCodeId, taskName: data.taskName, planDetail: data.planDetail, planTargetDate: data.planTargetDate ? new Date(data.planTargetDate) : null, actualDetail: data.actualDetail, actualDate: data.actualDate ? new Date(data.actualDate) : null, progress: data.progress, nextPlan: data.nextPlan, nextTargetDate: data.nextTargetDate ? new Date(data.nextTargetDate) : null, notes: data.notes, createdBy: userId } });
   await writeAuditLog(projectId, userId, "WEEKLY_PROGRESS_INSERT", "weekly_progress", row.id, null, row);
+  revalidateTag(portfolioTag(projectId));
   return { id: row.id };
 }
 export async function updateProgress(projectId: string, id: string, input: unknown) {
@@ -105,6 +118,7 @@ export async function updateProgress(projectId: string, id: string, input: unkno
   if (!current) throw new DomainError("NOT_FOUND", "주간실적을 찾을 수 없습니다.");
   const updated = await prisma.weeklyProgress.update({ where: { id }, data: { weekId: data.weekId, groupId: data.areaCodeId, taskName: data.taskName, planDetail: data.planDetail, planTargetDate: data.planTargetDate ? new Date(data.planTargetDate) : null, actualDetail: data.actualDetail, actualDate: data.actualDate ? new Date(data.actualDate) : null, progress: data.progress, nextPlan: data.nextPlan, nextTargetDate: data.nextTargetDate ? new Date(data.nextTargetDate) : null, notes: data.notes, version: { increment: 1 } } });
   await writeAuditLog(projectId, null, "WEEKLY_PROGRESS_UPDATE", "weekly_progress", id, current, updated);
+  revalidateTag(portfolioTag(projectId));
   return { id };
 }
 
@@ -121,10 +135,11 @@ export async function saveStaffChange(projectId: string, userId: string, input: 
     ? await prisma.staffChange.update({ where: { id: existing.id }, data: { currentCount: data.currentCount, nextCount: data.nextCount, notes: data.notes, version: { increment: 1 } } })
     : await prisma.staffChange.create({ data: { weekId: data.weekId, groupId: data.areaCodeId, changeType: data.changeType, currentCount: data.currentCount, nextCount: data.nextCount, notes: data.notes, createdBy: userId } });
   await writeAuditLog(projectId, userId, `STAFF_CHANGES_${existing ? "UPDATE" : "INSERT"}`, "staff_changes", saved.id, existing ?? null, saved);
+  revalidateTag(portfolioTag(projectId));
   return { id: saved.id };
 }
 
-export async function getPortfolioDashboard(projectId: string) {
+async function loadPortfolioDashboard(projectId: string) {
   const prisma = getPrisma();
   const scope = { week: { projectId } };
   const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
@@ -143,4 +158,9 @@ export async function getPortfolioDashboard(projectId: string) {
     averageProgress: Math.round((progressAvg._avg.progress ?? 0) * 10) / 10, delayedCount,
     currentStaff: signedSum("currentCount"), nextStaff: signedSum("nextCount"), openIssues,
   };
+}
+
+// 통합 대시보드 KPI는 변동 빈도가 낮으므로 15초 캐시한다. 이슈/실적/보고/인력변동 저장 시 revalidateTag로 무효화한다.
+export function getPortfolioDashboard(projectId: string) {
+  return unstable_cache(loadPortfolioDashboard, ["portfolio-dashboard"], { tags: [portfolioTag(projectId)], revalidate: 15 })(projectId);
 }

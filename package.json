@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "next dev --port 3020",
-    "local": "next dev --port 3020",
+    "dev": "next dev --turbopack --port 3020",
+    "local": "next dev --turbopack --port 3020",
+    "dev:webpack": "next dev --port 3020",
     "db:local:start": "powershell -ExecutionPolicy Bypass -File scripts/start-local-postgres.ps1",
     "db:local:stop": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-postgres.ps1",
     "db:local:status": "powershell -ExecutionPolicy Bypass -File scripts/status-local-postgres.ps1",

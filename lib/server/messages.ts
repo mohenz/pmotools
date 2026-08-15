@@ -11,7 +11,7 @@ export async function listMessages(userId: string, box: "received" | "sent"): Pr
   const prisma = getPrisma();
   const messages = await prisma.message.findMany({
     where: box === "received" ? { receiverId: userId } : { senderId: userId },
-    include: { sender: true, receiver: true },
+    include: { sender: { select: { name: true, userId: true } }, receiver: { select: { name: true, userId: true } } },
     orderBy: { createdAt: "desc" },
   });
   return messages.map((m) => ({
