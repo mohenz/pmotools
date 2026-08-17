@@ -11,7 +11,7 @@
     "db:local:stop": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-postgres.ps1",
     "db:local:status": "powershell -ExecutionPolicy Bypass -File scripts/status-local-postgres.ps1",
     "build": "next build",
-    "vercel-build": "prisma migrate deploy && prisma db seed && next build",
+    "vercel-build": "prisma migrate deploy && next build",
     "start": "next start --port 3020",
     "lint": "tsc --noEmit",
     "test": "vitest run"
