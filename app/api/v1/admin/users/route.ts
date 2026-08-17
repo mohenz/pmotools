@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLocalContext } from "@/lib/server/context";
-import { listUsers } from "@/lib/server/admin";
+import { createUser, listUsers } from "@/lib/server/admin";
 import { mutationErrorResponse } from "@/lib/server/http";
 
 export async function GET(request: NextRequest) {
@@ -8,5 +8,13 @@ export async function GET(request: NextRequest) {
   try {
     const q = request.nextUrl.searchParams.get("q") ?? undefined;
     return NextResponse.json({ data: await listUsers(projectId, userId, q) });
+  } catch (error) { return mutationErrorResponse(error); }
+}
+
+export async function POST(request: NextRequest) {
+  const { projectId, userId } = await getLocalContext();
+  try {
+    const result = await createUser(projectId, userId, await request.json());
+    return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) { return mutationErrorResponse(error); }
 }

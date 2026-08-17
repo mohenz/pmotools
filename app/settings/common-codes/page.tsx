@@ -1,11 +1,11 @@
-import { getLocalContext } from "@/lib/server/context";
+import { requireManagerContext } from "@/lib/server/context";
 import { listCommonCodeGroups, listCommonCodes } from "@/lib/server/common-codes";
 import { CommonCodeSettingsScreen } from "@/screens/CommonCodeSettingsScreen";
 
 export const dynamic = "force-dynamic";
 
 export default async function CommonCodeSettingsPage({ searchParams }: { searchParams: Promise<{ group?: string }> }) {
-  const { projectId } = await getLocalContext();
+  const { projectId } = await requireManagerContext();
   const groups = await listCommonCodeGroups(projectId);
   const requested = (await searchParams).group;
   const selectedGroup = groups.find((group) => group.id === requested) ?? groups[0] ?? null;

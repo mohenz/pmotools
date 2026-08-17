@@ -17,7 +17,7 @@ const eventSchema = z.object({
   title: z.string().trim().min(1).max(200), description: z.string().max(10000), eventType: z.enum(["meeting", "milestone", "work", "other"]),
   startAt: z.string().datetime(), endAt: z.string().datetime(), allDay: z.boolean(), areaCodeId: z.string().uuid().nullable(), location: z.string().trim().max(200),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]).default("MEDIUM"), isMilestone: z.boolean().default(false), recurrence: recurrenceSchema.nullable().optional(),
-  assigneeIds: z.array(z.string().uuid()).default([]), groupTagIds: z.array(z.string().uuid()).default([]),
+  assigneeIds: z.array(z.string().uuid()).default([]), assigneeNames: z.array(z.string().trim().min(1).max(50)).max(50).default([]), groupTagIds: z.array(z.string().uuid()).default([]),
 }).superRefine((d, ctx) => {
   if (d.endAt < d.startAt) ctx.addIssue({ code: "custom", path: ["endAt"], message: "종료일시는 시작일시 이후여야 합니다." });
   for (const field of ["startAt", "endAt"] as const) { const date = new Date(d[field]); if (date.getUTCMinutes() % 10 !== 0 || date.getUTCSeconds() !== 0) ctx.addIssue({ code: "custom", path: [field], message: "시간은 10분 단위로 입력해 주세요." }); }
@@ -71,7 +71,7 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
     getCodeOptions(projectId),
   ]);
   const labels = new Map(options.tracks.map((code) => [code.id, code.label]));
-  const toAssignees = (event: (typeof events)[number]): EventPerson[] => event.assignees.map((a) => ({ id: a.user.id, name: a.user.name }));
+  const toAssignees = (event: (typeof events)[number]): EventPerson[] => event.assignees.map((a) => (a.user ? { id: a.user.id, name: a.user.name } : { id: a.id, name: a.guestName! }));
   const toGroupTags = (event: (typeof events)[number]): EventGroupTagEntry[] => event.groupTags.map((t) => ({ id: t.group.id, label: t.group.label }));
   const recurringIds = events.filter((event) => event.recurrenceRule).map((event) => event.id);
   const exceptions = recurringIds.length ? await prisma.eventException.findMany({ where: { eventId: { in: recurringIds } } }) : [];
@@ -118,7 +118,7 @@ export async function getCalendarEvent(projectId: string, id: string) {
   const event = await prisma.calendarEvent.findUnique({ where: { id: masterId }, include: { assignees: { include: { user: true } }, groupTags: { include: { group: true } } } });
   if (!event || event.projectId !== projectId) return null;
   const options = await getCodeOptions(projectId), labels = new Map(options.tracks.map((code) => [code.id, code.label]));
-  const assignees: EventPerson[] = event.assignees.map((a) => ({ id: a.user.id, name: a.user.name }));
+  const assignees: EventPerson[] = event.assignees.map((a) => (a.user ? { id: a.user.id, name: a.user.name } : { id: a.id, name: a.guestName! }));
   const groupTags: EventGroupTagEntry[] = event.groupTags.map((t) => ({ id: t.group.id, label: t.group.label }));
 
   if (occurrenceDate && event.recurrenceRule) {
@@ -144,7 +144,7 @@ export async function createCalendarEvent(projectId: string, userId: string, inp
   const prisma = getPrisma();
   const event = await prisma.$transaction(async (tx) => {
     const event = await tx.calendarEvent.create({ data: { projectId, title: data.title, description: data.description, eventType: data.eventType, startAt: new Date(data.startAt), endAt: new Date(data.endAt), allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone, recurrenceRule, createdBy: userId } });
-    if (data.assigneeIds.length) await tx.eventAssignee.createMany({ data: data.assigneeIds.map((userId) => ({ eventId: event.id, userId })) });
+    if (data.assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...data.assigneeIds.map((userId) => ({ eventId: event.id, userId })), ...data.assigneeNames.map((guestName) => ({ eventId: event.id, guestName }))] });
     if (data.groupTagIds.length) await tx.eventGroupTag.createMany({ data: data.groupTagIds.map((groupId) => ({ eventId: event.id, groupId })) });
     return event;
   });
@@ -174,7 +174,7 @@ export async function updateCalendarEvent(projectId: string, id: string, userId:
   const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.calendarEvent.update({ where: { id: masterId }, data: { title: data.title, description: data.description, eventType: data.eventType, startAt: new Date(data.startAt), endAt: new Date(data.endAt), allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone, recurrenceRule, updatedBy: userId, version: { increment: 1 } } });
     await tx.eventAssignee.deleteMany({ where: { eventId: masterId } });
-    if (data.assigneeIds.length) await tx.eventAssignee.createMany({ data: data.assigneeIds.map((userId) => ({ eventId: masterId, userId })) });
+    if (data.assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...data.assigneeIds.map((userId) => ({ eventId: masterId, userId })), ...data.assigneeNames.map((guestName) => ({ eventId: masterId, guestName }))] });
     await tx.eventGroupTag.deleteMany({ where: { eventId: masterId } });
     if (data.groupTagIds.length) await tx.eventGroupTag.createMany({ data: data.groupTagIds.map((groupId) => ({ eventId: masterId, groupId })) });
     return updated;

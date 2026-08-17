@@ -5,16 +5,32 @@ import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { UnreadMessageProvider } from "@/components/UnreadMessageProvider";
 import { UserMenu } from "@/components/UserMenu";
 import { auth } from "@/lib/server/auth";
+import { listMenuPreferences } from "@/lib/server/menu-preferences";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PMO CONTROL",
-  description: "프로젝트 관리에 필요한 업무 도구를 제공하는 PMO CONTROL",
+  title: "PMOTOOLS",
+  description: "프로젝트 관리에 필요한 업무 도구를 제공하는 PMOTOOLS",
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
+  const menuPrefs = session?.user ? await listMenuPreferences(session.user.projectId) : [];
+  const isManager = session?.user?.role === "ADMIN" || session?.user?.role === "OPERATOR";
+  const homeHref = isManager ? "/portfolio" : "/calendar";
   const themeScript = `(function(){try{var p=localStorage.getItem('pmo-control-theme')||'system';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.style.colorScheme=d}catch(e){}})()`;
+  if (!session?.user) {
+    return (
+      <html lang="ko" suppressHydrationWarning>
+        <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+        <body>
+          <AuthSessionProvider session={session}>
+            <main className="main" id="main-content" tabIndex={-1}>{children}</main>
+          </AuthSessionProvider>
+        </body>
+      </html>
+    );
+  }
   return (
     <html lang="ko" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
@@ -24,14 +40,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <a className="skip-link" href="#main-content">본문 바로가기</a>
             <div className="app-shell">
               <aside className="sidebar">
-                <Link className="brand" href="/portfolio" aria-label="PMO CONTROL 통합 현황으로 이동">
-                  <span>PROJECT MANAGEMENT</span>
-                  <strong>PMO CONTROL</strong>
+                <Link className="brand" href={homeHref} aria-label="PMOTOOLS 메인 화면으로 이동">
+                  <div className="brand-mark" aria-hidden="true" />
+                  <span className="brand-text">
+                    <span>PROJECT MANAGEMENT</span>
+                    <strong>PMOTOOLS</strong>
+                  </span>
                 </Link>
-                <AppNavigation area="sidebar" />
-                <div className="sidebar-foot"><UserMenu />VERCEL · SUPABASE POSTGRES</div>
+                <AppNavigation area="sidebar" menuPrefs={menuPrefs} />
+                <div className="sidebar-foot"><UserMenu /></div>
               </aside>
-              <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" />{children}</main>
+              <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" menuPrefs={menuPrefs} />{children}</main>
             </div>
           </UnreadMessageProvider>
         </AuthSessionProvider>

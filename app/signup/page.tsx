@@ -20,6 +20,7 @@ export default function SignupPage() {
       body: JSON.stringify({
         userId: String(data.get("userId") ?? ""),
         name: String(data.get("name") ?? ""),
+        department: String(data.get("department") ?? ""),
         password: String(data.get("password") ?? ""),
       }),
     });
@@ -33,22 +34,29 @@ export default function SignupPage() {
   }
 
   return (
-    <>
-      <header className="topbar"><div><h1>회원가입</h1><p>아이디, 이름, 비밀번호만으로 가입합니다.</p></div></header>
-      <div className="content">
-        <section className="panel" style={{ maxWidth: 420 }}>
-          <form className="calendar-event-form" onSubmit={submit}>
-            <label>아이디<input name="userId" autoComplete="username" required maxLength={50} /></label>
-            <label>이름<input name="name" autoComplete="name" required maxLength={50} /></label>
-            <label>비밀번호<input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={100} /></label>
-            {message && <p className="form-error">{message}</p>}
-            <div className="topbar-actions">
-              <button className="button primary" disabled={pending}>{pending ? "가입 중…" : "가입하기"}</button>
-              <Link className="button secondary" href="/login">로그인으로</Link>
-            </div>
-          </form>
-        </section>
+    <div className="auth-center">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <img src="/pmotools-logo.png" alt="PMOTOOLS" />
+          <h1>계정 생성</h1>
+          <p>Project Management Tools</p>
+        </div>
+        <div className="auth-divider" />
+        <form className="auth-form" onSubmit={submit}>
+          <label>아이디<input name="userId" autoComplete="username" placeholder="아이디를 입력하세요" required maxLength={50} /></label>
+          <label>이름<input name="name" autoComplete="name" placeholder="이름을 입력하세요" required maxLength={50} /></label>
+          <label>회사명<input name="department" autoComplete="organization" placeholder="회사명을 입력하세요" maxLength={100} /></label>
+          <label>
+            비밀번호<input name="password" type="password" autoComplete="new-password" placeholder="••••••••" required minLength={8} maxLength={100} />
+          </label>
+          <p className="auth-hint">영문/숫자 조합 8자 이상</p>
+          {message && <p className="form-error">{message}</p>}
+          <button className="auth-submit" disabled={pending}>{pending ? "가입 중…" : "가입하기"}</button>
+        </form>
+        <div className="auth-footer-links center">
+          <Link href="/login">로그인으로 이동</Link>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

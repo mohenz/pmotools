@@ -31,29 +31,33 @@ function LoginForm() {
   }
 
   return (
-    <form className="calendar-event-form" onSubmit={submit}>
-      <label>아이디<input name="userId" autoComplete="username" required maxLength={50} /></label>
-      <label>비밀번호<input name="password" type="password" autoComplete="current-password" required maxLength={100} /></label>
+    <form className="auth-form" onSubmit={submit}>
+      <label>아이디<input name="userId" autoComplete="username" placeholder="아이디 입력" required maxLength={50} /></label>
+      <label>비밀번호<input name="password" type="password" autoComplete="current-password" placeholder="••••••••" required maxLength={100} /></label>
       {message && <p className="form-error">{message}</p>}
-      <div className="topbar-actions">
-        <button className="button primary" disabled={pending}>{pending ? "로그인 중…" : "로그인"}</button>
-        <Link className="button secondary" href="/signup">회원가입</Link>
-      </div>
+      <button className="auth-submit" disabled={pending}>{pending ? "로그인 중…" : "로그인"}</button>
     </form>
   );
 }
 
 export default function LoginPage() {
   return (
-    <>
-      <header className="topbar"><div><h1>로그인</h1><p>아이디와 비밀번호로 로그인합니다.</p></div></header>
-      <div className="content">
-        <section className="panel" style={{ maxWidth: 420 }}>
-          <Suspense fallback={null}>
-            <LoginForm />
-          </Suspense>
-        </section>
+    <div className="auth-center">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <img src="/pmotools-logo.png" alt="PMOTOOLS" />
+          <h1>PMOTOOLS</h1>
+          <p>Project Management Tools</p>
+        </div>
+        <div className="auth-divider" />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
+        <div className="auth-footer-links">
+          <Link href="/signup">회원가입</Link>
+          <Link href="/reset-password">비밀번호 초기화</Link>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

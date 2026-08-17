@@ -10,9 +10,9 @@ export default async function MeetingRoomsPage() {
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
   const from = new Date(`${date}T00:00:00+09:00`), to = new Date(`${date}T24:00:00+09:00`);
   const [rooms, reservations, recurring, members] = await Promise.all([
-    listMeetingRooms(context.projectId, context.role === "ADMIN"),
+    listMeetingRooms(context.projectId, false),
     listMeetingReservations(context.projectId, from, to),
-    listRecurringMeetings(context.projectId, context.userId, context.role === "ADMIN"),
+    listRecurringMeetings(context.projectId, context.userId, false),
     listProjectMembers(context.projectId),
   ]);
   return <MeetingRoomScreen initialDate={date} initialRooms={rooms} initialReservations={reservations} initialRecurring={JSON.parse(JSON.stringify(recurring))} members={members} currentUserId={context.userId} isAdmin={context.role === "ADMIN"} />;

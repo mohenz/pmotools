@@ -44,28 +44,56 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  memberships          ProjectMember[]
-  groupMemberships     UserGroupMap[]
-  createdItems         Item[]                        @relation("ItemCreator")
-  ownedItems           Item[]                        @relation("ItemOwner")
-  itemEvents           ItemEvent[]
-  assignedEvents       EventAssignee[]
-  createdEvents        CalendarEvent[]               @relation("CalendarEventCreator")
-  updatedEvents        CalendarEvent[]               @relation("CalendarEventUpdater")
-  createdWeeklyReports WeeklyReport[]                @relation("WeeklyReportCreator")
-  createdProgress      WeeklyProgress[]              @relation("WeeklyProgressCreator")
-  createdStaffChanges  StaffChange[]                 @relation("StaffChangeCreator")
-  notificationSetting  NotificationSetting?
-  sentMessages         Message[]                     @relation("MessageSender")
-  receivedMessages     Message[]                     @relation("MessageReceiver")
-  auditLogs            AuditLog[]
-  meetingReservations  MeetingReservation[]
-  recurringMeetings    RecurringMeetingReservation[] @relation("RecurringApplicant")
-  reviewedMeetings     RecurringMeetingReservation[] @relation("RecurringReviewer")
-  meetingChangeLogs    MeetingReservationChangeLog[]
-  meetingAttendances   MeetingReservationAttendee[]
+  memberships                 ProjectMember[]
+  groupMemberships            UserGroupMap[]
+  createdItems                Item[]                        @relation("ItemCreator")
+  ownedItems                  Item[]                        @relation("ItemOwner")
+  itemEvents                  ItemEvent[]
+  assignedEvents              EventAssignee[]
+  createdEvents               CalendarEvent[]               @relation("CalendarEventCreator")
+  updatedEvents               CalendarEvent[]               @relation("CalendarEventUpdater")
+  createdWeeklyReports        WeeklyReport[]                @relation("WeeklyReportCreator")
+  createdProgress             WeeklyProgress[]              @relation("WeeklyProgressCreator")
+  createdStaffChanges         StaffChange[]                 @relation("StaffChangeCreator")
+  notificationSetting         NotificationSetting?
+  sentMessages                Message[]                     @relation("MessageSender")
+  receivedMessages            Message[]                     @relation("MessageReceiver")
+  auditLogs                   AuditLog[]
+  meetingReservations         MeetingReservation[]
+  recurringMeetings           RecurringMeetingReservation[] @relation("RecurringApplicant")
+  reviewedMeetings            RecurringMeetingReservation[] @relation("RecurringReviewer")
+  meetingChangeLogs           MeetingReservationChangeLog[]
+  meetingAttendances          MeetingReservationAttendee[]
+  createdRequirements         Requirement[]                 @relation("RequirementCreator")
+  ownedRequirements           Requirement[]                 @relation("RequirementOwner")
+  requirementEvents           RequirementEvent[]
+  requestedRequirementChanges RequirementChange[]           @relation("RequirementChangeRequester")
+  decidedRequirementChanges   RequirementChange[]           @relation("RequirementChangeDecider")
+  passwordResetRequests         PasswordResetRequest[] @relation("PasswordResetRequestUser")
+  resolvedPasswordResetRequests PasswordResetRequest[] @relation("PasswordResetRequestResolver")
 
   @@map("users")
+}
+
+enum PasswordResetRequestStatus {
+  PENDING
+  RESOLVED
+}
+
+model PasswordResetRequest {
+  id           String                      @id @default(uuid())
+  userId       String
+  note         String?
+  status       PasswordResetRequestStatus  @default(PENDING)
+  createdAt    DateTime                    @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+
+  user       User  @relation("PasswordResetRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("PasswordResetRequestResolver", fields: [resolvedById], references: [id])
+
+  @@index([status])
+  @@map("password_reset_requests")
 }
 
 model ProjectMember {
@@ -122,20 +150,39 @@ model Project {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  members             ProjectMember[]
-  groups              Groups[]
-  commonCodeGroups    CommonCodeGroup[]
-  commonCodes         CommonCode[]
-  items               Item[]
-  weeks               Week[]
-  calendarEvents      CalendarEvent[]
-  auditLogs           AuditLog[]
-  itemSequence        ItemSequence?
-  meetingRooms        MeetingRoom[]
-  meetingReservations MeetingReservation[]
-  recurringMeetings   RecurringMeetingReservation[]
+  members                   ProjectMember[]
+  groups                    Groups[]
+  commonCodeGroups          CommonCodeGroup[]
+  commonCodes               CommonCode[]
+  items                     Item[]
+  weeks                     Week[]
+  calendarEvents            CalendarEvent[]
+  auditLogs                 AuditLog[]
+  itemSequence              ItemSequence?
+  meetingRooms              MeetingRoom[]
+  meetingReservations       MeetingReservation[]
+  recurringMeetings         RecurringMeetingReservation[]
+  requirements              Requirement[]
+  requirementSequence       RequirementSequence?
+  requirementChanges        RequirementChange[]
+  requirementChangeSequence RequirementChangeSequence?
+  menuPreferences           MenuPreference[]
 
   @@map("projects")
+}
+
+model MenuPreference {
+  projectId       String
+  menuKey         String
+  visibleAdmin    Boolean @default(true)
+  visibleOperator Boolean @default(true)
+  visibleMember   Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, menuKey])
+  @@map("menu_preferences")
 }
 
 // ---------------------------------------------------------------------------
@@ -219,10 +266,12 @@ model CommonCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  group             CommonCodeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  itemsByCategory   Item[]          @relation("ItemCategory")
-  itemsByEscalation Item[]          @relation("ItemEscalation")
+  project                Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group                  CommonCodeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  itemsByCategory        Item[]          @relation("ItemCategory")
+  itemsByEscalation      Item[]          @relation("ItemEscalation")
+  requirementsByDivision Requirement[]   @relation("RequirementDivision")
+  requirementsByCategory Requirement[]   @relation("RequirementCategory")
 
   @@unique([groupId, code])
   @@map("common_codes")
@@ -320,6 +369,133 @@ model ItemEvent {
 
   @@index([itemId, createdAt])
   @@map("item_events")
+}
+
+// ---------------------------------------------------------------------------
+// 요구사항관리 (요구사항정의서 + 요구사항변경관리)
+// ---------------------------------------------------------------------------
+
+enum RequirementAcceptance {
+  pending
+  accepted
+  rejected
+  deferred
+}
+
+enum RequirementEventType {
+  created
+  edited
+  archived
+  change_requested
+  change_approved
+  change_rejected
+}
+
+enum RequirementChangeStatus {
+  pending
+  approved
+  rejected
+}
+
+model Requirement {
+  id                String                @id @default(uuid())
+  displayId         String                @unique
+  projectId         String
+  title             String
+  content           String                @default("")
+  ownerUserId       String?
+  basis             String                @default("")
+  precondition      String                @default("")
+  resolution        String                @default("")
+  acceptanceStatus  RequirementAcceptance @default(pending)
+  requestDepartment String                @default("")
+  divisionCodeId    String?
+  categoryCodeId    String?
+  priority          ProbabilityLevel?
+  importance        ProbabilityLevel?
+  createdBy         String
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  archivedAt        DateTime?
+
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner    User?               @relation("RequirementOwner", fields: [ownerUserId], references: [id])
+  creator  User                @relation("RequirementCreator", fields: [createdBy], references: [id])
+  division CommonCode?         @relation("RequirementDivision", fields: [divisionCodeId], references: [id])
+  category CommonCode?         @relation("RequirementCategory", fields: [categoryCodeId], references: [id])
+  events   RequirementEvent[]
+  changes  RequirementChange[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, acceptanceStatus])
+  @@map("requirements")
+}
+
+model RequirementSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("requirement_sequences")
+}
+
+model RequirementEvent {
+  id            String               @id @default(uuid())
+  requirementId String
+  eventType     RequirementEventType
+  actorId       String?
+  actorName     String?
+  body          String?
+  beforeData    Json?
+  afterData     Json?
+  createdAt     DateTime             @default(now())
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  actor       User?       @relation(fields: [actorId], references: [id])
+
+  @@index([requirementId, createdAt])
+  @@map("requirement_events")
+}
+
+model RequirementChangeSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("requirement_change_sequences")
+}
+
+model RequirementChange {
+  id                   String                  @id @default(uuid())
+  displayId            String                  @unique
+  title                String
+  projectId            String
+  requirementId        String
+  changeReason         String
+  proposedTitle        String?
+  proposedContent      String?
+  proposedBasis        String?
+  proposedPrecondition String?
+  proposedResolution   String?
+  proposedAcceptance   RequirementAcceptance?
+  status               RequirementChangeStatus @default(pending)
+  requestedBy          String
+  requestedAt          DateTime                @default(now())
+  decidedBy            String?
+  decidedAt            DateTime?
+  decisionNote         String?
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  requester   User        @relation("RequirementChangeRequester", fields: [requestedBy], references: [id])
+  decider     User?       @relation("RequirementChangeDecider", fields: [decidedBy], references: [id])
+
+  @@index([projectId, status])
+  @@index([requirementId, requestedAt])
+  @@map("requirement_changes")
 }
 
 // ---------------------------------------------------------------------------
@@ -497,13 +673,15 @@ model EventException {
 }
 
 model EventAssignee {
-  eventId String
-  userId  String
+  id        String  @id @default(uuid())
+  eventId   String
+  userId    String?
+  guestName String?
 
   event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([eventId, userId])
+  @@unique([eventId, userId])
   @@map("event_assignees")
 }
 
@@ -617,6 +795,7 @@ enum MeetingChangeAction {
   CANCEL
   EXTEND
   SHORTEN
+  UPDATE
 }
 
 model MeetingRoom {
@@ -717,14 +896,16 @@ model MeetingReservationChangeLog {
 }
 
 model MeetingReservationAttendee {
+  id            String   @id @default(uuid())
   reservationId String
-  userId        String
+  userId        String?
+  guestName     String?
   createdAt     DateTime @default(now())
 
   reservation MeetingReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  user        User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  @@id([reservationId, userId])
+  @@unique([reservationId, userId])
   @@index([userId, createdAt])
   @@map("meeting_reservation_attendees")
 }

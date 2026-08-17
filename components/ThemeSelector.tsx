@@ -52,7 +52,7 @@ export function ThemeSelector() {
   }
 
   return <section className="panel theme-settings-panel">
-    <div className="panel-head"><div><h2>화면 모드</h2><p>PMO CONTROL 전체 화면에 적용할 테마를 선택합니다.</p></div><span>현재 {resolved === "dark" ? "다크" : "화이트"} 모드</span></div>
+    <div className="panel-head"><div><h2>화면 모드</h2><p>PMOTOOLS 전체 화면에 적용할 테마를 선택합니다.</p></div><span>현재 {resolved === "dark" ? "다크" : "화이트"} 모드</span></div>
     <fieldset className="theme-options">
       <legend className="sr-only">화면 모드 선택</legend>
       {options.map((option) => <label className={`theme-option ${preference === option.value ? "selected" : ""}`} key={option.value}>

@@ -55,15 +55,57 @@ export async function updateUserStatus(projectId: string, adminUserId: string, t
 function generateTempPassword() {
   return `Temp-${crypto.randomUUID().slice(0, 8)}!`;
 }
-export async function resetUserPassword(projectId: string, adminUserId: string, targetUserId: string) {
+const resetPasswordSchema = z.object({ password: z.string().trim().min(8).max(100).optional() });
+export async function resetUserPassword(projectId: string, adminUserId: string, targetUserId: string, input?: unknown) {
   await assertAdmin(projectId, adminUserId);
+  const data = resetPasswordSchema.parse(input ?? {});
   const prisma = getPrisma();
   const user = await prisma.user.findUnique({ where: { id: targetUserId } });
   if (!user) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
-  const tempPassword = generateTempPassword();
+  const tempPassword = data.password || generateTempPassword();
   await prisma.user.update({ where: { id: targetUserId }, data: { passwordHash: await hash(tempPassword, 12) } });
   await writeAuditLog(projectId, adminUserId, "USER_PASSWORD_RESET", "users", targetUserId, null, null);
   return { id: targetUserId, tempPassword };
+}
+
+const createUserSchema = z.object({
+  userId: z.string().trim().min(3).max(50).regex(/^[A-Za-z0-9._-]+$/, "아이디는 영문/숫자/._- 만 사용할 수 있습니다."),
+  name: z.string().trim().min(1).max(50),
+  email: z.union([z.string().trim().email(), z.literal("")]).optional(),
+  department: z.string().trim().max(100).nullable().optional(),
+  role: z.enum(["ADMIN", "OPERATOR", "MEMBER"]),
+});
+export async function createUser(projectId: string, adminUserId: string, input: unknown) {
+  await assertAdmin(projectId, adminUserId);
+  const data = createUserSchema.parse(input);
+  const prisma = getPrisma();
+  const existing = await prisma.user.findUnique({ where: { userId: data.userId } });
+  if (existing) throw new DomainError("DUPLICATE_CODE", "이미 사용 중인 아이디입니다.");
+  const tempPassword = generateTempPassword();
+  const passwordHash = await hash(tempPassword, 12);
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({ data: { userId: data.userId, name: data.name, passwordHash, email: data.email || null, department: data.department || null, role: data.role } });
+    await tx.projectMember.create({ data: { projectId, userId: created.id, role: data.role } });
+    return created;
+  });
+  await writeAuditLog(projectId, adminUserId, "USER_CREATE", "users", user.id, null, { userId: user.userId, name: user.name, role: data.role });
+  return { id: user.id, userId: user.userId, tempPassword };
+}
+
+const updateUserProfileSchema = z.object({
+  name: z.string().trim().min(1).max(50),
+  email: z.union([z.string().trim().email(), z.literal("")]).optional(),
+  department: z.string().trim().max(100).nullable().optional(),
+});
+export async function updateUserProfile(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
+  await assertAdmin(projectId, adminUserId);
+  const data = updateUserProfileSchema.parse(input);
+  const prisma = getPrisma();
+  const current = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!current) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { name: data.name, email: data.email || null, department: data.department || null } });
+  await writeAuditLog(projectId, adminUserId, "USER_PROFILE_UPDATE", "users", targetUserId, { name: current.name, email: current.email, department: current.department }, { name: updated.name, email: updated.email, department: updated.department });
+  return { id: targetUserId, name: updated.name, email: updated.email, department: updated.department };
 }
 
 export async function listGroups(projectId: string, groupType?: GroupType): Promise<GroupRow[]> {

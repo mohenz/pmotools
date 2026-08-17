@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/server/auth";
 
-const PUBLIC_PATHS = ["/login", "/signup"];
+const PUBLIC_PATHS = ["/login", "/signup", "/reset-password"];
+const PUBLIC_FILE = /\.(png|jpg|jpeg|svg|webp|ico)$/;
 
 export default auth((request) => {
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((path) => pathname === path) || pathname.startsWith("/api/auth") || pathname === "/api/health";
+  const isPublic = PUBLIC_PATHS.some((path) => pathname === path) || pathname.startsWith("/api/auth") || pathname === "/api/health" || PUBLIC_FILE.test(pathname);
   if (isPublic || request.auth) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {

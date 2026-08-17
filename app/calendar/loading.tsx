@@ -3,7 +3,7 @@ export default function CalendarLoading() {
     <>
       <header className="topbar">
         <div>
-          <h1 className="skeleton skeleton-title">통합 캘린더</h1>
+          <h1 className="skeleton skeleton-title">캘린더</h1>
           <p className="skeleton skeleton-line" style={{ width: 260, marginTop: 8 }} />
         </div>
       </header>

@@ -54,6 +54,32 @@ export async function updateProjectWeekStatus(projectId: string, id: string, sta
   revalidateTag(weeksTag(projectId));
   return { id, weekKey: current.weekKey, label: current.label, startDate: dateStr(current.startDate)!, endDate: dateStr(current.endDate)!, status: value };
 }
+const weekEditSchema = z.object({ label: z.string().trim().min(1).max(50), startDate: z.string().date(), endDate: z.string().date() }).superRefine((d, ctx) => { if (d.endDate < d.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "종료일은 시작일 이후여야 합니다." }); });
+export async function updateProjectWeek(projectId: string, id: string, input: unknown) {
+  const data = weekEditSchema.parse(input);
+  const prisma = getPrisma();
+  const current = await prisma.week.findUnique({ where: { id } });
+  if (!current || current.projectId !== projectId) throw new DomainError("NOT_FOUND", "프로젝트 주차를 찾을 수 없습니다.");
+  const updated = await prisma.week.update({ where: { id }, data: { label: data.label, startDate: new Date(data.startDate), endDate: new Date(data.endDate) } });
+  await writeAuditLog(projectId, null, "PROJECT_WEEKS_UPDATE", "weeks", id, current, updated);
+  revalidateTag(weeksTag(projectId));
+  return toProjectWeek(updated);
+}
+export async function deleteProjectWeek(projectId: string, id: string) {
+  const prisma = getPrisma();
+  const current = await prisma.week.findUnique({ where: { id } });
+  if (!current || current.projectId !== projectId) throw new DomainError("NOT_FOUND", "프로젝트 주차를 찾을 수 없습니다.");
+  const [reportCount, progressCount, staffCount] = await Promise.all([
+    prisma.weeklyReport.count({ where: { weekId: id } }),
+    prisma.weeklyProgress.count({ where: { weekId: id } }),
+    prisma.staffChange.count({ where: { weekId: id } }),
+  ]);
+  if (reportCount || progressCount || staffCount) throw new DomainError("INVALID_STATE", "해당 주차에 등록된 주간보고·실적·인력변동 데이터가 있어 삭제할 수 없습니다.");
+  await prisma.week.delete({ where: { id } });
+  await writeAuditLog(projectId, null, "PROJECT_WEEKS_DELETE", "weeks", id, current, null);
+  revalidateTag(weeksTag(projectId));
+  return { id };
+}
 export type ActivityLogFilters = { table?: string; targetId?: string; from?: string; to?: string };
 export async function listActivityLogs(projectId: string, filters: ActivityLogFilters = {}): Promise<ActivityLog[]> {
   const logs = await getPrisma().auditLog.findMany({

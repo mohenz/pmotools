@@ -4,52 +4,7 @@ import { useRouter } from "next/navigation";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { CalendarEvent } from "@/lib/server/calendar";
 import type { ProjectMemberOption } from "@/lib/server/users";
-import type { EventAttachmentRow } from "@/lib/server/storage";
-
-function AttachmentSection({ eventId, canWrite }: { eventId: string; canWrite: boolean }) {
-  const [attachments, setAttachments] = useState<EventAttachmentRow[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function load() {
-    const response = await fetch(`/api/v1/calendar-events/${eventId}/attachments`);
-    const payload = await response.json().catch(() => null);
-    if (response.ok) setAttachments(payload.data ?? []);
-  }
-  useEffect(() => { load(); }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function upload(fileList: FileList | null) {
-    const file = fileList?.[0];
-    if (!file) return;
-    setUploading(true); setError("");
-    const form = new FormData(); form.append("file", file);
-    const response = await fetch(`/api/v1/calendar-events/${eventId}/attachments`, { method: "POST", body: form });
-    const payload = await response.json().catch(() => null);
-    setUploading(false);
-    if (!response.ok) { setError(payload?.error?.message ?? "업로드에 실패했습니다."); return; }
-    load();
-  }
-  async function remove(attachmentId: string) {
-    if (!window.confirm("첨부파일을 삭제할까요?")) return;
-    await fetch(`/api/v1/calendar-events/attachments/${attachmentId}`, { method: "DELETE" });
-    load();
-  }
-
-  return <div>
-    <span className="field-label">첨부파일</span>
-    <div className="attachment-list">
-      {attachments.map((a) => <div className="attachment-row" key={a.id}>
-        <a href={`/api/v1/calendar-events/attachments/${a.id}/download`} target="_blank" rel="noreferrer">{a.fileName}</a>
-        <span>{(a.fileSize / 1024).toFixed(0)}KB</span>
-        {canWrite && <button className="button secondary" type="button" onClick={() => remove(a.id)}>삭제</button>}
-      </div>)}
-      {!attachments.length && <span className="empty">첨부된 파일이 없습니다.</span>}
-    </div>
-    {canWrite && <input type="file" onChange={(e) => upload(e.target.files)} disabled={uploading} />}
-    {uploading && <span> 업로드 중…</span>}
-    {error && <p className="form-error">{error}</p>}
-  </div>;
-}
+import { PersonPicker } from "@/components/PersonPicker";
 
 const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const minutes = ["00", "10", "20", "30", "40", "50"];
@@ -58,15 +13,20 @@ function shifted(value: string, milliseconds: number) { const date = new Date(va
 function replacePart(value: string, part: "date" | "hour" | "minute", next: string) { const date = value.slice(0, 10), hour = value.slice(11, 13), minute = value.slice(14, 16); if (part === "date") return `${next}T${hour}:${minute}`; if (part === "hour") return `${date}T${next}:${minute}`; return `${date}T${hour}:${next}`; }
 function DateTimePicker({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label>{label}<div className="calendar-time-picker"><input aria-label={`${label} 날짜`} type="date" value={value.slice(0, 10)} onChange={(e) => onChange(replacePart(value, "date", e.target.value))} required /><select aria-label={`${label} 시간`} value={value.slice(11, 13)} onChange={(e) => onChange(replacePart(value, "hour", e.target.value))}>{hours.map((hour) => <option value={hour} key={hour}>{hour}시</option>)}</select><select aria-label={`${label} 분`} value={value.slice(14, 16)} onChange={(e) => onChange(replacePart(value, "minute", e.target.value))}>{minutes.map((minute) => <option value={minute} key={minute}>{minute}분</option>)}</select></div></label>; }
 
-export function CalendarEventForm({ areas, members, event, selectedDate, returnUrl, canWrite = true }: { areas: CommonCode[]; members: ProjectMemberOption[]; event?: CalendarEvent | null; selectedDate: string; returnUrl: string; canWrite?: boolean }) {
+function plusOneHour(time: string) { const [h, m] = time.split(":").map(Number); const total = (h * 60 + m + 60) % 1440; return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
+
+export function CalendarEventForm({ areas, members, event, selectedDate, selectedTime, returnUrl, canWrite = true }: { areas: CommonCode[]; members: ProjectMemberOption[]; event?: CalendarEvent | null; selectedDate: string; selectedTime?: string; returnUrl: string; canWrite?: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
-  const initialStart = localInput(event?.startAt, `${selectedDate}T09:00`), initialEnd = localInput(event?.endAt, `${selectedDate}T10:00`);
+  const startTime = selectedTime ?? "09:00";
+  const initialStart = localInput(event?.startAt, `${selectedDate}T${startTime}`), initialEnd = localInput(event?.endAt, `${selectedDate}T${plusOneHour(startTime)}`);
   const [startAt, setStartAt] = useState(initialStart), [endAt, setEndAt] = useState(initialEnd);
   const [scope, setScope] = useState<"single" | "all">("single");
   const [repeatFreq, setRepeatFreq] = useState<"NONE" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY">(event?.isRecurring && !event.occurrenceDate ? "WEEKLY" : "NONE");
   const [repeatEndType, setRepeatEndType] = useState<"never" | "until" | "count">("count");
-  const [assigneeIds, setAssigneeIds] = useState<string[]>(event?.assignees.map((a) => a.id) ?? []);
+  const memberIds = new Set(members.map((m) => m.id));
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(event?.assignees.filter((a) => memberIds.has(a.id)).map((a) => a.id) ?? []);
+  const [assigneeNames, setAssigneeNames] = useState<string[]>(event?.assignees.filter((a) => !memberIds.has(a.id)).map((a) => a.name) ?? []);
   const [groupTagIds, setGroupTagIds] = useState<string[]>(event?.groupTags.map((t) => t.id) ?? []);
   function toggle(list: string[], id: string, setList: (next: string[]) => void) { setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]); }
   function changeStart(next: string) { const currentDuration = Math.max(600000, new Date(endAt).getTime() - new Date(startAt).getTime() || 3600000); setStartAt(next); setEndAt(shifted(next, event ? currentDuration : 3600000)); }
@@ -78,7 +38,7 @@ export function CalendarEventForm({ areas, members, event, selectedDate, returnU
     e.preventDefault(); setPending(true); setMessage("");
     const d = new FormData(e.currentTarget), v = (n: string) => String(d.get(n) ?? "");
     const recurrence = repeatFreq !== "NONE" && canEditSeries ? { freq: repeatFreq, endType: repeatEndType, until: repeatEndType === "until" ? v("repeatUntil") : undefined, count: repeatEndType === "count" ? Number(v("repeatCount")) || 10 : undefined } : null;
-    const body = { title: v("title"), description: v("description"), eventType: v("eventType"), startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), allDay: d.get("allDay") === "on", areaCodeId: v("areaCodeId") || null, location: v("location"), priority: v("priority"), isMilestone: d.get("isMilestone") === "on", recurrence, assigneeIds, groupTagIds };
+    const body = { title: v("title"), description: v("description"), eventType: v("eventType"), startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), allDay: d.get("allDay") === "on", areaCodeId: v("areaCodeId") || null, location: v("location"), priority: v("priority"), isMilestone: d.get("isMilestone") === "on", recurrence, assigneeIds, assigneeNames, groupTagIds };
     const scopeParam = event?.isRecurring ? `?scope=${scope}` : "";
     const response = await fetch(event ? `/api/v1/calendar-events/${event.id}${scopeParam}` : "/api/v1/calendar-events", { method: event ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json().catch(() => null);
@@ -120,13 +80,12 @@ export function CalendarEventForm({ areas, members, event, selectedDate, returnU
       {repeatEndType === "until" && <label>종료일<input name="repeatUntil" type="date" defaultValue={selectedDate} required /></label>}
     </div>}
     <div className="form-grid">
-      <div><span className="field-label">담당자</span><div className="checkbox-chip-list">{members.map((m) => <label className="checkbox-chip" key={m.id}><input type="checkbox" checked={assigneeIds.includes(m.id)} onChange={() => toggle(assigneeIds, m.id, setAssigneeIds)} /> {m.name}</label>)}{!members.length && <span className="empty">등록된 사용자가 없습니다.</span>}</div></div>
+      <div><span className="field-label">담당자</span><div className="attendee-picker"><PersonPicker people={members} selectedIds={assigneeIds} selectedNames={assigneeNames} onChange={(ids, names) => { setAssigneeIds(ids); setAssigneeNames(names); }} /></div></div>
       <div><span className="field-label">업무그룹 태그</span><div className="checkbox-chip-list">{areas.map((a) => <label className="checkbox-chip" key={a.id}><input type="checkbox" checked={groupTagIds.includes(a.id)} onChange={() => toggle(groupTagIds, a.id, setGroupTagIds)} /> {a.label}</label>)}</div></div>
     </div>
     <label className="toggle calendar-all-day"><input name="allDay" type="checkbox" defaultChecked={event?.allDay} /> 종일 일정</label>
     <label>설명<textarea name="description" rows={2} defaultValue={event?.description} /></label>
     </fieldset>
-    {event && <AttachmentSection eventId={event.masterId} canWrite={canWrite} />}
     {message && <p className="form-error">{message}</p>}
     <div className="topbar-actions">
       {canWrite && <button className="button primary" disabled={pending}>{pending ? "저장 중…" : event ? "일정 수정" : "일정 등록"}</button>}
