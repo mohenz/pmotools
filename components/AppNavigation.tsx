@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Bell, Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
+import { Activity, Bell, Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
 import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 import { isMenuVisibleForRole, type MenuPreferenceRow } from "@/lib/domain/menu-preferences";
 
-const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail };
-const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages" };
-const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages" };
-const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "주간보고", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "쪽지" };
+const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, "management-tasks": Activity, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail };
+const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks/dashboard", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages" };
+const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", "management-tasks": "Monitoring", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages" };
+const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "프로젝트통합모니터링", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "쪽지" };
 
 export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[] }) {
   const pathname = usePathname();
@@ -20,7 +20,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   const isManager = isAdmin || role === "OPERATOR";
   const { count: unread } = useUnreadMessageCount();
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
-  const toolActive = (key: string, href: string) => key === "items" ? pathname.startsWith("/items") : pathname.startsWith(href);
+  const toolActive = (key: string, href: string) => key === "items" || key === "management-tasks" ? pathname.startsWith(`/${key}`) : pathname.startsWith(href);
   const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: TOOL_LABEL[key], sub: TOOL_SUB[key], active: toolActive(key, TOOL_HREF[key]) }));
 
   if (area === "sidebar") {
@@ -43,6 +43,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
       ...(isManager ? [
         { href: "/project-settings", label: "프로젝트정보 설정", active: pathname.startsWith("/project-settings") },
         { href: "/weeks", label: "프로젝트 주차", active: pathname.startsWith("/weeks") },
+        { href: "/settings/weekly-reports", label: "위클리리포트 관리", active: pathname.startsWith("/settings/weekly-reports") },
         { href: "/settings/common-codes", label: "공통코드 설정", active: pathname.startsWith("/settings/common-codes") },
         { href: "/settings/meeting-rooms", label: "회의실 관리", active: pathname.startsWith("/settings/meeting-rooms") },
         { href: "/settings/recurring-meetings", label: "정기예약 승인", active: pathname.startsWith("/settings/recurring-meetings") },
@@ -62,7 +63,8 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   if (currentTool && currentTool.key !== "items") {
     const moduleTabs: Record<string, {href:string;label:string}[]> = {
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
-      "/weekly-reports": [{href:"/weekly-reports",label:"입력·조회"},{href:"/weekly-reports/print",label:"보고서 출력"},{href:"/api/v1/work-export?type=reports",label:"Excel용 CSV"}],
+      "/management-tasks/dashboard": [{href:"/management-tasks/dashboard",label:"대시보드"},{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"}],
+      "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"},{href:"/weekly-reports/print",label:"보고서 출력"},{href:"/api/v1/work-export?type=reports",label:"Excel용 CSV"}],
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},...(isManager?[{href:"/portfolio",label:"공정률 현황"}]:[]),{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
       "/staff-changes": [{href:"/staff-changes",label:"투입·철수 관리"},{href:"/api/v1/work-export?type=staff",label:"Excel용 CSV"}],
       "/calendar": [{href:"/calendar",label:"캘린더"},{href:"/calendar/milestones",label:"주요 이벤트"}],

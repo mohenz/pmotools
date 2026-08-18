@@ -74,6 +74,8 @@ model User {
   resolvedPasswordResetRequests PasswordResetRequest[]        @relation("PasswordResetRequestResolver")
   createdAnnouncements          Announcement[]                @relation("AnnouncementAuthor")
   updatedAnnouncements          Announcement[]                @relation("AnnouncementUpdater")
+  createdManagementTasks        ManagementTask[]              @relation("ManagementTaskCreator")
+  createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
 
   @@map("users")
 }
@@ -171,6 +173,9 @@ model Project {
   requirementChangeSequence RequirementChangeSequence?
   menuPreferences           MenuPreference[]
   announcements             Announcement[]
+  managementTasks           ManagementTask[]
+  managementTaskSequence    ManagementTaskSequence?
+  managementTaskLinks       ManagementTaskLink[]
 
   @@map("projects")
 }
@@ -210,14 +215,15 @@ model Groups {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userMap        UserGroupMap[]
-  items          Item[]
-  weeklyReports  WeeklyReport[]
-  weeklyProgress WeeklyProgress[]
-  staffChanges   StaffChange[]
-  calendarEvents CalendarEvent[]
-  eventTags      EventGroupTag[]
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userMap         UserGroupMap[]
+  items           Item[]
+  weeklyReports   WeeklyReport[]
+  weeklyProgress  WeeklyProgress[]
+  staffChanges    StaffChange[]
+  calendarEvents  CalendarEvent[]
+  eventTags       EventGroupTag[]
+  managementTasks ManagementTask[]
 
   @@unique([projectId, groupType, code])
   @@map("groups")
@@ -508,6 +514,81 @@ model RequirementChange {
   @@index([projectId, status])
   @@index([requirementId, requestedAt])
   @@map("requirement_changes")
+}
+
+// ---------------------------------------------------------------------------
+// 프로젝트통합모니터링 (관리업무항목)
+// ---------------------------------------------------------------------------
+
+enum ManagementTaskBand {
+  RED
+  YELLOW
+  GREEN
+}
+
+model ManagementTask {
+  id               String             @id @default(uuid())
+  displayId        String             @unique
+  projectId        String
+  groupId          String // WORK_MODULE Groups row (assertWorkModuleGroup으로 검증)
+  name             String
+  registrationDate DateTime           @db.Date
+  prepContent      String             @default("")
+  prepPercent      Int                @default(0)
+  ownerContent     String             @default("")
+  ownerPercent     Int                @default(0)
+  progressContent  String             @default("")
+  progressPercent  Int                @default(0)
+  issueContent     String             @default("")
+  issuePercent     Int                @default(0)
+  closeContent     String             @default("")
+  closePercent     Int                @default(0)
+  totalScore       Int                @default(0)
+  band             ManagementTaskBand @default(RED)
+  createdBy        String
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  archivedAt       DateTime?
+
+  project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group            Groups               @relation(fields: [groupId], references: [id])
+  creator          User                 @relation("ManagementTaskCreator", fields: [createdBy], references: [id])
+  predecessorLinks ManagementTaskLink[] @relation("TaskSuccessor")
+  successorLinks   ManagementTaskLink[] @relation("TaskPredecessor")
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, groupId])
+  @@index([projectId, band])
+  @@map("management_tasks")
+}
+
+model ManagementTaskSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("management_task_sequences")
+}
+
+model ManagementTaskLink {
+  id            String   @id @default(uuid())
+  projectId     String
+  predecessorId String
+  successorId   String
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predecessor ManagementTask @relation("TaskPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   ManagementTask @relation("TaskSuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+  creator     User           @relation("ManagementTaskLinkCreator", fields: [createdBy], references: [id])
+
+  @@unique([predecessorId, successorId])
+  @@index([projectId, predecessorId])
+  @@index([projectId, successorId])
+  @@map("management_task_links")
 }
 
 // ---------------------------------------------------------------------------

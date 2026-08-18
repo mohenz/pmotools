@@ -149,7 +149,7 @@ async function assertCommonCode(projectId: string, codeId: string, groupCode: st
   if (!code || code.projectId !== projectId || code.groupCode !== groupCode || !code.isActive) throw new DomainError("INVALID_CODE", "선택한 공통코드를 사용할 수 없습니다.");
   return code;
 }
-async function assertWorkModuleGroup(projectId: string, groupId: string) {
+export async function assertWorkModuleGroup(projectId: string, groupId: string) {
   const group = await getPrisma().groups.findUnique({ where: { id: groupId } });
   if (!group || group.projectId !== projectId || group.groupType !== "WORK_MODULE" || !group.isActive) throw new DomainError("INVALID_CODE", "선택한 Track을 사용할 수 없습니다.");
   return group;
