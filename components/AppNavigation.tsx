@@ -68,7 +68,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
       "/calendar": [{href:"/calendar",label:"캘린더"},{href:"/calendar/milestones",label:"주요 이벤트"}],
       "/meetrooms": [{href:"/meetrooms",label:"예약·관리"}],
       "/messages": [{href:"/messages",label:"쪽지함"}],
-      "/requirements": [{href:"/requirements",label:"요구사항정의서"},...(isManager?[{href:"/requirements/changes",label:"요구사항변경관리"}]:[])],
+      "/requirements": [{href:"/requirements",label:"요구사항정의서"},{href:"/requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/requirements/changes",label:"요구사항변경관리"}]:[])],
     };
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }

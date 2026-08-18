@@ -15,7 +15,11 @@ export async function listUsers(projectId: string, adminUserId: string, q?: stri
   const members = await getPrisma().projectMember.findMany({
     where: {
       projectId,
-      ...(query ? { user: { OR: [{ userId: { contains: query, mode: "insensitive" } }, { name: { contains: query, mode: "insensitive" } }] } } : {}),
+      isActive: true,
+      user: {
+        deletedAt: null,
+        ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" } }, { name: { contains: query, mode: "insensitive" } }] } : {}),
+      },
     },
     include: { user: true },
     orderBy: { user: { userId: "asc" } },
@@ -106,6 +110,30 @@ export async function updateUserProfile(projectId: string, adminUserId: string, 
   const updated = await prisma.user.update({ where: { id: targetUserId }, data: { name: data.name, email: data.email || null, department: data.department || null } });
   await writeAuditLog(projectId, adminUserId, "USER_PROFILE_UPDATE", "users", targetUserId, { name: current.name, email: current.email, department: current.department }, { name: updated.name, email: updated.email, department: updated.department });
   return { id: targetUserId, name: updated.name, email: updated.email, department: updated.department };
+}
+
+export async function deleteUser(projectId: string, adminUserId: string, targetUserId: string) {
+  await assertAdmin(projectId, adminUserId);
+  if (targetUserId === adminUserId) throw new DomainError("FORBIDDEN", "본인 계정은 삭제할 수 없습니다.");
+  const prisma = getPrisma();
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId: targetUserId } },
+    include: { user: true },
+  });
+  if (!member || !member.isActive || member.user.deletedAt) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+  if (member.role === "ADMIN") {
+    const adminCount = await prisma.projectMember.count({
+      where: { projectId, role: "ADMIN", isActive: true, user: { deletedAt: null } },
+    });
+    if (adminCount <= 1) throw new DomainError("LAST_ACTIVE_CODE", "프로젝트에는 최소 한 명의 관리자가 필요합니다.");
+  }
+  const deletedAt = new Date();
+  await prisma.$transaction([
+    prisma.projectMember.update({ where: { id: member.id }, data: { isActive: false } }),
+    prisma.user.update({ where: { id: targetUserId }, data: { status: "LOCKED", deletedAt } }),
+  ]);
+  await writeAuditLog(projectId, adminUserId, "USER_DELETE", "users", targetUserId, { userId: member.user.userId, role: member.role }, { deletedAt: deletedAt.toISOString() });
+  return { id: targetUserId };
 }
 
 export async function listGroups(projectId: string, groupType?: GroupType): Promise<GroupRow[]> {

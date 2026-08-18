@@ -22,7 +22,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const prisma = getPrisma();
         const user = await prisma.user.findUnique({ where: { userId } });
-        if (!user || user.status === "LOCKED") return null;
+        if (!user || user.status === "LOCKED" || user.deletedAt) return null;
         const valid = await compare(password, user.passwordHash);
         if (!valid) return null;
 
@@ -30,6 +30,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { projectId_userId: { projectId: DEFAULT_PROJECT_ID, userId: user.id } },
         });
 
+        if (!membership?.isActive) return null;
         return {
           id: user.id,
           name: user.name,

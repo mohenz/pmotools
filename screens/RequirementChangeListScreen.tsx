@@ -29,9 +29,8 @@ export function RequirementChangeListScreen({ result, filters }: { result: Resul
       <section className="panel compact">
         {result.changes.length ? <div className="change-list">{result.changes.map((change) => <article className="panel compact" key={change.id}>
           <div className="detail-badges">
-            <span className="badge mono">{change.displayId}</span>
             <span className="badge">{changeStatusLabels[change.status]}</span>
-            <Link className="mono table-link" href={`/requirements/${change.requirementId}`}>{change.requirementDisplayId}</Link>
+            <Link className="mono table-link requirement-id" href={`/requirements/${change.requirementId}`}>{change.requirementManualId || "요구사항 ID 미입력"}</Link>
             <time>{formatDate(change.requestedAt)}</time>
           </div>
           <p><strong>{change.title}</strong> — <Link className="table-link" href={`/requirements/${change.requirementId}`}>{change.requirementTitle}</Link></p>

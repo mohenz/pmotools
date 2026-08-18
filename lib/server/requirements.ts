@@ -18,16 +18,22 @@ export async function listRequirementCodeOptions(projectId: string) {
   };
 }
 
-const acceptanceSchema = z.enum(["pending", "accepted", "rejected", "deferred"]);
+const acceptanceSchema = z.enum(["pending", "accepted", "partially_accepted", "rejected", "deferred"]);
 const levelSchema = z.enum(["low", "medium", "high"]);
 
 export const createRequirementSchema = z.object({
+  requirementId: z.string().trim().max(100).default(""),
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().max(10000).default(""),
   ownerUserId: z.string().uuid().nullable().optional(),
   basis: z.string().trim().max(5000).default(""),
   precondition: z.string().trim().max(5000).default(""),
   resolution: z.string().trim().max(5000).default(""),
+  businessMajorCategory: z.string().trim().max(200).default(""),
+  businessMiddleCategory: z.string().trim().max(200).default(""),
+  businessMinorCategory: z.string().trim().max(200).default(""),
+  addedAfterConfirmation: z.boolean().nullable().default(null),
+  notes: z.string().trim().max(5000).default(""),
   acceptanceStatus: acceptanceSchema.default("pending"),
   requestDepartment: z.string().trim().max(200).default(""),
   divisionCodeId: z.string().uuid().nullable().optional(),
@@ -51,8 +57,10 @@ export const decideChangeSchema = z.object({ decision: z.enum(["approved", "reje
 export type RequirementAcceptance = z.infer<typeof acceptanceSchema>;
 export type RequirementLevel = z.infer<typeof levelSchema>;
 export type RequirementRow = {
-  id: string; displayId: string; projectId: string; title: string; content: string;
+  id: string; displayId: string; requirementId: string | null; projectId: string; title: string; content: string;
   ownerUserId: string | null; ownerName: string | null; basis: string; precondition: string; resolution: string;
+  businessMajorCategory: string; businessMiddleCategory: string; businessMinorCategory: string;
+  addedAfterConfirmation: boolean | null; notes: string;
   acceptanceStatus: RequirementAcceptance; requestDepartment: string;
   divisionCodeId: string | null; divisionLabel: string | null; categoryCodeId: string | null; categoryLabel: string | null;
   priority: RequirementLevel | null; importance: RequirementLevel | null;
@@ -64,24 +72,35 @@ export type RequirementEventRow = {
   actorName: string; body: string | null; beforeData: Record<string, unknown> | null; afterData: Record<string, unknown> | null; createdAt: string;
 };
 export type RequirementChangeRow = {
-  id: string; displayId: string; title: string; projectId: string; requirementId: string; requirementDisplayId: string; requirementTitle: string;
+  id: string; displayId: string; title: string; projectId: string; requirementId: string; requirementManualId: string | null; requirementTitle: string;
   changeReason: string; proposedTitle: string | null; proposedContent: string | null; proposedBasis: string | null;
   proposedPrecondition: string | null; proposedResolution: string | null; proposedAcceptance: RequirementAcceptance | null;
   status: "pending" | "approved" | "rejected"; requestedBy: string; requestedByName: string; requestedAt: string;
   decidedBy: string | null; decidedByName: string | null; decidedAt: string | null; decisionNote: string | null;
 };
-export type RequirementFilters = { q?: string; acceptanceStatus?: string; divisionCodeId?: string; priority?: string; importance?: string; page?: number; pageSize?: number };
+export type RequirementFilters = { q?: string; acceptanceStatus?: string; divisionCodeId?: string; priority?: string; importance?: string; page?: number; pageSize?: number | "all" };
 export type RequirementChangeFilters = { requirementId?: string; status?: string; page?: number; pageSize?: number };
+export type RequirementStatisticsRow = { label: string; rejected: number; partiallyAccepted: number; accepted: number; total: number };
+export type RequirementStatistics = {
+  total: number;
+  accepted: number;
+  partiallyAccepted: number;
+  rejected: number;
+  byCategory: RequirementStatisticsRow[];
+  byDivision: { label: string; count: number }[];
+};
 
 const requirementInclude = { owner: { select: { name: true } }, division: { select: { label: true } }, category: { select: { label: true } } } as const;
 type RequirementWithRelations = Prisma.RequirementGetPayload<{ include: typeof requirementInclude }>;
-const changeInclude = { requirement: { select: { displayId: true, title: true } }, requester: { select: { name: true } }, decider: { select: { name: true } } } as const;
+const changeInclude = { requirement: { select: { requirementId: true, title: true } }, requester: { select: { name: true } }, decider: { select: { name: true } } } as const;
 type ChangeWithRelations = Prisma.RequirementChangeGetPayload<{ include: typeof changeInclude }>;
 
 function toRow(row: RequirementWithRelations, changeCount = 0): RequirementRow {
   return {
-    id: row.id, displayId: row.displayId, projectId: row.projectId, title: row.title, content: row.content,
+    id: row.id, displayId: row.displayId, requirementId: row.requirementId, projectId: row.projectId, title: row.title, content: row.content,
     ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? null, basis: row.basis, precondition: row.precondition, resolution: row.resolution,
+    businessMajorCategory: row.businessMajorCategory, businessMiddleCategory: row.businessMiddleCategory, businessMinorCategory: row.businessMinorCategory,
+    addedAfterConfirmation: row.addedAfterConfirmation, notes: row.notes,
     acceptanceStatus: row.acceptanceStatus, requestDepartment: row.requestDepartment,
     divisionCodeId: row.divisionCodeId, divisionLabel: row.division?.label ?? null, categoryCodeId: row.categoryCodeId, categoryLabel: row.category?.label ?? null,
     priority: row.priority, importance: row.importance,
@@ -92,7 +111,7 @@ function toRow(row: RequirementWithRelations, changeCount = 0): RequirementRow {
 }
 function toChangeRow(row: ChangeWithRelations): RequirementChangeRow {
   return {
-    id: row.id, displayId: row.displayId, title: row.title, projectId: row.projectId, requirementId: row.requirementId, requirementDisplayId: row.requirement.displayId, requirementTitle: row.requirement.title,
+    id: row.id, displayId: row.displayId, title: row.title, projectId: row.projectId, requirementId: row.requirementId, requirementManualId: row.requirement.requirementId, requirementTitle: row.requirement.title,
     changeReason: row.changeReason, proposedTitle: row.proposedTitle, proposedContent: row.proposedContent, proposedBasis: row.proposedBasis,
     proposedPrecondition: row.proposedPrecondition, proposedResolution: row.proposedResolution, proposedAcceptance: row.proposedAcceptance,
     status: row.status, requestedBy: row.requestedBy, requestedByName: row.requester.name, requestedAt: row.requestedAt.toISOString(),
@@ -105,14 +124,14 @@ function requirementWhere(projectId: string, filters: RequirementFilters): Prism
   const status = filters.acceptanceStatus && acceptanceSchema.options.includes(filters.acceptanceStatus as RequirementAcceptance) ? (filters.acceptanceStatus as RequirementAcceptance) : undefined;
   if (status) and.push({ acceptanceStatus: status });
   const query = filters.q?.trim();
-  if (query) and.push({ OR: [{ title: { contains: query, mode: "insensitive" } }, { content: { contains: query, mode: "insensitive" } }, { displayId: { contains: query, mode: "insensitive" } }] });
+  if (query) and.push({ OR: [{ title: { contains: query, mode: "insensitive" } }, { content: { contains: query, mode: "insensitive" } }, { displayId: { contains: query, mode: "insensitive" } }, { requirementId: { contains: query, mode: "insensitive" } }, { businessMajorCategory: { contains: query, mode: "insensitive" } }, { businessMiddleCategory: { contains: query, mode: "insensitive" } }, { businessMinorCategory: { contains: query, mode: "insensitive" } }] });
   if (filters.divisionCodeId) and.push({ divisionCodeId: filters.divisionCodeId });
   if (filters.priority && levelSchema.options.includes(filters.priority as RequirementLevel)) and.push({ priority: filters.priority as RequirementLevel });
   if (filters.importance && levelSchema.options.includes(filters.importance as RequirementLevel)) and.push({ importance: filters.importance as RequirementLevel });
   return { projectId, archivedAt: null, ...(and.length ? { AND: and } : {}) };
 }
-function clampPage(filters: { page?: number; pageSize?: number }, total: number) {
-  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 20));
+function clampPage(filters: { page?: number; pageSize?: number | "all" }, total: number) {
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
   return { pageSize, totalPages, page };
@@ -185,10 +204,54 @@ function mutationError(row: Pick<PrismaRequirement, "archivedAt" | "version"> | 
   if (row.version !== version) throw new DomainError("VERSION_CONFLICT", "다른 사용자가 먼저 수정했습니다. 최신 내용을 다시 확인해 주세요.");
 }
 
+export async function getRequirementStatistics(projectId: string): Promise<RequirementStatistics> {
+  const requirements = await getPrisma().requirement.findMany({
+    where: { projectId, archivedAt: null },
+    select: {
+      acceptanceStatus: true,
+      category: { select: { label: true, sortOrder: true } },
+      division: { select: { label: true, sortOrder: true } },
+    },
+  });
+  const categories = new Map<string, RequirementStatisticsRow & { sortOrder: number }>();
+  const divisions = new Map<string, { label: string; count: number; sortOrder: number }>();
+  let accepted = 0, partiallyAccepted = 0, rejected = 0;
+  for (const requirement of requirements) {
+    if (requirement.acceptanceStatus === "accepted") accepted += 1;
+    if (requirement.acceptanceStatus === "partially_accepted") partiallyAccepted += 1;
+    if (requirement.acceptanceStatus === "rejected") rejected += 1;
+    const categoryLabel = requirement.category?.label ?? "미지정";
+    const category = categories.get(categoryLabel) ?? { label: categoryLabel, rejected: 0, partiallyAccepted: 0, accepted: 0, total: 0, sortOrder: requirement.category?.sortOrder ?? 9999 };
+    if (requirement.acceptanceStatus === "accepted") category.accepted += 1;
+    if (requirement.acceptanceStatus === "partially_accepted") category.partiallyAccepted += 1;
+    if (requirement.acceptanceStatus === "rejected") category.rejected += 1;
+    category.total += 1;
+    categories.set(categoryLabel, category);
+    const divisionLabel = requirement.division?.label ?? "미지정";
+    const division = divisions.get(divisionLabel) ?? { label: divisionLabel, count: 0, sortOrder: requirement.division?.sortOrder ?? 9999 };
+    division.count += 1;
+    divisions.set(divisionLabel, division);
+  }
+  return {
+    total: requirements.length,
+    accepted,
+    partiallyAccepted,
+    rejected,
+    byCategory: [...categories.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko")).map(({ sortOrder: _, ...row }) => row),
+    byDivision: [...divisions.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko")).map(({ sortOrder: _, ...row }) => row),
+  };
+}
+async function assertUniqueRequirementId(projectId: string, requirementId: string, excludeId?: string) {
+  if (!requirementId) return;
+  const existing = await getPrisma().requirement.findFirst({ where: { projectId, requirementId, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { id: true } });
+  if (existing) throw new DomainError("DUPLICATE_CODE", "이미 등록된 요구사항 ID입니다.");
+}
+
 export async function createRequirement(projectId: string, userId: string, input: unknown) {
   const data = createRequirementSchema.parse(input), requestId = crypto.randomUUID();
   await assertManager(projectId, userId);
   await assertValidOwner(projectId, data.ownerUserId);
+  await assertUniqueRequirementId(projectId, data.requirementId);
   await Promise.all([
     assertCommonCode(projectId, data.divisionCodeId, "requirement_division", "요구사항구분"),
     assertCommonCode(projectId, data.categoryCodeId, "requirement_category", "요구사항분류"),
@@ -198,7 +261,7 @@ export async function createRequirement(projectId: string, userId: string, input
   const { requirement, displayId } = await prisma.$transaction(async (tx) => {
     const sequence = await tx.requirementSequence.upsert({ where: { projectId }, create: { projectId, value: 1 }, update: { value: { increment: 1 } } });
     const displayId = `REQ-${new Date().getUTCFullYear()}-${String(sequence.value).padStart(6, "0")}`;
-    const requirement = await tx.requirement.create({ data: { displayId, projectId, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, createdBy: userId } });
+    const requirement = await tx.requirement.create({ data: { displayId, requirementId: data.requirementId || null, projectId, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, businessMajorCategory: data.businessMajorCategory, businessMiddleCategory: data.businessMiddleCategory, businessMinorCategory: data.businessMinorCategory, addedAfterConfirmation: data.addedAfterConfirmation, notes: data.notes, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, createdBy: userId } });
     await tx.requirementEvent.create({ data: { requirementId: requirement.id, eventType: "created", actorId: userId, actorName, body: "신규 등록" } });
     return { requirement, displayId };
   });
@@ -210,6 +273,7 @@ export async function updateRequirement(projectId: string, userId: string, requi
   const data = updateRequirementSchema.parse(input), requestId = crypto.randomUUID();
   await assertWritePermission(projectId, userId, requirementId);
   await assertValidOwner(projectId, data.ownerUserId);
+  await assertUniqueRequirementId(projectId, data.requirementId, requirementId);
   await Promise.all([
     assertCommonCode(projectId, data.divisionCodeId, "requirement_division", "요구사항구분"),
     assertCommonCode(projectId, data.categoryCodeId, "requirement_category", "요구사항분류"),
@@ -220,7 +284,7 @@ export async function updateRequirement(projectId: string, userId: string, requi
     const before = await tx.requirement.findUnique({ where: { id: requirementId } });
     mutationError(before, data.version);
     const version = data.version + 1;
-    const update = { title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, version };
+    const update = { requirementId: data.requirementId || null, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, businessMajorCategory: data.businessMajorCategory, businessMiddleCategory: data.businessMiddleCategory, businessMinorCategory: data.businessMinorCategory, addedAfterConfirmation: data.addedAfterConfirmation, notes: data.notes, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, version };
     await tx.requirement.update({ where: { id: requirementId }, data: update });
     await tx.requirementEvent.create({ data: { requirementId, eventType: "edited", actorId: userId, actorName, body: "기본 정보 수정", beforeData: before as never, afterData: update as never } });
     return { before, version };

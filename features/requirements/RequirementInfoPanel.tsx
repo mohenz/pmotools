@@ -26,8 +26,11 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
     const response = await fetch(`/api/v1/requirements/${requirement.id}`, {
       method: "PATCH", headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        requirementId: form.get("requirementId"),
         title: form.get("title"), content: form.get("content"), ownerUserId: form.get("ownerUserId") || null,
         basis: form.get("basis"), precondition: form.get("precondition"), resolution: form.get("resolution"),
+        businessMajorCategory: form.get("businessMajorCategory"), businessMiddleCategory: form.get("businessMiddleCategory"), businessMinorCategory: form.get("businessMinorCategory"),
+        addedAfterConfirmation: form.get("addedAfterConfirmation") === "" ? null : form.get("addedAfterConfirmation") === "true", notes: form.get("notes"),
         acceptanceStatus: form.get("acceptanceStatus"), requestDepartment: form.get("requestDepartment"),
         divisionCodeId: form.get("divisionCodeId") || null, categoryCodeId: form.get("categoryCodeId") || null,
         priority: form.get("priority") || null, importance: form.get("importance") || null,
@@ -44,8 +47,14 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
     <section className="panel form-panel detail-edit">
       <div className="panel-head"><h2>기본 정보 수정</h2><span>버전 {requirement.version}</span></div>
       <form onSubmit={save}>
+        <label>요구사항 ID<input name="requirementId" maxLength={100} defaultValue={requirement.requirementId ?? ""} /></label>
         <label>요구사항명<input name="title" required maxLength={200} defaultValue={requirement.title} /></label>
         <label>요구사항내용<textarea name="content" rows={4} maxLength={10000} defaultValue={requirement.content} /></label>
+        <div className="form-grid triple">
+          <label>업무대분류<input name="businessMajorCategory" maxLength={200} defaultValue={requirement.businessMajorCategory} /></label>
+          <label>업무중분류<input name="businessMiddleCategory" maxLength={200} defaultValue={requirement.businessMiddleCategory} /></label>
+          <label>업무소분류<input name="businessMinorCategory" maxLength={200} defaultValue={requirement.businessMinorCategory} /></label>
+        </div>
         <div className="form-grid">
           <label>요구사항담당자<select name="ownerUserId" defaultValue={requirement.ownerUserId ?? ""}><option value="">미지정</option>{options.members.map((member) => <option value={member.id} key={member.id}>{member.name} ({member.userId})</option>)}</select></label>
           <label>요구사항수용구분<select name="acceptanceStatus" defaultValue={requirement.acceptanceStatus}>{Object.entries(acceptanceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
@@ -58,10 +67,12 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
           <label>우선순위<select name="priority" defaultValue={requirement.priority ?? ""}><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
           <label>중요도<select name="importance" defaultValue={requirement.importance ?? ""}><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
         </div>
-        <label>요구사항근거<textarea name="basis" rows={3} maxLength={5000} defaultValue={requirement.basis} /></label>
-        <label>요구사항선결사항<textarea name="precondition" rows={3} maxLength={5000} defaultValue={requirement.precondition} /></label>
+        <label>요구사항출처<textarea name="basis" rows={3} maxLength={5000} defaultValue={requirement.basis} /></label>
+        <label>사전확인사항<textarea name="precondition" rows={3} maxLength={5000} defaultValue={requirement.precondition} /></label>
         <label>요구사항해결방안<textarea name="resolution" rows={3} maxLength={5000} defaultValue={requirement.resolution} /></label>
         <label>요구사항요청부서<input name="requestDepartment" maxLength={200} defaultValue={requirement.requestDepartment} /></label>
+        <label>확정후추가<select name="addedAfterConfirmation" defaultValue={requirement.addedAfterConfirmation === null ? "" : String(requirement.addedAfterConfirmation)}><option value="">미입력</option><option value="true">예</option><option value="false">아니요</option></select></label>
+        <label>비고<textarea name="notes" rows={3} maxLength={5000} defaultValue={requirement.notes} /></label>
         {message && <p className="form-error">{message}</p>}
         <button className="button primary" type="submit" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
       </form>
@@ -76,13 +87,17 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
         {requirement.categoryLabel && <span className="badge">{requirement.categoryLabel}</span>}
       </div>
       <dl>
+        <div><dt>요구사항 ID</dt><dd className="mono requirement-id">{requirement.requirementId || "-"}</dd></div>
         <div><dt>요구사항내용</dt><dd className="prewrap">{requirement.content || "-"}</dd></div>
+        <div><dt>업무분류</dt><dd>{[requirement.businessMajorCategory, requirement.businessMiddleCategory, requirement.businessMinorCategory].filter(Boolean).join(" › ") || "-"}</dd></div>
         <div><dt>담당자</dt><dd>{requirement.ownerName ?? "미지정"}</dd></div>
         <div><dt>우선순위 / 중요도</dt><dd>{requirement.priority ? probabilityLabel(requirement.priority) : "미지정"} / {requirement.importance ? probabilityLabel(requirement.importance) : "미지정"}</dd></div>
-        <div><dt>요구사항근거</dt><dd className="prewrap">{requirement.basis || "-"}</dd></div>
-        <div><dt>요구사항선결사항</dt><dd className="prewrap">{requirement.precondition || "-"}</dd></div>
+        <div><dt>요구사항출처</dt><dd className="prewrap">{requirement.basis || "-"}</dd></div>
+        <div><dt>사전확인사항</dt><dd className="prewrap">{requirement.precondition || "-"}</dd></div>
         <div><dt>요구사항해결방안</dt><dd className="prewrap">{requirement.resolution || "-"}</dd></div>
         <div><dt>요구사항요청부서</dt><dd>{requirement.requestDepartment || "-"}</dd></div>
+        <div><dt>확정후추가</dt><dd>{requirement.addedAfterConfirmation === null ? "-" : requirement.addedAfterConfirmation ? "예" : "아니요"}</dd></div>
+        <div><dt>비고</dt><dd className="prewrap">{requirement.notes || "-"}</dd></div>
         <div><dt>등록일</dt><dd>{formatDate(requirement.createdAt)}</dd></div>
       </dl>
     </article>

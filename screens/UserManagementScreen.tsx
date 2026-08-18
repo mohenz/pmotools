@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { AdminUserRow } from "@/lib/server/admin";
 import type { PasswordResetRequestRow } from "@/lib/server/password-reset-requests";
 
@@ -71,6 +72,16 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
     setPending("");
     if (!response.ok) { setMessage(payload?.error?.message ?? "정보를 저장하지 못했습니다."); return; }
     setDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
+    router.refresh();
+  }
+  async function deleteAccount(user: AdminUserRow) {
+    setPending(`delete-${user.id}`); setMessage(""); setTempPassword(null);
+    const response = await fetch(`/api/v1/admin/users/${user.id}`, { method: "DELETE" });
+    const payload = await response.json().catch(() => null);
+    setPending("");
+    if (!response.ok) { setMessage(payload?.error?.message ?? "계정을 삭제하지 못했습니다."); return; }
+    setDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
+    setResetDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
     router.refresh();
   }
   async function createUser(event: FormEvent<HTMLFormElement>) {
@@ -165,6 +176,20 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
                       <input aria-label={`${user.userId} 지정 비밀번호(선택)`} className="mono" style={{ width: 140 }} placeholder="비밀번호 입력" value={resetDrafts[user.id] ?? ""} onChange={(event) => setResetDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))} minLength={8} maxLength={100} />
                       <button className="button secondary" type="button" disabled={pending === `reset-${user.id}`} onClick={() => resetPassword(user)}>{resetDrafts[user.id]?.trim() ? "비밀번호 지정" : "비밀번호 초기화"}</button>
                     </span>
+                    <AlertDialog.Root>
+                      <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={pending === `delete-${user.id}`}>{pending === `delete-${user.id}` ? "삭제 중…" : "계정 삭제"}</button></AlertDialog.Trigger>
+                      <AlertDialog.Portal>
+                        <AlertDialog.Overlay className="calendar-modal-backdrop" />
+                        <AlertDialog.Content className="alert-dialog">
+                          <AlertDialog.Title asChild><h2>{user.userId} 계정을 삭제하시겠습니까?</h2></AlertDialog.Title>
+                          <AlertDialog.Description asChild><p>로그인과 프로젝트 접근이 즉시 차단됩니다. 작성된 업무 및 감사 이력은 보존됩니다.</p></AlertDialog.Description>
+                          <div className="alert-dialog-actions">
+                            <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                            <AlertDialog.Action asChild><button className="button danger" type="button" onClick={() => deleteAccount(user)}>계정 삭제</button></AlertDialog.Action>
+                          </div>
+                        </AlertDialog.Content>
+                      </AlertDialog.Portal>
+                    </AlertDialog.Root>
                   </td>
                 </tr>;
               })}

@@ -41,36 +41,37 @@ model User {
   role         UserRole   @default(MEMBER)
   theme        ThemeMode  @default(SYSTEM)
   status       UserStatus @default(ACTIVE)
+  deletedAt    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  memberships                 ProjectMember[]
-  groupMemberships            UserGroupMap[]
-  createdItems                Item[]                        @relation("ItemCreator")
-  ownedItems                  Item[]                        @relation("ItemOwner")
-  itemEvents                  ItemEvent[]
-  assignedEvents              EventAssignee[]
-  createdEvents               CalendarEvent[]               @relation("CalendarEventCreator")
-  updatedEvents               CalendarEvent[]               @relation("CalendarEventUpdater")
-  createdWeeklyReports        WeeklyReport[]                @relation("WeeklyReportCreator")
-  createdProgress             WeeklyProgress[]              @relation("WeeklyProgressCreator")
-  createdStaffChanges         StaffChange[]                 @relation("StaffChangeCreator")
-  notificationSetting         NotificationSetting?
-  sentMessages                Message[]                     @relation("MessageSender")
-  receivedMessages            Message[]                     @relation("MessageReceiver")
-  auditLogs                   AuditLog[]
-  meetingReservations         MeetingReservation[]
-  recurringMeetings           RecurringMeetingReservation[] @relation("RecurringApplicant")
-  reviewedMeetings            RecurringMeetingReservation[] @relation("RecurringReviewer")
-  meetingChangeLogs           MeetingReservationChangeLog[]
-  meetingAttendances          MeetingReservationAttendee[]
-  createdRequirements         Requirement[]                 @relation("RequirementCreator")
-  ownedRequirements           Requirement[]                 @relation("RequirementOwner")
-  requirementEvents           RequirementEvent[]
-  requestedRequirementChanges RequirementChange[]           @relation("RequirementChangeRequester")
-  decidedRequirementChanges   RequirementChange[]           @relation("RequirementChangeDecider")
-  passwordResetRequests         PasswordResetRequest[] @relation("PasswordResetRequestUser")
-  resolvedPasswordResetRequests PasswordResetRequest[] @relation("PasswordResetRequestResolver")
+  memberships                   ProjectMember[]
+  groupMemberships              UserGroupMap[]
+  createdItems                  Item[]                        @relation("ItemCreator")
+  ownedItems                    Item[]                        @relation("ItemOwner")
+  itemEvents                    ItemEvent[]
+  assignedEvents                EventAssignee[]
+  createdEvents                 CalendarEvent[]               @relation("CalendarEventCreator")
+  updatedEvents                 CalendarEvent[]               @relation("CalendarEventUpdater")
+  createdWeeklyReports          WeeklyReport[]                @relation("WeeklyReportCreator")
+  createdProgress               WeeklyProgress[]              @relation("WeeklyProgressCreator")
+  createdStaffChanges           StaffChange[]                 @relation("StaffChangeCreator")
+  notificationSetting           NotificationSetting?
+  sentMessages                  Message[]                     @relation("MessageSender")
+  receivedMessages              Message[]                     @relation("MessageReceiver")
+  auditLogs                     AuditLog[]
+  meetingReservations           MeetingReservation[]
+  recurringMeetings             RecurringMeetingReservation[] @relation("RecurringApplicant")
+  reviewedMeetings              RecurringMeetingReservation[] @relation("RecurringReviewer")
+  meetingChangeLogs             MeetingReservationChangeLog[]
+  meetingAttendances            MeetingReservationAttendee[]
+  createdRequirements           Requirement[]                 @relation("RequirementCreator")
+  ownedRequirements             Requirement[]                 @relation("RequirementOwner")
+  requirementEvents             RequirementEvent[]
+  requestedRequirementChanges   RequirementChange[]           @relation("RequirementChangeRequester")
+  decidedRequirementChanges     RequirementChange[]           @relation("RequirementChangeDecider")
+  passwordResetRequests         PasswordResetRequest[]        @relation("PasswordResetRequestUser")
+  resolvedPasswordResetRequests PasswordResetRequest[]        @relation("PasswordResetRequestResolver")
 
   @@map("users")
 }
@@ -81,11 +82,11 @@ enum PasswordResetRequestStatus {
 }
 
 model PasswordResetRequest {
-  id           String                      @id @default(uuid())
+  id           String                     @id @default(uuid())
   userId       String
   note         String?
-  status       PasswordResetRequestStatus  @default(PENDING)
-  createdAt    DateTime                    @default(now())
+  status       PasswordResetRequestStatus @default(PENDING)
+  createdAt    DateTime                   @default(now())
   resolvedAt   DateTime?
   resolvedById String?
 
@@ -378,6 +379,7 @@ model ItemEvent {
 enum RequirementAcceptance {
   pending
   accepted
+  partially_accepted
   rejected
   deferred
 }
@@ -398,26 +400,32 @@ enum RequirementChangeStatus {
 }
 
 model Requirement {
-  id                String                @id @default(uuid())
-  displayId         String                @unique
-  projectId         String
-  title             String
-  content           String                @default("")
-  ownerUserId       String?
-  basis             String                @default("")
-  precondition      String                @default("")
-  resolution        String                @default("")
-  acceptanceStatus  RequirementAcceptance @default(pending)
-  requestDepartment String                @default("")
-  divisionCodeId    String?
-  categoryCodeId    String?
-  priority          ProbabilityLevel?
-  importance        ProbabilityLevel?
-  createdBy         String
-  version           Int                   @default(1)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  archivedAt        DateTime?
+  id                     String                @id @default(uuid())
+  displayId              String                @unique
+  requirementId          String?
+  projectId              String
+  title                  String
+  content                String                @default("")
+  ownerUserId            String?
+  basis                  String                @default("")
+  precondition           String                @default("")
+  resolution             String                @default("")
+  businessMajorCategory  String                @default("")
+  businessMiddleCategory String                @default("")
+  businessMinorCategory  String                @default("")
+  addedAfterConfirmation Boolean?
+  notes                  String                @default("")
+  acceptanceStatus       RequirementAcceptance @default(pending)
+  requestDepartment      String                @default("")
+  divisionCodeId         String?
+  categoryCodeId         String?
+  priority               ProbabilityLevel?
+  importance             ProbabilityLevel?
+  createdBy              String
+  version                Int                   @default(1)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  archivedAt             DateTime?
 
   project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner    User?               @relation("RequirementOwner", fields: [ownerUserId], references: [id])
@@ -429,6 +437,7 @@ model Requirement {
 
   @@index([projectId, archivedAt])
   @@index([projectId, acceptanceStatus])
+  @@unique([projectId, requirementId])
   @@map("requirements")
 }
 

@@ -1,6 +1,7 @@
 export const acceptanceLabels = {
   pending: "검토중",
   accepted: "수용",
+  partially_accepted: "부분수용",
   rejected: "미수용",
   deferred: "보류",
 } as const;
