@@ -15,7 +15,10 @@ if (!useProcessEnv) {
 const PROJECT_ID = "20000000-0000-4000-8000-000000000001";
 const sourceArg = args.find((arg) => arg !== "--use-process-env");
 const sourcePath = path.resolve(sourceArg ?? "D:/Workspace/work/요구사항리스트_등록용.xlsx");
-const connectionString = (process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL)?.replace(/sslmode=require/, "sslmode=no-verify");
+const rawConnectionString = useProcessEnv
+  ? process.env.POSTGRES_PRISMA_URL ?? process.env.POSTGRES_URL ?? process.env.DATABASE_URL
+  : process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL;
+const connectionString = rawConnectionString?.replace(/sslmode=require/, "sslmode=no-verify");
 if (!connectionString) throw new Error("DATABASE_URL is not set.");
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
