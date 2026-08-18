@@ -6,7 +6,9 @@ import { PrismaClient, type Prisma } from "@/lib/generated/prisma/client";
 const globalForPrisma = globalThis as unknown as { pmoPrisma?: PrismaClient };
 
 function createPrismaClient() {
-  const raw = process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL;
+  const raw = process.env.VERCEL === "1"
+    ? process.env.POSTGRES_PRISMA_URL ?? process.env.POSTGRES_URL ?? process.env.DATABASE_URL
+    : process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL;
   if (!raw) throw new Error("DATABASE_URL is not set.");
   // Supabase pooler 인증서가 Node 기본 신뢰 저장소에서 검증되지 않아 sslmode를 no-verify로 낮춘다(전송은 여전히 암호화됨).
   const connectionString = raw.replace(/sslmode=require/, "sslmode=no-verify");
