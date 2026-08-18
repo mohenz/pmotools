@@ -13,6 +13,7 @@ const iso=(d:Date)=>d.toISOString().slice(0,10);
 const addDays=(d:Date,n:number)=>new Date(d.getTime()+n*86400000);
 const parse=(s:string)=>new Date(`${s}T00:00:00Z`);
 const monday=(d:Date)=>addDays(d,-((d.getUTCDay()+6)%7));
+const monthCells=(monthStart:Date)=>{const firstWeekday=(monthStart.getUTCDay()+6)%7,lastDay=new Date(Date.UTC(monthStart.getUTCFullYear(),monthStart.getUTCMonth()+1,0)).getUTCDate();return Array.from({length:42},(_,index)=>{const day=index-firstWeekday+1;return day>=1&&day<=lastDay?new Date(Date.UTC(monthStart.getUTCFullYear(),monthStart.getUTCMonth(),day)):null;});};
 
 function range(view:View,selected:Date){
   if(view==="day")return {from:selected,to:selected,cells:[selected]};
@@ -56,7 +57,11 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
             {r.cells.map(d=>{const key=iso(d),items=(byDate[key]??[]).filter(e=>!e.allDay&&slotOf(e.startTime)===slot);return <div className={`calendar-time-cell ${slot%60===0?"hour":""}`} key={key}>{items.map(e=><EventLink event={e} base={base} canNavigate={canWrite} key={`${e.source}-${e.id}`}/>)}{!items.length&&canWrite&&<Link className="calendar-slot-add" aria-label={`${key} ${hhmm(slot)} 일정 등록`} title={`${hhmm(slot)} 일정 등록`} href={`${base}&new=${key}&time=${hhmm(slot)}`}>+</Link>}</div>})}
           </div>)}
         </div>}
-        {view==="year"&&<div className="calendar-year">{r.cells.map(monthStart=>{const monthKey=`${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth()+1).padStart(2,"0")}`,count=events.filter(e=>e.date.startsWith(monthKey)).length;return <Link className="calendar-year-cell" href={`/calendar?view=month&date=${iso(monthStart)}`} key={monthKey}><strong>{monthStart.getUTCMonth()+1}월</strong><span>{count>0?`일정 ${count}건`:"일정 없음"}</span></Link>})}</div>}
+        {view==="year"&&<div className="calendar-year">{r.cells.map(monthStart=>{const monthKey=`${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth()+1).padStart(2,"0")}`,monthEvents=events.filter(e=>e.date.startsWith(monthKey));return <section className="calendar-year-month" key={monthKey}>
+          <header><Link href={`/calendar?view=month&date=${iso(monthStart)}`}>{monthStart.getUTCMonth()+1}월</Link><span>{monthEvents.length>0?`${monthEvents.length}건`:"일정 없음"}</span></header>
+          <div className="calendar-year-weekdays">{["월","화","수","목","금","토","일"].map(day=><span key={day}>{day}</span>)}</div>
+          <div className="calendar-year-days">{monthCells(monthStart).map((date,index)=>{if(!date)return <span className="empty" aria-hidden="true" key={`empty-${index}`}/>;const key=iso(date),dayEvents=byDate[key]??[];return <Link className={`calendar-year-date ${key===today?"today":""} ${dayEvents.length?"has-events":""}`} href={`/calendar?view=day&date=${key}`} aria-label={`${key}${dayEvents.length?`, 일정 ${dayEvents.length}건`:""}`} key={key}><span>{date.getUTCDate()}</span>{dayEvents.length>0&&<small>{dayEvents.length}</small>}</Link>})}</div>
+        </section>})}</div>}
         {view==="agenda"&&<div className="calendar-agenda">{r.cells.map(d=>{const key=iso(d);const dayEvents=byDate[key]??[];if(!dayEvents.length)return null;return <div className="calendar-agenda-day" key={key}><header>{new Intl.DateTimeFormat("ko-KR",{month:"long",day:"numeric",weekday:"short",timeZone:"UTC"}).format(d)}</header><div>{dayEvents.map(e=><EventLink event={e} base={base} canNavigate={canWrite} key={`${e.source}-${e.id}`}/>)}</div></div>})}{!events.length&&<p className="empty">이 달에는 일정이 없습니다.</p>}</div>}
       </section>
       <div className="calendar-legend"><span><i className="priority-high"/>우선순위 상</span><span><i className="priority-medium"/>우선순위 중</span><span><i className="priority-low"/>우선순위 하</span><span><i className="progress"/>목표일</span><span><i className="next_plan"/>차주 계획</span><span><i className="issue"/>이슈</span><span>★ 마일스톤</span><span>↻ 반복 일정</span></div>

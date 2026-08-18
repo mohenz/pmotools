@@ -20,8 +20,9 @@ function formatDate(value: string) {
 }
 
 export function RequirementListScreen({ result, filters, divisions, isManager }: { result: Result; filters: Filters; divisions: CommonCode[]; isManager: boolean }) {
-  const firstPage = Math.max(1, Math.min(result.page - 3, result.totalPages - 6));
-  const pageNumbers = Array.from({ length: Math.min(7, result.totalPages) }, (_, index) => firstPage + index);
+  const pageLinkCount = Math.min(10, result.totalPages);
+  const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
+  const pageNumbers = Array.from({ length: pageLinkCount }, (_, index) => firstPage + index);
   return <>
     <header className="topbar"><div><h1>요구사항정의서</h1><p>총 {result.total}건</p></div><div className="topbar-actions">{isManager && <Link className="button primary" href="/requirements/new">+ 신규 등록</Link>}</div></header>
     <div className="content">
