@@ -30,6 +30,10 @@ describe("weeklyReportName", () => {
     expect(weeklyReportName("2026년 8월 4주", "PMO CONTROL")).toBe("2026년 8월 4주 PMO 위클리 리포트");
   });
 
+  it("PMO 통제 프로젝트의 신규·기존 리포트명에서 통제 프로젝트를 제외한다", () => {
+    expect(weeklyReportName("2026년 8월 4주", "PMO 통제 프로젝트")).toBe("2026년 8월 4주 PMO 위클리 리포트");
+  });
+
   it("다른 프로젝트명은 그대로 유지한다", () => {
     expect(weeklyReportName("2026년 8월 4주", "차세대 시스템")).toBe("2026년 8월 4주 차세대 시스템 위클리 리포트");
   });

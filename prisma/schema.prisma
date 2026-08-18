@@ -38,6 +38,7 @@ model User {
   passwordHash String
   email        String?
   department   String?
+  jobTitle     String?
   role         UserRole   @default(MEMBER)
   theme        ThemeMode  @default(SYSTEM)
   status       UserStatus @default(ACTIVE)

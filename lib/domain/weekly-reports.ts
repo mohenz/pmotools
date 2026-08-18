@@ -13,7 +13,7 @@ export type WeeklyReportPeriod = {
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 
 export function weeklyReportName(weekLabel: string, projectName: string) {
-  const reportProjectName = projectName.replace(/\s+CONTROL$/i, "").trim();
+  const reportProjectName = projectName.replace(/\s+(?:CONTROL|통제 프로젝트)$/i, "").trim();
   return `${weekLabel} ${reportProjectName || projectName.trim()} 위클리 리포트`;
 }
 
