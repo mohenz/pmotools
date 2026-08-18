@@ -12,9 +12,9 @@ export function ManagementTaskDashboardScreen({ data }: { data: ManagementTaskDa
     <div className="content">
       <section className="kpi-grid kpi-grid-5" aria-label="핵심 지표">
         <Kpi href="/management-tasks" label="전체 등록 건수" value={data.summary.total} note="관리업무항목 누적" />
-        <Kpi href="/management-tasks?band=red" label="위험(빨강)" value={data.summary.red} note="0~40점" critical={data.summary.red > 0} />
-        <Kpi href="/management-tasks?band=yellow" label="주의(노랑)" value={data.summary.yellow} note="41~80점" />
-        <Kpi href="/management-tasks?band=green" label="양호(녹색)" value={data.summary.green} note="81~100점" />
+        <Kpi href="/management-tasks?band=red" label="위험" value={data.summary.red} note="0~40점" critical={data.summary.red > 0} />
+        <Kpi href="/management-tasks?band=yellow" label="주의" value={data.summary.yellow} note="41~80점" />
+        <Kpi href="/management-tasks?band=green" label="양호" value={data.summary.green} note="81~100점" />
         <Link href="/management-tasks" className={`kpi project-score ${data.projectBand ? `band-${data.projectBand}` : "band-empty"}`}>
           <span>프로젝트통합모니터링 점수</span>
           <strong>{data.projectScore ?? "-"}</strong>
