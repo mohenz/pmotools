@@ -1,3 +1,9 @@
-import { getLocalContext } from "@/lib/server/context";import { listWeeklyReports } from "@/lib/server/work-management";
-export const dynamic="force-dynamic";
-export default async function PrintReport(){const {projectId}=await getLocalContext();const rows=await listWeeklyReports(projectId);return <div className="print-report"><header><h1>주간 업무보고서</h1><p>{rows[0]?.weekLabel}</p></header>{rows.map(r=><section key={r.id}><h2>{r.areaLabel}</h2><table><tbody><tr><th>금주 실적</th><td>{r.achievements}</td></tr><tr><th>차주 계획</th><td>{r.nextPlan}</td></tr><tr><th>이슈사항</th><td>{r.issues}</td></tr><tr><th>의사결정</th><td>{r.decisions}</td></tr><tr><th>비고</th><td>{r.notes}</td></tr></tbody></table></section>)}</div>}
+import { getLocalContext } from "@/lib/server/context";
+import { listWeeklyReports } from "@/lib/server/work-management";
+
+export default async function PrintReport({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+  const { projectId } = await getLocalContext();
+  const { week } = await searchParams;
+  const rows = await listWeeklyReports(projectId, week);
+  return <div className="print-report"><header><h1>위클리 리포트</h1><p>{rows[0]?.weekLabel ?? "생성된 리포트가 없습니다."}</p></header>{rows.map((row) => <section key={row.id}><h2>{row.areaLabel}</h2><table><tbody><tr><th>실적</th><td>{row.achievements}</td></tr><tr><th>계획</th><td>{row.nextPlan}</td></tr><tr><th>이슈 및 요청사항</th><td>{row.issues}</td></tr></tbody></table></section>)}</div>;
+}

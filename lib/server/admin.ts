@@ -6,7 +6,7 @@ import { assertAdmin } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import type { GroupType, UserRole, UserStatus } from "@/lib/generated/prisma/client";
 
-export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; role: UserRole; status: UserStatus; createdAt: string };
+export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; jobTitle: string | null; role: UserRole; status: UserStatus; createdAt: string };
 export type GroupRow = { id: string; groupType: GroupType; code: string; label: string; color: string | null; sortOrder: number; isActive: boolean };
 
 export async function listUsers(projectId: string, adminUserId: string, q?: string): Promise<AdminUserRow[]> {
@@ -18,13 +18,13 @@ export async function listUsers(projectId: string, adminUserId: string, q?: stri
       isActive: true,
       user: {
         deletedAt: null,
-        ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" } }, { name: { contains: query, mode: "insensitive" } }] } : {}),
+        ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" } }, { name: { contains: query, mode: "insensitive" } }, { jobTitle: { contains: query, mode: "insensitive" } }] } : {}),
       },
     },
     include: { user: true },
     orderBy: { user: { userId: "asc" } },
   });
-  return members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString() }));
+  return members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString() }));
 }
 
 const roleSchema = z.object({ role: z.enum(["ADMIN", "OPERATOR", "MEMBER"]) });
@@ -77,6 +77,7 @@ const createUserSchema = z.object({
   name: z.string().trim().min(1).max(50),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   department: z.string().trim().max(100).nullable().optional(),
+  jobTitle: z.string().trim().max(100).nullable().optional(),
   role: z.enum(["ADMIN", "OPERATOR", "MEMBER"]),
 });
 export async function createUser(projectId: string, adminUserId: string, input: unknown) {
@@ -88,7 +89,7 @@ export async function createUser(projectId: string, adminUserId: string, input: 
   const tempPassword = generateTempPassword();
   const passwordHash = await hash(tempPassword, 12);
   const user = await prisma.$transaction(async (tx) => {
-    const created = await tx.user.create({ data: { userId: data.userId, name: data.name, passwordHash, email: data.email || null, department: data.department || null, role: data.role } });
+    const created = await tx.user.create({ data: { userId: data.userId, name: data.name, passwordHash, email: data.email || null, department: data.department || null, jobTitle: data.jobTitle || null, role: data.role } });
     await tx.projectMember.create({ data: { projectId, userId: created.id, role: data.role } });
     return created;
   });
@@ -100,6 +101,7 @@ const updateUserProfileSchema = z.object({
   name: z.string().trim().min(1).max(50),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   department: z.string().trim().max(100).nullable().optional(),
+  jobTitle: z.string().trim().max(100).nullable().optional(),
 });
 export async function updateUserProfile(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
@@ -107,9 +109,9 @@ export async function updateUserProfile(projectId: string, adminUserId: string, 
   const prisma = getPrisma();
   const current = await prisma.user.findUnique({ where: { id: targetUserId } });
   if (!current) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
-  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { name: data.name, email: data.email || null, department: data.department || null } });
-  await writeAuditLog(projectId, adminUserId, "USER_PROFILE_UPDATE", "users", targetUserId, { name: current.name, email: current.email, department: current.department }, { name: updated.name, email: updated.email, department: updated.department });
-  return { id: targetUserId, name: updated.name, email: updated.email, department: updated.department };
+  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { name: data.name, email: data.email || null, department: data.department || null, jobTitle: data.jobTitle || null } });
+  await writeAuditLog(projectId, adminUserId, "USER_PROFILE_UPDATE", "users", targetUserId, { name: current.name, email: current.email, department: current.department, jobTitle: current.jobTitle }, { name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle });
+  return { id: targetUserId, name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle };
 }
 
 export async function deleteUser(projectId: string, adminUserId: string, targetUserId: string) {

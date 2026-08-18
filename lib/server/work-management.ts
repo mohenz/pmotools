@@ -4,14 +4,25 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import type { CommonCode } from "@/lib/server/common-codes";
 import { getCodeOptions } from "@/lib/server/common-codes";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
-import { DomainError } from "@/lib/server/items";
+import { DomainError } from "@/lib/server/errors";
 import { portfolioTag } from "@/lib/server/cache-tags";
-import { assertManager } from "@/lib/server/permissions";
+import { assertManager, getMemberRole, isManagerRole } from "@/lib/server/permissions";
+import { calculateWeeklyReportPeriod, inferWeekOfMonth, weeklyReportName } from "@/lib/domain/weekly-reports";
 
 const weeksTag = (projectId: string) => `weeks:${projectId}`;
 
 export type ProjectWeek = { id: string; weekKey: string; label: string; startDate: string; endDate: string; status: "open" | "closed" };
-export type WeeklyReport = { id: string; weekId: string; weekLabel: string; areaCodeId: string; areaLabel: string; achievements: string; nextPlan: string; issues: string; decisions: string; notes: string; version: number; creatorName: string; createdAt: string; updatedAt: string };
+export type WeeklyReport = { id: string; weekId: string; weekLabel: string; areaCodeId: string; areaLabel: string; achievements: string; nextPlan: string; issues: string; decisions: string; notes: string; version: number };
+export type WeeklyReportSummary = {
+  id: string; label: string; reportName: string; year: number; month: number; weekOfMonth: number;
+  actualStart: string; actualEnd: string; planStart: string; planEnd: string;
+  status: "open" | "closed"; moduleCount: number; completedCount: number; createdAt: string;
+};
+export type WeeklyReportDetail = WeeklyReportSummary & {
+  reports: Array<WeeklyReport & { canEdit: boolean }>;
+  canManage: boolean;
+};
+export type WeeklyReportListResult = { rows: WeeklyReportSummary[]; total: number; page: number; pageSize: number; pageCount: number };
 export type ProgressRow = { id: string; weekId: string; weekLabel: string; areaCodeId: string; areaLabel: string; taskName: string; planDetail: string; planTargetDate: string | null; actualDetail: string; actualDate: string | null; progress: number; nextPlan: string; nextTargetDate: string | null; notes: string; version: number; delayed: boolean };
 export type StaffChange = { id: string; weekId: string; weekLabel: string; areaCodeId: string; areaLabel: string; changeType: "join" | "leave"; currentCount: number; nextCount: number; notes: string; version: number };
 export type ActivityLog = { id: string; action: string; actorName: string | null; createdAt: string; beforeData: Record<string, unknown> | null; afterData: Record<string, unknown> | null };
@@ -106,31 +117,140 @@ const weekGroupInclude = { week: true, group: true } as const;
 const weekGroupOrder = [{ week: { startDate: "desc" } }, { group: { sortOrder: "asc" } }] as const;
 
 export async function listWeeklyReports(projectId: string, weekId?: string): Promise<WeeklyReport[]> {
-  const records = await getPrisma().weeklyReport.findMany({ where: weekScope(projectId, weekId), include: { ...weekGroupInclude, creator: { select: { name: true } } }, orderBy: [...weekGroupOrder] });
-  return records.map((row) => ({ id: row.id, weekId: row.weekId, weekLabel: row.week.label, areaCodeId: row.groupId, areaLabel: row.group.label, achievements: row.achievements, nextPlan: row.nextPlan, issues: row.issues, decisions: row.decisions, notes: row.notes, version: row.version, creatorName: row.creator.name, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }));
+  const records = await getPrisma().weeklyReport.findMany({ where: weekScope(projectId, weekId), include: weekGroupInclude, orderBy: [...weekGroupOrder] });
+  return records.map((row) => ({ id: row.id, weekId: row.weekId, weekLabel: row.week.label, areaCodeId: row.groupId, areaLabel: row.group.label, achievements: row.achievements, nextPlan: row.nextPlan, issues: row.issues, decisions: row.decisions, notes: row.notes, version: row.version }));
 }
-const reportSchema = z.object({ weekId: z.string().uuid(), areaCodeId: z.string().uuid(), achievements: z.string().max(10000), nextPlan: z.string().max(10000), issues: z.string().max(10000), decisions: z.string().max(10000), notes: z.string().max(10000) });
+
+const reportSummary = (week: {
+  id: string; label: string; startDate: Date; endDate: Date; status: "open" | "closed"; createdAt: Date;
+  project: { name: string }; reports: Array<{ achievements: string; nextPlan: string; issues: string }>;
+}): WeeklyReportSummary => {
+  const planStart = dateStr(week.startDate)!;
+  const planEnd = dateStr(week.endDate)!;
+  const start = new Date(`${planStart}T00:00:00.000Z`);
+  const actualStartDate = new Date(start); actualStartDate.setUTCDate(start.getUTCDate() - 7);
+  const actualEndDate = new Date(start); actualEndDate.setUTCDate(start.getUTCDate() - 3);
+  return {
+    id: week.id,
+    label: week.label,
+    reportName: weeklyReportName(week.label, week.project.name),
+    year: start.getUTCFullYear(),
+    month: start.getUTCMonth() + 1,
+    weekOfMonth: inferWeekOfMonth(planStart),
+    actualStart: dateStr(actualStartDate)!, actualEnd: dateStr(actualEndDate)!, planStart, planEnd,
+    status: week.status,
+    moduleCount: week.reports.length,
+    completedCount: week.reports.filter((row) => row.achievements.trim() && row.nextPlan.trim()).length,
+    createdAt: week.createdAt.toISOString(),
+  };
+};
+
+export async function listWeeklyReportSummaries(projectId: string, filters: { q?: string; page?: number; pageSize?: number } = {}): Promise<WeeklyReportListResult> {
+  const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 10));
+  const q = filters.q?.trim() ?? "";
+  const where = { projectId, reports: { some: {} }, ...(q ? { OR: [{ label: { contains: q, mode: "insensitive" as const } }, { project: { name: { contains: q, mode: "insensitive" as const } } }] } : {}) };
+  const prisma = getPrisma();
+  const total = await prisma.week.count({ where });
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(pageCount, Math.max(1, filters.page ?? 1));
+  const weeks = await prisma.week.findMany({
+    where, include: { project: { select: { name: true } }, reports: { select: { achievements: true, nextPlan: true, issues: true } } },
+    orderBy: { startDate: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
+  });
+  return { rows: weeks.map(reportSummary), total, page, pageSize, pageCount };
+}
+
+const generationSchema = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12), weekOfMonth: z.number().int().min(1).max(5) });
+export async function generateWeeklyReport(projectId: string, userId: string, input: unknown) {
+  await assertManager(projectId, userId);
+  const data = generationSchema.parse(input);
+  let period;
+  try { period = calculateWeeklyReportPeriod(data.year, data.month, data.weekOfMonth); }
+  catch (error) { throw new DomainError("INVALID_STATE", error instanceof Error ? error.message : "리포트 기간을 계산할 수 없습니다."); }
+  const prisma = getPrisma();
+  const modules = await prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true } });
+  if (!modules.length) throw new DomainError("INVALID_STATE", "활성 업무모듈을 먼저 등록해 주세요.");
+  const existing = await prisma.week.findUnique({ where: { projectId_weekKey: { projectId, weekKey: period.weekKey } } });
+  if (existing?.status === "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료된 리포트입니다. 먼저 확인을 취소해 주세요.");
+  if (existing) throw new DomainError("INVALID_STATE", `${period.label} 위클리리포트는 이미 생성되어 있습니다. 목록에서 기존 리포트를 확인해 주세요.`);
+  const week = await prisma.week.create({ data: { projectId, weekKey: period.weekKey, label: period.label, startDate: new Date(period.planStart), endDate: new Date(period.planEnd), status: "open" } });
+  await prisma.weeklyReport.createMany({ data: modules.map((module) => ({ weekId: week.id, groupId: module.id, createdBy: userId })), skipDuplicates: true });
+  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_GENERATE", "weeks", week.id, null, { ...week, moduleCount: modules.length });
+  revalidateTag(weeksTag(projectId));
+  revalidateTag(portfolioTag(projectId));
+  return { id: week.id };
+}
+
+export async function getWeeklyReportDetail(projectId: string, userId: string, weekId: string): Promise<WeeklyReportDetail> {
+  const prisma = getPrisma();
+  const [week, role, mappings] = await Promise.all([
+    prisma.week.findFirst({ where: { id: weekId, projectId, reports: { some: {} } }, include: { project: { select: { name: true } }, reports: { include: { group: true }, orderBy: { group: { sortOrder: "asc" } } } } }),
+    getMemberRole(projectId, userId),
+    prisma.userGroupMap.findMany({ where: { userId, group: { projectId } }, select: { groupId: true } }),
+  ]);
+  if (!week) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
+  const canManage = isManagerRole(role);
+  const assigned = new Set(mappings.map((row) => row.groupId));
+  const summary = reportSummary(week);
+  return {
+    ...summary,
+    canManage,
+    reports: week.reports.map((row) => ({
+      id: row.id, weekId: row.weekId, weekLabel: week.label, areaCodeId: row.groupId, areaLabel: row.group.label,
+      achievements: row.achievements, nextPlan: row.nextPlan, issues: row.issues, decisions: row.decisions, notes: row.notes, version: row.version,
+      canEdit: week.status === "open" && (canManage || assigned.has(row.groupId)),
+    })),
+  };
+}
+
+const reportSchema = z.object({ weekId: z.string().uuid(), areaCodeId: z.string().uuid(), achievements: z.string().max(2000), nextPlan: z.string().max(2000), issues: z.string().max(2000), decisions: z.string().max(2000).default(""), notes: z.string().max(2000).default("") });
 export async function saveWeeklyReport(projectId: string, userId: string, input: unknown) {
   const data = reportSchema.parse(input);
   const prisma = getPrisma();
+  const [week, group, role, assignment] = await Promise.all([
+    prisma.week.findFirst({ where: { id: data.weekId, projectId } }),
+    prisma.groups.findFirst({ where: { id: data.areaCodeId, projectId, groupType: "WORK_MODULE" } }),
+    getMemberRole(projectId, userId),
+    prisma.userGroupMap.findUnique({ where: { userId_groupId: { userId, groupId: data.areaCodeId } } }),
+  ]);
+  if (!week || !group) throw new DomainError("NOT_FOUND", "리포트 주차 또는 업무모듈을 찾을 수 없습니다.");
+  if (week.status === "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료되어 수정할 수 없습니다.");
+  if (!isManagerRole(role) && !assignment) throw new DomainError("FORBIDDEN", "담당 업무모듈만 수정할 수 있습니다.");
   const existing = await prisma.weeklyReport.findUnique({ where: { weekId_groupId: { weekId: data.weekId, groupId: data.areaCodeId } } });
+  if (!existing) throw new DomainError("NOT_FOUND", "생성된 업무모듈 리포트를 찾을 수 없습니다.");
   const saved = existing
     ? await prisma.weeklyReport.update({ where: { id: existing.id }, data: { achievements: data.achievements, nextPlan: data.nextPlan, issues: data.issues, decisions: data.decisions, notes: data.notes, version: { increment: 1 } } })
-    : await prisma.weeklyReport.create({ data: { weekId: data.weekId, groupId: data.areaCodeId, achievements: data.achievements, nextPlan: data.nextPlan, issues: data.issues, decisions: data.decisions, notes: data.notes, createdBy: userId } });
-  await writeAuditLog(projectId, userId, `WEEKLY_REPORTS_${existing ? "UPDATE" : "INSERT"}`, "weekly_reports", saved.id, existing ?? null, saved);
+    : existing;
+  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_UPDATE", "weekly_reports", saved.id, existing, saved);
   revalidateTag(portfolioTag(projectId));
   return { id: saved.id };
 }
 
-export async function deleteWeeklyReport(projectId: string, userId: string, id: string) {
+export async function deleteWeeklyReport(projectId: string, userId: string, weekId: string) {
   await assertManager(projectId, userId);
   const prisma = getPrisma();
-  const current = await prisma.weeklyReport.findUnique({ where: { id }, include: { week: { select: { projectId: true, label: true } }, group: { select: { label: true } } } });
-  if (!current || current.week.projectId !== projectId) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
-  await prisma.weeklyReport.delete({ where: { id } });
-  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_DELETE", "weekly_reports", id, { weekLabel: current.week.label, areaLabel: current.group.label, achievements: current.achievements, nextPlan: current.nextPlan }, null);
+  const current = await prisma.week.findFirst({
+    where: { id: weekId, projectId, reports: { some: {} } },
+    include: { project: { select: { name: true } }, reports: { select: { id: true } } },
+  });
+  if (!current) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
+  const deleted = await prisma.weeklyReport.deleteMany({ where: { weekId } });
+  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_DELETE", "weeks", weekId, { weekLabel: current.label, projectName: current.project.name, reportCount: current.reports.length }, null);
+  revalidateTag(weeksTag(projectId));
   revalidateTag(portfolioTag(projectId));
-  return { id };
+  return { id: weekId, count: deleted.count };
+}
+
+export async function updateWeeklyReportStatus(projectId: string, userId: string, weekId: string, status: unknown) {
+  await assertManager(projectId, userId);
+  const value = z.enum(["open", "closed"]).parse(status);
+  const prisma = getPrisma();
+  const current = await prisma.week.findFirst({ where: { id: weekId, projectId, reports: { some: {} } } });
+  if (!current) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
+  const updated = await prisma.week.update({ where: { id: weekId }, data: { status: value } });
+  await writeAuditLog(projectId, userId, value === "closed" ? "WEEKLY_REPORTS_CONFIRM" : "WEEKLY_REPORTS_REOPEN", "weeks", weekId, current, updated);
+  revalidateTag(weeksTag(projectId));
+  return { id: weekId, status: value };
 }
 
 export async function listWeeklyProgress(projectId: string, weekId?: string): Promise<ProgressRow[]> {

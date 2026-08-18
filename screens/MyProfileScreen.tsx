@@ -13,7 +13,7 @@ function formatDate(value: string) {
 export function MyProfileScreen({ profile }: { profile: MyProfile }) {
   const router = useRouter();
   const [current, setCurrent] = useState(profile);
-  const [form, setForm] = useState({ name: profile.name, email: profile.email ?? "", department: profile.department ?? "" });
+  const [form, setForm] = useState({ name: profile.name, email: profile.email ?? "", department: profile.department ?? "", jobTitle: profile.jobTitle ?? "" });
   const [pwForm, setPwForm] = useState({ currentPassword: "", newPassword: "", newPasswordConfirm: "" });
   const [profilePending, setProfilePending] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -27,7 +27,7 @@ export function MyProfileScreen({ profile }: { profile: MyProfile }) {
     const payload = await response.json().catch(() => null);
     setProfilePending(false);
     if (!response.ok) { setProfileMessage({ type: "error", text: payload?.error?.message ?? "정보를 저장하지 못했습니다." }); return; }
-    setCurrent((prev) => ({ ...prev, name: payload.data.name, email: payload.data.email, department: payload.data.department }));
+    setCurrent((prev) => ({ ...prev, name: payload.data.name, email: payload.data.email, department: payload.data.department, jobTitle: payload.data.jobTitle }));
     setProfileMessage({ type: "success", text: "정보가 저장되었습니다." });
     router.refresh();
   }
@@ -51,7 +51,7 @@ export function MyProfileScreen({ profile }: { profile: MyProfile }) {
       <section className="panel detail-summary" style={{ maxWidth: 640 }}>
         <dl>
           <div><dt>아이디</dt><dd className="mono">{current.userId}</dd></div>
-          <div><dt>역할</dt><dd><span className="badge">{ROLE_LABEL[current.role] ?? current.role}</span></dd></div>
+          <div><dt>권한</dt><dd><span className="badge">{ROLE_LABEL[current.role] ?? current.role}</span></dd></div>
           <div><dt>계정 상태</dt><dd><span className={`badge ${current.status === "LOCKED" ? "issue" : "level-pm"}`}>{current.status === "LOCKED" ? "잠김" : "정상"}</span></dd></div>
           <div><dt>가입일</dt><dd>{formatDate(current.createdAt)}</dd></div>
         </dl>
@@ -63,6 +63,7 @@ export function MyProfileScreen({ profile }: { profile: MyProfile }) {
           <label>이름<input value={form.name} onChange={(event) => setForm((f) => ({ ...f, name: event.target.value }))} required maxLength={50} /></label>
           <label>이메일<input type="email" value={form.email} onChange={(event) => setForm((f) => ({ ...f, email: event.target.value }))} maxLength={100} /></label>
           <label>회사명<input value={form.department} onChange={(event) => setForm((f) => ({ ...f, department: event.target.value }))} maxLength={100} /></label>
+          <label>직책<input value={form.jobTitle} onChange={(event) => setForm((f) => ({ ...f, jobTitle: event.target.value }))} maxLength={100} /></label>
           {profileMessage && <p className={profileMessage.type === "error" ? "form-error" : "form-success"} role={profileMessage.type === "error" ? "alert" : "status"}>{profileMessage.text}</p>}
           <button className="button primary" type="submit" disabled={profilePending}>{profilePending ? "저장 중…" : "저장"}</button>
         </form>

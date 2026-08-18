@@ -19,8 +19,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const session = await auth();
   const menuPrefs = session?.user ? await listMenuPreferences(session.user.projectId) : [];
   const announcements = session?.user ? await listDashboardAnnouncements(session.user.projectId, session.user.id) : [];
-  const isManager = session?.user?.role === "ADMIN" || session?.user?.role === "OPERATOR";
-  const homeHref = isManager ? "/portfolio" : "/calendar";
+  const homeHref = "/announcements";
   const themeScript = `(function(){try{var p=localStorage.getItem('pmo-control-theme')||'system';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.style.colorScheme=d}catch(e){}})()`;
   if (!session?.user) {
     return (

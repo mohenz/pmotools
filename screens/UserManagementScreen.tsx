@@ -8,8 +8,8 @@ import type { PasswordResetRequestRow } from "@/lib/server/password-reset-reques
 
 const ROLE_LABEL: Record<string, string> = { ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
-type ProfileDraft = { name: string; email: string; department: string };
-const emptyCreateDraft = { userId: "", name: "", email: "", department: "", role: "MEMBER" };
+type ProfileDraft = { name: string; email: string; department: string; jobTitle: string };
+const emptyCreateDraft = { userId: "", name: "", email: "", department: "", jobTitle: "", role: "MEMBER" };
 
 export function UserManagementScreen({ users, q, resetRequests }: { users: AdminUserRow[]; q: string; resetRequests: PasswordResetRequestRow[] }) {
   const router = useRouter();
@@ -30,7 +30,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
   }
 
   function draftFor(user: AdminUserRow): ProfileDraft {
-    return drafts[user.id] ?? { name: user.name, email: user.email ?? "", department: user.department ?? "" };
+    return drafts[user.id] ?? { name: user.name, email: user.email ?? "", department: user.department ?? "", jobTitle: user.jobTitle ?? "" };
   }
   function updateDraft(user: AdminUserRow, field: keyof ProfileDraft, value: string) {
     setDrafts((prev) => ({ ...prev, [user.id]: { ...draftFor(user), [field]: value } }));
@@ -41,7 +41,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
     const response = await fetch(`/api/v1/admin/users/${user.id}/role`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ role }) });
     const payload = await response.json().catch(() => null);
     setPending("");
-    if (!response.ok) { setMessage(payload?.error?.message ?? "역할을 변경하지 못했습니다."); return; }
+    if (!response.ok) { setMessage(payload?.error?.message ?? "권한을 변경하지 못했습니다."); return; }
     router.refresh();
   }
   async function toggleStatus(user: AdminUserRow) {
@@ -102,7 +102,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
   }
 
   return <>
-    <header className="topbar"><div><h1>사용자 관리</h1><p>사용자 등록, 정보 수정, 역할 변경, 계정 잠금, 비밀번호 강제 초기화를 관리합니다.</p></div></header>
+    <header className="topbar"><div><h1>사용자 관리</h1><p>사용자 등록, 정보 수정, 권한 변경, 계정 잠금, 비밀번호 강제 초기화를 관리합니다.</p></div></header>
     <div className="content settings-content">
       {message && <p className="form-error action-message" role="alert">{message}</p>}
       {tempPassword && <p className="form-success action-message" role="status">{tempPassword.userId} 임시 비밀번호: <strong className="mono">{tempPassword.value}</strong> (다시 표시되지 않습니다. 사용자에게 안전하게 전달하세요.)</p>}
@@ -142,7 +142,8 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
           <label>이름<input value={createDraft.name} onChange={(event) => setCreateDraft((d) => ({ ...d, name: event.target.value }))} required maxLength={50} /></label>
           <label>이메일<input type="email" value={createDraft.email} onChange={(event) => setCreateDraft((d) => ({ ...d, email: event.target.value }))} maxLength={100} /></label>
           <label>회사명<input value={createDraft.department} onChange={(event) => setCreateDraft((d) => ({ ...d, department: event.target.value }))} maxLength={100} /></label>
-          <label>역할
+          <label>직책<input value={createDraft.jobTitle} onChange={(event) => setCreateDraft((d) => ({ ...d, jobTitle: event.target.value }))} maxLength={100} /></label>
+          <label>권한
             <select value={createDraft.role} onChange={(event) => setCreateDraft((d) => ({ ...d, role: event.target.value }))}>
               {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
             </select>
@@ -154,7 +155,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
         <div className="panel-head"><h2>사용자 목록</h2><span>{users.length}명</span></div>
         <div className="table-wrap">
           <table className="dense-table">
-            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>역할</th><th>상태</th><th /></tr></thead>
+            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직책</th><th>권한</th><th>상태</th><th /></tr></thead>
             <tbody>
               {users.map((user) => {
                 const draft = draftFor(user);
@@ -163,8 +164,9 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
                   <td><input aria-label={`${user.userId} 이름`} value={draft.name} onChange={(event) => updateDraft(user, "name", event.target.value)} required maxLength={50} /></td>
                   <td><input aria-label={`${user.userId} 이메일`} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 회사명`} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
+                  <td><input aria-label={`${user.userId} 직책`} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
                   <td>
-                    <select value={user.role} disabled={pending === `role-${user.id}`} onChange={(event) => changeRole(user, event.target.value)}>
+                    <select className="user-role-select" aria-label={`${user.userId} 권한`} value={user.role} disabled={pending === `role-${user.id}`} onChange={(event) => changeRole(user, event.target.value)}>
                       {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                     </select>
                   </td>
@@ -193,7 +195,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
                   </td>
                 </tr>;
               })}
-              {!users.length && <tr><td colSpan={7} className="empty">검색 결과가 없습니다.</td></tr>}
+              {!users.length && <tr><td colSpan={8} className="empty">검색 결과가 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>
