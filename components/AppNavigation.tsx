@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
+import { Bell, Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
 import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 import { isMenuVisibleForRole, type MenuPreferenceRow } from "@/lib/domain/menu-preferences";
 
-const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail };
-const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages" };
-const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages" };
-const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", "weekly-reports": "주간보고", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "쪽지" };
+const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail };
+const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages" };
+const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages" };
+const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "주간보고", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "쪽지" };
 
 export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[] }) {
   const pathname = usePathname();
@@ -69,6 +69,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
       "/meetrooms": [{href:"/meetrooms",label:"예약·관리"}],
       "/messages": [{href:"/messages",label:"쪽지함"}],
       "/requirements": [{href:"/requirements",label:"요구사항정의서"},{href:"/requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/requirements/changes",label:"요구사항변경관리"}]:[])],
+      "/announcements": [{href:"/announcements",label:"공지사항 조회"},...(isManager?[{href:"/announcements/new",label:"공지사항 등록"}]:[])],
     };
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }

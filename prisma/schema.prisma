@@ -72,6 +72,8 @@ model User {
   decidedRequirementChanges     RequirementChange[]           @relation("RequirementChangeDecider")
   passwordResetRequests         PasswordResetRequest[]        @relation("PasswordResetRequestUser")
   resolvedPasswordResetRequests PasswordResetRequest[]        @relation("PasswordResetRequestResolver")
+  createdAnnouncements          Announcement[]                @relation("AnnouncementAuthor")
+  updatedAnnouncements          Announcement[]                @relation("AnnouncementUpdater")
 
   @@map("users")
 }
@@ -168,6 +170,7 @@ model Project {
   requirementChanges        RequirementChange[]
   requirementChangeSequence RequirementChangeSequence?
   menuPreferences           MenuPreference[]
+  announcements             Announcement[]
 
   @@map("projects")
 }
@@ -435,9 +438,9 @@ model Requirement {
   events   RequirementEvent[]
   changes  RequirementChange[]
 
+  @@unique([projectId, requirementId])
   @@index([projectId, archivedAt])
   @@index([projectId, acceptanceStatus])
-  @@unique([projectId, requirementId])
   @@map("requirements")
 }
 
@@ -747,6 +750,38 @@ model NotificationSetting {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_settings")
+}
+
+enum AnnouncementAudience {
+  ALL
+  MANAGERS
+}
+
+model Announcement {
+  id                 String               @id @default(uuid())
+  projectId          String
+  title              String
+  content            String
+  audience           AnnouncementAudience @default(ALL)
+  isImportant        Boolean              @default(false)
+  showOnDashboard    Boolean              @default(false)
+  dashboardVisibleTo DateTime?            @db.Date
+  publishedAt        DateTime             @default(now())
+  expiresAt          DateTime?            @db.Date
+  viewCount          Int                  @default(0)
+  authorId           String
+  updatedById        String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User    @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  updatedBy User    @relation("AnnouncementUpdater", fields: [updatedById], references: [id])
+
+  @@index([projectId, deletedAt, isImportant, publishedAt])
+  @@index([projectId, showOnDashboard, dashboardVisibleTo])
+  @@map("announcements")
 }
 
 // ---------------------------------------------------------------------------

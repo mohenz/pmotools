@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AppNavigation } from "@/components/AppNavigation";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { UnreadMessageProvider } from "@/components/UnreadMessageProvider";
 import { UserMenu } from "@/components/UserMenu";
 import { auth } from "@/lib/server/auth";
 import { listMenuPreferences } from "@/lib/server/menu-preferences";
+import { listDashboardAnnouncements } from "@/lib/server/announcements";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,6 +18,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
   const menuPrefs = session?.user ? await listMenuPreferences(session.user.projectId) : [];
+  const announcements = session?.user ? await listDashboardAnnouncements(session.user.projectId, session.user.id) : [];
   const isManager = session?.user?.role === "ADMIN" || session?.user?.role === "OPERATOR";
   const homeHref = isManager ? "/portfolio" : "/calendar";
   const themeScript = `(function(){try{var p=localStorage.getItem('pmo-control-theme')||'system';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.style.colorScheme=d}catch(e){}})()`;
@@ -50,7 +53,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 <AppNavigation area="sidebar" menuPrefs={menuPrefs} />
                 <div className="sidebar-foot"><UserMenu /></div>
               </aside>
-              <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" menuPrefs={menuPrefs} />{children}</main>
+              <main className="main" id="main-content" tabIndex={-1}><AppNavigation area="workspace" menuPrefs={menuPrefs} /><AnnouncementBanner announcements={announcements} />{children}</main>
             </div>
           </UnreadMessageProvider>
         </AuthSessionProvider>

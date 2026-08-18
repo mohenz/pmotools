@@ -4,6 +4,7 @@ export const DEFAULT_MENU_ITEMS = [
   { key: "meetrooms", label: "회의실" },
   { key: "items", label: "이슈 관리" },
   { key: "requirements", label: "요구사항관리" },
+  { key: "announcements", label: "공지사항" },
   { key: "weekly-reports", label: "주간보고" },
   { key: "weekly-progress", label: "주간실적" },
   { key: "staff-changes", label: "인력변동" },
