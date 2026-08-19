@@ -14,7 +14,9 @@ export function UserMenu() {
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   return (
     <div className="user-menu">
-      <span>{session.user.name} ({ROLE_LABEL[session.user.role] ?? session.user.role})</span>
+      <Link className="user-profile-link" href="/settings/profile" title="나의 정보 보기">
+        {session.user.name} ({ROLE_LABEL[session.user.role] ?? session.user.role})
+      </Link>
       <div className="sidebar-icon-actions">
         <Link href="/settings/system" aria-label="설정" title="설정" className={settingsActive ? "active" : ""}><Settings aria-hidden="true" /></Link>
         <button type="button" aria-label="로그아웃" title="로그아웃" onClick={() => signOut({ callbackUrl: "/login" })}><LogOut aria-hidden="true" /></button>

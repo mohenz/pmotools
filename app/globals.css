@@ -145,6 +145,8 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .settings-tree .settings-parent.active { background: var(--sidebar-accent); color: white; }
 .sidebar-foot { margin-top: auto; padding: 10px 16px 12px; border-top: 1px solid var(--sidebar-border); color: oklch(1 0 0 / 32%); font: 9px/1.5 var(--font-mono); }
 .user-menu { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: oklch(1 0 0 / 75%); font: 12px/1.4 var(--font-sans); }
+.user-profile-link { min-width: 0; overflow: hidden; padding: 4px 0; text-overflow: ellipsis; white-space: nowrap; }
+.user-profile-link:hover, .user-profile-link:focus-visible { color: white; text-decoration: underline; text-underline-offset: 3px; }
 .sidebar-icon-actions { display: flex; flex: none; gap: 6px; }
 .sidebar-icon-actions a, .sidebar-icon-actions button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--sidebar-border); border-radius: var(--radius-sm); background: transparent; color: oklch(1 0 0 / 55%); cursor: pointer; }
 .sidebar-icon-actions a:hover, .sidebar-icon-actions button:hover, .sidebar-icon-actions a.active { background: var(--sidebar-accent); color: white; }
