@@ -168,17 +168,26 @@ export async function generateWeeklyReport(projectId: string, userId: string, in
   try { period = calculateWeeklyReportPeriod(data.year, data.month, data.weekOfMonth); }
   catch (error) { throw new DomainError("INVALID_STATE", error instanceof Error ? error.message : "리포트 기간을 계산할 수 없습니다."); }
   const prisma = getPrisma();
-  const modules = await prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true } });
-  if (!modules.length) throw new DomainError("INVALID_STATE", "활성 업무모듈을 먼저 등록해 주세요.");
-  const existing = await prisma.week.findUnique({ where: { projectId_weekKey: { projectId, weekKey: period.weekKey } } });
-  if (existing?.status === "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료된 리포트입니다. 먼저 확인을 취소해 주세요.");
-  if (existing) throw new DomainError("INVALID_STATE", `${period.label} 위클리리포트는 이미 생성되어 있습니다. 목록에서 기존 리포트를 확인해 주세요.`);
-  const week = await prisma.week.create({ data: { projectId, weekKey: period.weekKey, label: period.label, startDate: new Date(period.planStart), endDate: new Date(period.planEnd), status: "open" } });
-  await prisma.weeklyReport.createMany({ data: modules.map((module) => ({ weekId: week.id, groupId: module.id, createdBy: userId })), skipDuplicates: true });
-  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_GENERATE", "weeks", week.id, null, { ...week, moduleCount: modules.length });
+  const generated = await prisma.$transaction(async (tx) => {
+    const modules = await tx.groups.findMany({
+      where: { projectId, groupType: "WORK_MODULE", isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    });
+    if (!modules.length) throw new DomainError("INVALID_STATE", "활성 업무모듈을 먼저 등록해 주세요.");
+
+    const existing = await tx.week.findUnique({ where: { projectId_weekKey: { projectId, weekKey: period.weekKey } } });
+    if (existing?.status === "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료된 리포트입니다. 먼저 확인을 취소해 주세요.");
+    if (existing) throw new DomainError("INVALID_STATE", `${period.label} 위클리리포트는 이미 생성되어 있습니다. 목록에서 기존 리포트를 확인해 주세요.`);
+
+    const week = await tx.week.create({ data: { projectId, weekKey: period.weekKey, label: period.label, startDate: new Date(period.planStart), endDate: new Date(period.planEnd), status: "open" } });
+    await tx.weeklyReport.createMany({ data: modules.map((module) => ({ weekId: week.id, groupId: module.id, createdBy: userId })) });
+    return { week, moduleCount: modules.length };
+  });
+  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_GENERATE", "weeks", generated.week.id, null, { ...generated.week, moduleCount: generated.moduleCount });
   revalidateTag(weeksTag(projectId));
   revalidateTag(portfolioTag(projectId));
-  return { id: week.id };
+  return { id: generated.week.id };
 }
 
 export async function getWeeklyReportDetail(projectId: string, userId: string, weekId: string): Promise<WeeklyReportDetail> {
