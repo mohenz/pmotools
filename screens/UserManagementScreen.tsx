@@ -1,17 +1,31 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import type { AdminUserRow } from "@/lib/server/admin";
+import type { AdminUserListResult, AdminUserRow } from "@/lib/server/admin";
 import type { PasswordResetRequestRow } from "@/lib/server/password-reset-requests";
 
 const ROLE_LABEL: Record<string, string> = { ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
 type ProfileDraft = { name: string; email: string; department: string; jobTitle: string };
 const emptyCreateDraft = { userId: "", name: "", email: "", department: "", jobTitle: "", role: "MEMBER" };
+type UserFilters = { q: string; page: number; pageSize: number | "all" };
 
-export function UserManagementScreen({ users, q, resetRequests }: { users: AdminUserRow[]; q: string; resetRequests: PasswordResetRequestRow[] }) {
+function queryString(filters: UserFilters, overrides: Record<string, string | number | undefined> = {}) {
+  const params = new URLSearchParams();
+  Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => {
+    if (value !== "" && value != null && !(key === "page" && value === 1) && !(key === "pageSize" && value === 20)) params.set(key, String(value));
+  });
+  return params.toString();
+}
+
+export function UserManagementScreen({ result, filters, resetRequests }: { result: AdminUserListResult; filters: UserFilters; resetRequests: PasswordResetRequestRow[] }) {
+  const { users } = result;
+  const pageLinkCount = Math.min(10, result.totalPages);
+  const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
+  const pageNumbers = Array.from({ length: pageLinkCount }, (_, index) => firstPage + index);
   const router = useRouter();
   const [pending, setPending] = useState("");
   const [message, setMessage] = useState("");
@@ -98,7 +112,8 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = new FormData(event.currentTarget).get("q");
-    router.push(value ? `/settings/users?q=${encodeURIComponent(String(value))}` : "/settings/users");
+    const q = value ? String(value) : "";
+    router.push(`/settings/users?${queryString({ ...filters, q, page: 1 })}`);
   }
 
   return <>
@@ -131,7 +146,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
       )}
       <section className="panel">
         <form className="inline-create" onSubmit={search}>
-          <label>아이디·이름 검색<input name="q" defaultValue={q} placeholder="검색어 입력" maxLength={100} /></label>
+          <label>아이디·이름 검색<input name="q" defaultValue={filters.q} placeholder="검색어 입력" maxLength={100} /></label>
           <button className="button secondary" type="submit">검색</button>
         </form>
       </section>
@@ -152,7 +167,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
         </form>
       </section>
       <section className="panel">
-        <div className="panel-head"><h2>사용자 목록</h2><span>{users.length}명</span></div>
+        <div className="panel-head"><h2>사용자 목록</h2><span>{result.total}명</span></div>
         <div className="table-wrap">
           <table className="dense-table">
             <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>권한</th><th>상태</th><th /></tr></thead>
@@ -200,6 +215,19 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
           </table>
         </div>
       </section>
+      {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="사용자 목록 페이지 이동">
+        <form className="page-size-form" method="get">
+          {filters.q && <input type="hidden" name="q" value={filters.q} />}
+          <label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="20">20개</option><option value="40">40개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label>
+          <button className="button secondary" type="submit">적용</button>
+        </form>
+        <div className="page-links">
+          {result.page > 1 && <Link href={`/settings/users?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}
+          {pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/settings/users?${queryString(filters, { page })}`} key={page}>{page}</Link>)}
+          {result.page < result.totalPages && <Link href={`/settings/users?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}
+        </div>
+        <span className="page-summary">총 {result.total}명 · {result.page} / {result.totalPages} 페이지</span>
+      </nav>}
     </div>
   </>;
 }

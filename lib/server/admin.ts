@@ -7,24 +7,31 @@ import { DomainError } from "@/lib/server/errors";
 import type { GroupType, UserRole, UserStatus } from "@/lib/generated/prisma/client";
 
 export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; jobTitle: string | null; role: UserRole; status: UserStatus; createdAt: string };
+export type AdminUserListResult = { users: AdminUserRow[]; total: number; page: number; pageSize: number; totalPages: number };
+export type AdminUserFilters = { q?: string; page?: number; pageSize?: number | "all" };
 export type GroupRow = { id: string; groupType: GroupType; code: string; label: string; color: string | null; sortOrder: number; isActive: boolean };
 
 export async function listUsers(projectId: string, adminUserId: string, q?: string): Promise<AdminUserRow[]> {
+  return (await listUsersPage(projectId, adminUserId, { q, pageSize: "all" })).users;
+}
+
+export async function listUsersPage(projectId: string, adminUserId: string, filters: AdminUserFilters = {}): Promise<AdminUserListResult> {
   await assertAdmin(projectId, adminUserId);
-  const query = q?.trim();
-  const members = await getPrisma().projectMember.findMany({
-    where: {
-      projectId,
-      isActive: true,
-      user: {
-        deletedAt: null,
-        ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" } }, { name: { contains: query, mode: "insensitive" } }, { jobTitle: { contains: query, mode: "insensitive" } }] } : {}),
-      },
-    },
+  const query = filters.q?.trim();
+  const where = { projectId, isActive: true, user: { deletedAt: null, ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" as const } }, { name: { contains: query, mode: "insensitive" as const } }, { jobTitle: { contains: query, mode: "insensitive" as const } }] } : {}) } };
+  const prisma = getPrisma();
+  const total = await prisma.projectMember.count({ where });
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+  const members = await prisma.projectMember.findMany({
+    where,
     include: { user: true },
     orderBy: { user: { userId: "asc" } },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
-  return members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString() }));
+  return { users: members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString() })), total, page, pageSize, totalPages };
 }
 
 const roleSchema = z.object({ role: z.enum(["ADMIN", "OPERATOR", "MEMBER"]) });

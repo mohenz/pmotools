@@ -238,16 +238,32 @@ export async function saveWeeklyReport(projectId: string, userId: string, input:
 export async function deleteWeeklyReport(projectId: string, userId: string, weekId: string) {
   await assertManager(projectId, userId);
   const prisma = getPrisma();
-  const current = await prisma.week.findFirst({
-    where: { id: weekId, projectId, reports: { some: {} } },
-    include: { project: { select: { name: true } }, reports: { select: { id: true } } },
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.week.findFirst({
+      where: { id: weekId, projectId, reports: { some: {} } },
+      include: {
+        project: { select: { name: true } },
+        reports: { select: { id: true } },
+        _count: { select: { progress: true, staffChanges: true } },
+      },
+    });
+    if (!current) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
+
+    const deleted = await tx.weeklyReport.deleteMany({ where: { weekId } });
+    const weekDeleted = current._count.progress === 0 && current._count.staffChanges === 0;
+    if (weekDeleted) await tx.week.delete({ where: { id: weekId } });
+
+    return { current, count: deleted.count, weekDeleted };
   });
-  if (!current) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
-  const deleted = await prisma.weeklyReport.deleteMany({ where: { weekId } });
-  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_DELETE", "weeks", weekId, { weekLabel: current.label, projectName: current.project.name, reportCount: current.reports.length }, null);
+  await writeAuditLog(projectId, userId, "WEEKLY_REPORTS_DELETE", "weeks", weekId, {
+    weekLabel: result.current.label,
+    projectName: result.current.project.name,
+    reportCount: result.current.reports.length,
+    weekDeleted: result.weekDeleted,
+  }, null);
   revalidateTag(weeksTag(projectId));
   revalidateTag(portfolioTag(projectId));
-  return { id: weekId, count: deleted.count };
+  return { id: weekId, count: result.count, weekDeleted: result.weekDeleted };
 }
 
 export async function updateWeeklyReportStatus(projectId: string, userId: string, weekId: string, status: unknown) {
