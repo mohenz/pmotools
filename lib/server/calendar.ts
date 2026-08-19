@@ -6,6 +6,7 @@ import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import { buildRecurrenceRule, describeRecurrence, expandOccurrences, type RecurrenceInput } from "@/lib/domain/recurrence";
 import { canManageCalendarEvent } from "@/lib/domain/calendar-permissions";
+import { calendarInvitationPayload } from "@/lib/domain/calendar-invitations";
 import type { EventException, Prisma } from "@/lib/generated/prisma/client";
 
 export type EventPerson = { id: string; name: string };
@@ -143,11 +144,20 @@ export async function createCalendarEvent(projectId: string, userId: string, inp
   await assertManager(projectId, userId);
   const data = eventSchema.parse(input);
   const recurrenceRule = data.recurrence ? buildRecurrenceRule(data.recurrence as RecurrenceInput) : null;
+  const assigneeIds = [...new Set(data.assigneeIds)];
   const prisma = getPrisma();
   const event = await prisma.$transaction(async (tx) => {
     const event = await tx.calendarEvent.create({ data: { projectId, title: data.title, description: data.description, eventType: data.eventType, startAt: new Date(data.startAt), endAt: new Date(data.endAt), allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone, recurrenceRule, createdBy: userId } });
-    if (data.assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...data.assigneeIds.map((userId) => ({ eventId: event.id, userId })), ...data.assigneeNames.map((guestName) => ({ eventId: event.id, guestName }))] });
+    if (assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...assigneeIds.map((assigneeId) => ({ eventId: event.id, userId: assigneeId })), ...data.assigneeNames.map((guestName) => ({ eventId: event.id, guestName }))] });
     if (data.groupTagIds.length) await tx.eventGroupTag.createMany({ data: data.groupTagIds.map((groupId) => ({ eventId: event.id, groupId })) });
+    const receiverIds = assigneeIds.filter((assigneeId) => assigneeId !== userId);
+    if (receiverIds.length) {
+      const systemPayload = calendarInvitationPayload(event) as Prisma.InputJsonValue;
+      await tx.message.createMany({
+        data: receiverIds.map((receiverId) => ({ senderId: userId, receiverId, messageType: "CALENDAR_INVITATION" as const, calendarEventId: event.id, systemPayload })),
+        skipDuplicates: true,
+      });
+    }
     return event;
   });
   await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_INSERT", "calendar_events", event.id, null, event);
@@ -174,12 +184,27 @@ export async function updateCalendarEvent(projectId: string, id: string, userId:
     return { id };
   }
   const recurrenceRule = data.recurrence ? buildRecurrenceRule(data.recurrence as RecurrenceInput) : null;
+  const assigneeIds = [...new Set(data.assigneeIds)];
   const updated = await prisma.$transaction(async (tx) => {
+    const previousAssignees = await tx.eventAssignee.findMany({ where: { eventId: masterId, userId: { not: null } }, select: { userId: true } });
+    const previousAssigneeIds = new Set(previousAssignees.flatMap((assignee) => assignee.userId ? [assignee.userId] : []));
     const updated = await tx.calendarEvent.update({ where: { id: masterId }, data: { title: data.title, description: data.description, eventType: data.eventType, startAt: new Date(data.startAt), endAt: new Date(data.endAt), allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone, recurrenceRule, updatedBy: userId, version: { increment: 1 } } });
     await tx.eventAssignee.deleteMany({ where: { eventId: masterId } });
-    if (data.assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...data.assigneeIds.map((userId) => ({ eventId: masterId, userId })), ...data.assigneeNames.map((guestName) => ({ eventId: masterId, guestName }))] });
+    if (assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...assigneeIds.map((assigneeId) => ({ eventId: masterId, userId: assigneeId })), ...data.assigneeNames.map((guestName) => ({ eventId: masterId, guestName }))] });
     await tx.eventGroupTag.deleteMany({ where: { eventId: masterId } });
     if (data.groupTagIds.length) await tx.eventGroupTag.createMany({ data: data.groupTagIds.map((groupId) => ({ eventId: masterId, groupId })) });
+    const receiverIds = assigneeIds.filter((assigneeId) => assigneeId !== userId);
+    const systemPayload = calendarInvitationPayload(updated) as Prisma.InputJsonValue;
+    if (receiverIds.length) await tx.message.updateMany({ where: { calendarEventId: masterId, messageType: "CALENDAR_INVITATION", receiverId: { in: receiverIds } }, data: { systemPayload } });
+    await tx.message.deleteMany({ where: { calendarEventId: masterId, messageType: "CALENDAR_INVITATION", isRead: false, ...(receiverIds.length ? { receiverId: { notIn: receiverIds } } : {}) } });
+    const addedReceiverIds = receiverIds.filter((receiverId) => !previousAssigneeIds.has(receiverId));
+    for (const receiverId of addedReceiverIds) {
+      await tx.message.upsert({
+        where: { calendarEventId_receiverId: { calendarEventId: masterId, receiverId } },
+        create: { senderId: userId, receiverId, messageType: "CALENDAR_INVITATION", calendarEventId: masterId, systemPayload },
+        update: { senderId: userId, messageType: "CALENDAR_INVITATION", systemPayload, isRead: false },
+      });
+    }
     return updated;
   });
   await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_UPDATE", "calendar_events", masterId, before, updated);
@@ -203,7 +228,10 @@ export async function deleteCalendarEvent(projectId: string, id: string, userId:
     });
     await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_EXCEPTION_DELETE", "event_exceptions", exception.id, null, { occurrenceDate });
   } else {
-    await prisma.calendarEvent.delete({ where: { id: masterId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.message.deleteMany({ where: { calendarEventId: masterId, messageType: "CALENDAR_INVITATION" } });
+      await tx.calendarEvent.delete({ where: { id: masterId } });
+    });
     await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_DELETE", "calendar_events", masterId, before, null);
   }
   return { id: masterId };

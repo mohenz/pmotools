@@ -5,6 +5,7 @@ import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { UnreadMessageProvider } from "@/components/UnreadMessageProvider";
 import { UserMenu } from "@/components/UserMenu";
+import { CalendarInvitationPopup } from "@/components/CalendarInvitationPopup";
 import { auth } from "@/lib/server/auth";
 import { listMenuPreferences } from "@/lib/server/menu-preferences";
 import { listDashboardAnnouncements } from "@/lib/server/announcements";
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <AuthSessionProvider session={session}>
           <UnreadMessageProvider>
+            <CalendarInvitationPopup />
             <a className="skip-link" href="#main-content">본문 바로가기</a>
             <div className="app-shell">
               <aside className="sidebar">

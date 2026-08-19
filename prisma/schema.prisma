@@ -738,14 +738,15 @@ model CalendarEvent {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  group       Groups?           @relation(fields: [groupId], references: [id])
-  creator     User              @relation("CalendarEventCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-  updater     User?             @relation("CalendarEventUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
-  exceptions  EventException[]
-  assignees   EventAssignee[]
-  groupTags   EventGroupTag[]
-  attachments EventAttachment[]
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group              Groups?           @relation(fields: [groupId], references: [id])
+  creator            User              @relation("CalendarEventCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  updater            User?             @relation("CalendarEventUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  exceptions         EventException[]
+  assignees          EventAssignee[]
+  groupTags          EventGroupTag[]
+  attachments        EventAttachment[]
+  invitationMessages Message[]
 
   @@index([projectId, startAt, endAt])
   @@index([projectId, isMilestone])
@@ -807,20 +808,31 @@ model EventAttachment {
 // 쪽지 / 알림 설정
 // ---------------------------------------------------------------------------
 
+enum MessageType {
+  DIRECT
+  CALENDAR_INVITATION
+}
+
 model Message {
-  id               String   @id @default(uuid())
+  id               String      @id @default(uuid())
   senderId         String
   receiverId       String
-  contentEncrypted String
-  contentIv        String
-  viewPasswordHash String
-  isRead           Boolean  @default(false)
-  createdAt        DateTime @default(now())
+  messageType      MessageType @default(DIRECT)
+  contentEncrypted String?
+  contentIv        String?
+  viewPasswordHash String?
+  calendarEventId  String?
+  systemPayload    Json?
+  isRead           Boolean     @default(false)
+  createdAt        DateTime    @default(now())
 
-  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender        User           @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver      User           @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  calendarEvent CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
 
+  @@unique([calendarEventId, receiverId])
   @@index([receiverId, isRead])
+  @@index([receiverId, messageType, isRead])
   @@map("messages")
 }
 

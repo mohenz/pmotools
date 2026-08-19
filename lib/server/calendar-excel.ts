@@ -4,7 +4,8 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import { canManageCalendarEvent } from "@/lib/domain/calendar-permissions";
-import type { CalendarEventType, Priority } from "@/lib/generated/prisma/client";
+import { calendarInvitationPayload } from "@/lib/domain/calendar-invitations";
+import type { CalendarEventType, Prisma, Priority } from "@/lib/generated/prisma/client";
 
 type ParsedEventData = { title: string; description: string; eventType: CalendarEventType; startAt: string; endAt: string; allDay: boolean; location: string; priority: Priority; isMilestone: boolean; groupId: string | null };
 
@@ -97,6 +98,7 @@ export async function applyImport(projectId: string, userId: string, buffer: Buf
       if (!before) throw new DomainError("NOT_FOUND", "수정할 일정을 찾을 수 없습니다.");
       if (!canManageCalendarEvent(before.createdBy, userId)) throw new DomainError("FORBIDDEN", "본인이 등록한 일정만 수정할 수 있습니다.");
       const updated = await prisma.calendarEvent.update({ where: { id: item.id }, data: { ...item.data, startAt: new Date(item.data.startAt), endAt: new Date(item.data.endAt), updatedBy: userId, version: { increment: 1 } } });
+      await prisma.message.updateMany({ where: { calendarEventId: item.id, messageType: "CALENDAR_INVITATION" }, data: { systemPayload: calendarInvitationPayload(updated) as Prisma.InputJsonValue } });
       await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_EXCEL_UPDATE", "calendar_events", item.id, before, updated);
     } else {
       const created = await prisma.calendarEvent.create({ data: { projectId, ...item.data, startAt: new Date(item.data.startAt), endAt: new Date(item.data.endAt), createdBy: userId } });
