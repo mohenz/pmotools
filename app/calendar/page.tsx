@@ -5,7 +5,7 @@ import { listProjectMembers } from "@/lib/server/users";
 import { getCalendarEvent,listCalendarEvents,type CalendarEvent } from "@/lib/server/calendar";
 import { CalendarEventForm } from "@/features/calendar/CalendarEventForm";
 import { CalendarModal } from "@/features/calendar/CalendarModal";
-import { CALENDAR_END_MINUTES, CALENDAR_SLOT_MINUTES, CALENDAR_START_MINUTES, calendarTimePlacement } from "@/lib/domain/calendar-layout";
+import { CALENDAR_END_MINUTES, CALENDAR_SLOT_MINUTES, CALENDAR_START_MINUTES, calendarTimePlacement, calendarTodayKey } from "@/lib/domain/calendar-layout";
 
 export const dynamic="force-dynamic";
 type View="year"|"month"|"week"|"day"|"agenda";
@@ -36,7 +36,7 @@ function EventLink({event,base,canNavigate,timeGrid=false}:{event:CalendarEvent;
 export default async function CalendarPage({searchParams}:{searchParams:Promise<{view?:string;date?:string;edit?:string;new?:string;time?:string}>}){
   const {projectId,userId,role}=await getLocalContext();const canWrite=role==="ADMIN"||role==="OPERATOR";const q=await searchParams;
   const view:View=(["year","month","week","day","agenda"] as View[]).includes(q.view as View)?(q.view as View):"month";
-  const today=iso(new Date()),selected=/^\d{4}-\d{2}-\d{2}$/.test(q.date??"")?parse(q.date!):parse(today),r=range(view,selected);
+  const today=calendarTodayKey(),selected=/^\d{4}-\d{2}-\d{2}$/.test(q.date??"")?parse(q.date!):parse(today),r=range(view,selected);
   const base=`/calendar?view=${view}&date=${iso(selected)}`;
   const [events,codes,members,edit]=await Promise.all([listCalendarEvents(projectId,iso(r.from),iso(r.to),{},userId),getCodeOptions(projectId),listProjectMembers(projectId),q.edit?getCalendarEvent(projectId,q.edit,userId):null]);
   const byDate=events.reduce<Record<string,CalendarEvent[]>>((a,e)=>{(a[e.date]??=[]).push(e);return a;},{});

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { calendarTimePlacement } from "@/lib/domain/calendar-layout";
+import { calendarTimePlacement, calendarTodayKey } from "@/lib/domain/calendar-layout";
+
+describe("calendarTodayKey", () => {
+  it("한국시간 자정 이후에는 UTC 날짜가 아닌 한국 날짜를 반환한다", () => {
+    expect(calendarTodayKey(new Date("2026-08-19T15:30:00.000Z"))).toBe("2026-08-20");
+  });
+
+  it("한국시간 자정 직전에는 현재 한국 날짜를 유지한다", () => {
+    expect(calendarTodayKey(new Date("2026-08-19T14:59:59.999Z"))).toBe("2026-08-19");
+  });
+});
 
 describe("calendarTimePlacement", () => {
   it("15:00~17:00 일정을 4개 슬롯 높이로 표시한다", () => {
