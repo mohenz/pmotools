@@ -12,7 +12,7 @@ export function CalendarModal({title,returnUrl,children}:{title:string;returnUrl
       <Dialog.Overlay className="calendar-modal-backdrop" />
       <Dialog.Content className="calendar-modal" aria-describedby={undefined}>
         <header>
-          <div><Dialog.Title asChild><h2>{title}</h2></Dialog.Title><p>프로젝트 일정 정보를 입력해 주세요.</p></div>
+          <div><Dialog.Title asChild><h2>{title}</h2></Dialog.Title></div>
           <Dialog.Close asChild><button type="button" aria-label="일정 창 닫기"><X aria-hidden="true" /></button></Dialog.Close>
         </header>
         {children}

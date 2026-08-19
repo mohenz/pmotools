@@ -58,7 +58,6 @@ export function CalendarEventForm({ areas, members, event, selectedDate, selecte
   }
 
   return <form className="calendar-event-form" onSubmit={submit}>
-    {!canWrite && <p className="form-error">조회 전용 일정입니다. 일정 등록자만 수정·삭제할 수 있습니다.</p>}
     <fieldset disabled={!canWrite} style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
     {isEditingOccurrence && <label>수정 범위<select value={scope} onChange={(e) => setScope(e.target.value as "single" | "all")}><option value="single">이 일정만</option><option value="all">전체 반복 일정</option></select></label>}
     <div className="form-grid triple">
