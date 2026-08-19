@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { enumerateRecurringDates, MEETING_DAY_END, MEETING_DAY_START, MEETING_SLOT_MINUTES, seoulDateTime, validateMeetingTime, type RecurringPatternInput } from "@/lib/domain/meeting-rooms";
+import { meetingInvitationPayload } from "@/lib/domain/meeting-invitations";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { assertManager } from "@/lib/server/permissions";
@@ -82,10 +83,27 @@ async function assertNoConflict(tx: Prisma.TransactionClient, roomId: string, st
 }
 
 export async function createMeetingReservation(projectId: string, userId: string, input: unknown) {
-  const data = reservationSchema.parse(input); const validation = validateMeetingTime(data.startAt, data.endAt); if (validation) throw new DomainError("INVALID_CODE", validation); await assertRoomAvailable(projectId, data.roomId);
+  const data = reservationSchema.parse(input); const validation = validateMeetingTime(data.startAt, data.endAt); if (validation) throw new DomainError("INVALID_CODE", validation); const room = await assertRoomAvailable(projectId, data.roomId);
   const attendeeIds = [...new Set(data.attendeeIds)].filter((id) => id !== userId);
   const guestNames = [...new Set(data.attendeeNames)];
-  try { return await getPrisma().$transaction(async (tx) => { const validCount = await tx.projectMember.count({ where: { projectId, userId: { in: attendeeIds }, isActive: true, user: { status: "ACTIVE" } } }); if (validCount !== attendeeIds.length) throw new DomainError("INVALID_CODE", "참석자 목록에 유효하지 않은 사용자가 있습니다."); await assertNoConflict(tx, data.roomId, data.startAt, data.endAt); const row = await tx.meetingReservation.create({ data: { projectId, roomId: data.roomId, userId, startAt: data.startAt, endAt: data.endAt, purpose: data.purpose, attendees: { createMany: { data: [...attendeeIds.map((attendeeId) => ({ userId: attendeeId })), ...guestNames.map((guestName) => ({ guestName }))] } } } }); await tx.meetingReservationChangeLog.create({ data: { reservationId: row.id, actorId: userId, action: "CREATE", afterStart: row.startAt, afterEnd: row.endAt } }); return row; }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }); }
+  try {
+    return await getPrisma().$transaction(async (tx) => {
+      const validCount = await tx.projectMember.count({ where: { projectId, userId: { in: attendeeIds }, isActive: true, user: { status: "ACTIVE" } } });
+      if (validCount !== attendeeIds.length) throw new DomainError("INVALID_CODE", "참석자 목록에 유효하지 않은 사용자가 있습니다.");
+      await assertNoConflict(tx, data.roomId, data.startAt, data.endAt);
+      const row = await tx.meetingReservation.create({ data: { projectId, roomId: data.roomId, userId, startAt: data.startAt, endAt: data.endAt, purpose: data.purpose, attendees: { createMany: { data: [...attendeeIds.map((attendeeId) => ({ userId: attendeeId })), ...guestNames.map((guestName) => ({ guestName }))] } } } });
+      await tx.meetingReservationChangeLog.create({ data: { reservationId: row.id, actorId: userId, action: "CREATE", afterStart: row.startAt, afterEnd: row.endAt } });
+      if (attendeeIds.length) {
+        const organizer = await tx.user.findUnique({ where: { id: userId }, select: { name: true } });
+        const systemPayload = meetingInvitationPayload({ id: row.id, roomName: room.name, purpose: row.purpose, startAt: row.startAt, endAt: row.endAt, organizerName: organizer?.name ?? "" }) as Prisma.InputJsonValue;
+        await tx.message.createMany({
+          data: attendeeIds.map((receiverId) => ({ senderId: userId, receiverId, messageType: "MEETING_INVITATION" as const, meetingReservationId: row.id, systemPayload })),
+          skipDuplicates: true,
+        });
+      }
+      return row;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
   catch (error) { if (error instanceof DomainError) throw error; throw new DomainError("MEETING_CONFLICT", "동시에 다른 예약이 생성되었습니다. 시간을 다시 선택해 주세요."); }
 }
 
@@ -95,7 +113,12 @@ async function ownedReservation(projectId: string, actorId: string, id: string, 
 }
 export async function cancelMeetingReservation(projectId: string, actorId: string, id: string, isAdmin: boolean) {
   const current = await ownedReservation(projectId, actorId, id, isAdmin); if (current.status === "CANCELLED") return current;
-  return getPrisma().$transaction(async (tx) => { const row = await tx.meetingReservation.update({ where: { id }, data: { status: "CANCELLED" } }); await tx.meetingReservationChangeLog.create({ data: { reservationId: id, actorId, action: "CANCEL", beforeStart: current.startAt, beforeEnd: current.endAt } }); return row; });
+  return getPrisma().$transaction(async (tx) => {
+    const row = await tx.meetingReservation.update({ where: { id }, data: { status: "CANCELLED" } });
+    await tx.meetingReservationChangeLog.create({ data: { reservationId: id, actorId, action: "CANCEL", beforeStart: current.startAt, beforeEnd: current.endAt } });
+    await tx.message.deleteMany({ where: { meetingReservationId: id, messageType: "MEETING_INVITATION" } });
+    return row;
+  });
 }
 const reservationEditSchema = z.object({ startAt: z.coerce.date(), endAt: z.coerce.date(), purpose: z.string().trim().min(1).max(500), attendeeIds: z.array(z.string().uuid()).max(50).default([]), attendeeNames: z.array(z.string().trim().min(1).max(50)).max(50).default([]) });
 export async function updateMeetingReservation(projectId: string, actorId: string, id: string, isAdmin: boolean, input: unknown) {
@@ -110,11 +133,27 @@ export async function updateMeetingReservation(projectId: string, actorId: strin
       const validCount = await tx.projectMember.count({ where: { projectId, userId: { in: attendeeIds }, isActive: true, user: { status: "ACTIVE" } } });
       if (validCount !== attendeeIds.length) throw new DomainError("INVALID_CODE", "참석자 목록에 유효하지 않은 사용자가 있습니다.");
       await assertNoConflict(tx, current.roomId, data.startAt, data.endAt, id);
+      const previousAttendees = await tx.meetingReservationAttendee.findMany({ where: { reservationId: id, userId: { not: null } }, select: { userId: true } });
+      const previousAttendeeIds = new Set(previousAttendees.flatMap((attendee) => attendee.userId ? [attendee.userId] : []));
       await tx.meetingReservationAttendee.deleteMany({ where: { reservationId: id } });
       const row = await tx.meetingReservation.update({ where: { id }, data: { startAt: data.startAt, endAt: data.endAt, purpose: data.purpose, attendees: { createMany: { data: [...attendeeIds.map((attendeeId) => ({ userId: attendeeId })), ...guestNames.map((guestName) => ({ guestName }))] } } } });
       const timeChanged = data.startAt.getTime() !== current.startAt.getTime() || data.endAt.getTime() !== current.endAt.getTime();
       const action = timeChanged ? (data.endAt.getTime() - data.startAt.getTime() > current.endAt.getTime() - current.startAt.getTime() ? "EXTEND" : "SHORTEN") : "UPDATE";
       await tx.meetingReservationChangeLog.create({ data: { reservationId: id, actorId, action, beforeStart: current.startAt, beforeEnd: current.endAt, afterStart: row.startAt, afterEnd: row.endAt } });
+
+      const room = await tx.meetingRoom.findUnique({ where: { id: current.roomId }, select: { name: true } });
+      const organizer = await tx.user.findUnique({ where: { id: current.userId }, select: { name: true } });
+      const systemPayload = meetingInvitationPayload({ id: row.id, roomName: room?.name ?? "", purpose: row.purpose, startAt: row.startAt, endAt: row.endAt, organizerName: organizer?.name ?? "" }) as Prisma.InputJsonValue;
+      if (attendeeIds.length) await tx.message.updateMany({ where: { meetingReservationId: id, messageType: "MEETING_INVITATION", receiverId: { in: attendeeIds } }, data: { systemPayload } });
+      await tx.message.deleteMany({ where: { meetingReservationId: id, messageType: "MEETING_INVITATION", isRead: false, ...(attendeeIds.length ? { receiverId: { notIn: attendeeIds } } : {}) } });
+      const addedAttendeeIds = attendeeIds.filter((attendeeId) => !previousAttendeeIds.has(attendeeId));
+      for (const receiverId of addedAttendeeIds) {
+        await tx.message.upsert({
+          where: { meetingReservationId_receiverId: { meetingReservationId: id, receiverId } },
+          create: { senderId: current.userId, receiverId, messageType: "MEETING_INVITATION", meetingReservationId: id, systemPayload },
+          update: { senderId: current.userId, messageType: "MEETING_INVITATION", systemPayload, isRead: false },
+        });
+      }
       return row;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) { if (error instanceof DomainError) throw error; throw new DomainError("MEETING_CONFLICT", "변경하려는 시간에 다른 예약이 있습니다."); }

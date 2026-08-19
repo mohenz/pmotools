@@ -79,7 +79,7 @@ export function CalendarEventForm({ areas, members, event, selectedDate, selecte
       {repeatEndType === "until" && <label>종료일<input name="repeatUntil" type="date" defaultValue={selectedDate} required /></label>}
     </div>}
     <div className="form-grid">
-      <div><span className="field-label">담당자</span><div className="attendee-picker"><PersonPicker people={members} selectedIds={assigneeIds} selectedNames={assigneeNames} onChange={(ids, names) => { setAssigneeIds(ids); setAssigneeNames(names); }} /></div></div>
+      <div><span className="field-label">참석자</span><div className="attendee-picker"><PersonPicker people={members} selectedIds={assigneeIds} selectedNames={assigneeNames} onChange={(ids, names) => { setAssigneeIds(ids); setAssigneeNames(names); }} /></div></div>
       <div><span className="field-label">업무그룹 태그</span><div className="checkbox-chip-list">{areas.map((a) => <label className="checkbox-chip" key={a.id}><input type="checkbox" checked={groupTagIds.includes(a.id)} onChange={() => toggle(groupTagIds, a.id, setGroupTagIds)} /> {a.label}</label>)}</div></div>
     </div>
     <label className="toggle calendar-all-day"><input name="allDay" type="checkbox" defaultChecked={event?.allDay} /> 종일 일정</label>

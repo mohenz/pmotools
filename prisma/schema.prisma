@@ -811,26 +811,30 @@ model EventAttachment {
 enum MessageType {
   DIRECT
   CALENDAR_INVITATION
+  MEETING_INVITATION
 }
 
 model Message {
-  id               String      @id @default(uuid())
-  senderId         String
-  receiverId       String
-  messageType      MessageType @default(DIRECT)
-  contentEncrypted String?
-  contentIv        String?
-  viewPasswordHash String?
-  calendarEventId  String?
-  systemPayload    Json?
-  isRead           Boolean     @default(false)
-  createdAt        DateTime    @default(now())
+  id                   String              @id @default(uuid())
+  senderId             String
+  receiverId           String
+  messageType          MessageType         @default(DIRECT)
+  contentEncrypted     String?
+  contentIv            String?
+  viewPasswordHash     String?
+  calendarEventId      String?
+  meetingReservationId String?
+  systemPayload        Json?
+  isRead               Boolean             @default(false)
+  createdAt            DateTime            @default(now())
 
-  sender        User           @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver      User           @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  calendarEvent CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  sender             User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver           User                @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  calendarEvent      CalendarEvent?      @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  meetingReservation MeetingReservation? @relation(fields: [meetingReservationId], references: [id], onDelete: SetNull)
 
   @@unique([calendarEventId, receiverId])
+  @@unique([meetingReservationId, receiverId])
   @@index([receiverId, isRead])
   @@index([receiverId, messageType, isRead])
   @@map("messages")
@@ -977,6 +981,7 @@ model MeetingReservation {
   recurring RecurringMeetingReservation?  @relation(fields: [recurringId], references: [id], onDelete: Restrict)
   logs      MeetingReservationChangeLog[]
   attendees MeetingReservationAttendee[]
+  messages  Message[]
 
   @@unique([recurringId, startAt])
   @@index([projectId, startAt, endAt])

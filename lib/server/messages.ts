@@ -1,11 +1,11 @@
 import "server-only";
-import { z } from "zod";
 import { getPrisma } from "@/lib/server/db-pg";
-import { encryptWithPassword, decryptWithPassword } from "@/lib/domain/crypto";
+import { decryptWithPassword } from "@/lib/domain/crypto";
 import { DomainError } from "@/lib/server/errors";
 import { calendarInvitationContent, parseCalendarInvitationPayload, type CalendarInvitationPayload } from "@/lib/domain/calendar-invitations";
+import { meetingInvitationContent, parseMeetingInvitationPayload, type MeetingInvitationPayload } from "@/lib/domain/meeting-invitations";
 
-export type MessageSummary = { id: string; counterpartName: string; counterpartUserId: string; isRead: boolean; createdAt: string; direction: "sent" | "received"; messageType: "DIRECT" | "CALENDAR_INVITATION"; calendarEventId: string | null; calendarInvitation: CalendarInvitationPayload | null; isLegacyPasswordProtected: boolean };
+export type InvitationSummary = { id: string; senderName: string; senderUserId: string; isRead: boolean; createdAt: string; messageType: "CALENDAR_INVITATION" | "MEETING_INVITATION"; calendarEventId: string | null; calendarInvitation: CalendarInvitationPayload | null; meetingReservationId: string | null; meetingInvitation: MeetingInvitationPayload | null };
 
 function messageEncryptionKey() {
   const secret = process.env.MESSAGE_ENCRYPTION_KEY ?? process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
@@ -13,41 +13,28 @@ function messageEncryptionKey() {
   return `pmotools-message-v1:${secret}`;
 }
 
-export async function listMessages(userId: string, box: "received" | "sent"): Promise<MessageSummary[]> {
-  const prisma = getPrisma();
-  const messages = await prisma.message.findMany({
-    where: box === "received" ? { receiverId: userId } : { senderId: userId },
-    include: { sender: { select: { name: true, userId: true } }, receiver: { select: { name: true, userId: true } } },
+export async function listReceivedInvitations(userId: string): Promise<InvitationSummary[]> {
+  const messages = await getPrisma().message.findMany({
+    where: { receiverId: userId, messageType: { in: ["CALENDAR_INVITATION", "MEETING_INVITATION"] } },
+    include: { sender: { select: { name: true, userId: true } } },
     orderBy: { createdAt: "desc" },
   });
   return messages.map((m) => ({
     id: m.id,
-    counterpartName: box === "received" ? m.sender.name : m.receiver.name,
-    counterpartUserId: box === "received" ? m.sender.userId : m.receiver.userId,
+    senderName: m.sender.name,
+    senderUserId: m.sender.userId,
     isRead: m.isRead,
     createdAt: m.createdAt.toISOString(),
-    direction: box === "received" ? "received" : "sent",
-    messageType: m.messageType,
+    messageType: m.messageType as "CALENDAR_INVITATION" | "MEETING_INVITATION",
     calendarEventId: m.calendarEventId,
     calendarInvitation: m.messageType === "CALENDAR_INVITATION" ? parseCalendarInvitationPayload(m.systemPayload) : null,
-    isLegacyPasswordProtected: m.messageType === "DIRECT" && Boolean(m.viewPasswordHash),
+    meetingReservationId: m.meetingReservationId,
+    meetingInvitation: m.messageType === "MEETING_INVITATION" ? parseMeetingInvitationPayload(m.systemPayload) : null,
   }));
 }
 
 export async function unreadMessageCount(userId: string): Promise<number> {
   return getPrisma().message.count({ where: { receiverId: userId, isRead: false } });
-}
-
-const sendSchema = z.object({ receiverUserId: z.string().trim().min(1), content: z.string().trim().min(1).max(5000) });
-export async function sendMessage(senderId: string, input: unknown) {
-  const data = sendSchema.parse(input);
-  const prisma = getPrisma();
-  const receiver = await prisma.user.findUnique({ where: { userId: data.receiverUserId } });
-  if (!receiver) throw new DomainError("NOT_FOUND", "받는 사람을 찾을 수 없습니다.");
-  if (receiver.id === senderId) throw new DomainError("INVALID_CODE", "본인에게는 쪽지를 보낼 수 없습니다.");
-  const { contentEncrypted, contentIv } = encryptWithPassword(data.content, messageEncryptionKey());
-  const message = await prisma.message.create({ data: { senderId, receiverId: receiver.id, contentEncrypted, contentIv } });
-  return { id: message.id };
 }
 
 export async function viewMessage(userId: string, messageId: string, _input: unknown) {
@@ -59,6 +46,12 @@ export async function viewMessage(userId: string, messageId: string, _input: unk
     if (!invitation) throw new DomainError("INVALID_STATE", "일정 초청 정보를 확인할 수 없습니다.");
     if (message.receiverId === userId && !message.isRead) await prisma.message.update({ where: { id: messageId }, data: { isRead: true } });
     return { content: calendarInvitationContent(invitation), invitation };
+  }
+  if (message.messageType === "MEETING_INVITATION") {
+    const invitation = parseMeetingInvitationPayload(message.systemPayload);
+    if (!invitation) throw new DomainError("INVALID_STATE", "회의실 예약 초청 정보를 확인할 수 없습니다.");
+    if (message.receiverId === userId && !message.isRead) await prisma.message.update({ where: { id: messageId }, data: { isRead: true } });
+    return { content: meetingInvitationContent(invitation), invitation };
   }
   if (message.viewPasswordHash) throw new DomainError("INVALID_STATE", "기존 비밀번호 보호 쪽지는 자동으로 열람할 수 없습니다.");
   if (!message.contentEncrypted || !message.contentIv) throw new DomainError("INVALID_STATE", "쪽지 내용을 확인할 수 없습니다.");

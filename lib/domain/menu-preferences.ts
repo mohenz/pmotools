@@ -9,7 +9,7 @@ export const DEFAULT_MENU_ITEMS = [
   { key: "weekly-reports", label: "위클리리포트" },
   { key: "weekly-progress", label: "주간실적" },
   { key: "staff-changes", label: "인력변동" },
-  { key: "messages", label: "쪽지" },
+  { key: "messages", label: "초청" },
   { key: "manuals", label: "매뉴얼" },
 ] as const;
 
