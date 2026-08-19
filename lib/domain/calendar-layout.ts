@@ -3,15 +3,27 @@ export const CALENDAR_END_MINUTES = 18 * 60;
 export const CALENDAR_SLOT_MINUTES = 30;
 export const CALENDAR_ROW_HEIGHT = 36;
 
-export function calendarTodayKey(now: Date = new Date()) {
+export function calendarDateKey(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(now);
+  }).formatToParts(date);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export function calendarTodayKey(now: Date = new Date()) {
+  return calendarDateKey(now);
+}
+
+export function calendarDayDifference(dateKey: string, baseDateKey: string) {
+  const dayNumber = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return Date.UTC(year, month - 1, day) / 86_400_000;
+  };
+  return dayNumber(dateKey) - dayNumber(baseDateKey);
 }
 
 function minutes(time: string) {

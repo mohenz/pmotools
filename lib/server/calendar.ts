@@ -7,6 +7,7 @@ import { DomainError } from "@/lib/server/errors";
 import { buildRecurrenceRule, describeRecurrence, expandOccurrences, type RecurrenceInput } from "@/lib/domain/recurrence";
 import { canManageCalendarEvent } from "@/lib/domain/calendar-permissions";
 import { calendarInvitationPayload } from "@/lib/domain/calendar-invitations";
+import { calendarDateKey, calendarDayDifference, calendarTodayKey } from "@/lib/domain/calendar-layout";
 import type { EventException, Prisma } from "@/lib/generated/prisma/client";
 
 export type EventPerson = { id: string; name: string };
@@ -257,21 +258,27 @@ export async function listMilestones(projectId: string): Promise<MilestoneEntry[
     prisma.calendarEvent.findMany({ where: { projectId, OR: [{ isMilestone: true }, { priority: "HIGH" }] } }),
     prisma.project.findUnique({ where: { id: projectId } }),
   ]);
-  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-  const dayDiff = (d: Date) => Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  const todayKey = calendarTodayKey();
+  const today = new Date(`${todayKey}T00:00:00+09:00`);
+  const dayDiff = (dateKey: string) => calendarDayDifference(dateKey, todayKey);
   const rows: MilestoneEntry[] = [];
   for (const event of events) {
     if (event.recurrenceRule) {
       const [next] = expandOccurrences(event.recurrenceRule, event.startAt, today, new Date(today.getTime() + 365 * 86_400_000));
       if (!next) continue;
-      rows.push({ id: `${event.id}::${next.toISOString().slice(0, 10)}`, title: event.title, date: next.toISOString().slice(0, 10), kind: "event", daysUntil: dayDiff(next), sourceUrl: null });
+      const date = calendarDateKey(next);
+      rows.push({ id: `${event.id}::${date}`, title: event.title, date, kind: "event", daysUntil: dayDiff(date), sourceUrl: null });
     } else {
-      rows.push({ id: event.id, title: event.title, date: event.startAt.toISOString().slice(0, 10), kind: "event", daysUntil: dayDiff(event.startAt), sourceUrl: null });
+      const date = calendarDateKey(event.startAt);
+      rows.push({ id: event.id, title: event.title, date, kind: "event", daysUntil: dayDiff(date), sourceUrl: null });
     }
   }
   if (project) {
     const openDates: [string, Date | null][] = project.openMethod === "phased" ? [["1차 오픈", project.firstOpenDate], ["2차 오픈", project.secondOpenDate]] : [["오픈일", project.goLiveDate]];
-    for (const [label, date] of openDates) if (date) rows.push({ id: `project-${label}`, title: `${project.name} ${label}`, date: date.toISOString().slice(0, 10), kind: "project", daysUntil: dayDiff(date), sourceUrl: "/project-settings" });
+    for (const [label, value] of openDates) if (value) {
+      const date = calendarDateKey(value);
+      rows.push({ id: `project-${label}`, title: `${project.name} ${label}`, date, kind: "project", daysUntil: dayDiff(date), sourceUrl: "/project-settings" });
+    }
   }
   return rows.sort((a, b) => a.date.localeCompare(b.date));
 }

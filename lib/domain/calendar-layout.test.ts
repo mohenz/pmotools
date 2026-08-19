@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calendarTimePlacement, calendarTodayKey } from "@/lib/domain/calendar-layout";
+import { calendarDateKey, calendarDayDifference, calendarTimePlacement, calendarTodayKey } from "@/lib/domain/calendar-layout";
 
 describe("calendarTodayKey", () => {
   it("한국시간 자정 이후에는 UTC 날짜가 아닌 한국 날짜를 반환한다", () => {
@@ -8,6 +8,16 @@ describe("calendarTodayKey", () => {
 
   it("한국시간 자정 직전에는 현재 한국 날짜를 유지한다", () => {
     expect(calendarTodayKey(new Date("2026-08-19T14:59:59.999Z"))).toBe("2026-08-19");
+  });
+
+  it("일정 시각을 한국 날짜로 변환한다", () => {
+    expect(calendarDateKey(new Date("2026-08-19T15:30:00.000Z"))).toBe("2026-08-20");
+  });
+
+  it("시각을 제외한 날짜 차이로 D-Day를 계산한다", () => {
+    expect(calendarDayDifference("2026-08-20", "2026-08-20")).toBe(0);
+    expect(calendarDayDifference("2026-08-21", "2026-08-20")).toBe(1);
+    expect(calendarDayDifference("2026-08-19", "2026-08-20")).toBe(-1);
   });
 });
 
