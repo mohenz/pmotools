@@ -1,4 +1,4 @@
-import { getLocalContext } from "@/lib/server/context";
+import { requirePmPmoContext } from "@/lib/server/context";
 import { getCodeOptions } from "@/lib/server/common-codes";
 import { listItems } from "@/lib/server/items";
 import { ItemListScreen } from "@/screens/ItemListScreen";
@@ -18,7 +18,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     stale: params.stale === "true",
     page: typeof params.page === "string" ? Number(params.page) || 1 : 1,
   };
-  const { projectId } = await getLocalContext();
+  const { projectId } = await requirePmPmoContext();
   const [result, options] = await Promise.all([listItems(projectId, filters), getCodeOptions(projectId)]);
   return <ItemListScreen result={result} filters={filters} options={options} />;
 }

@@ -5,6 +5,7 @@ import { listProjectMembers } from "@/lib/server/users";
 import { getCalendarEvent,listCalendarEvents,type CalendarEvent } from "@/lib/server/calendar";
 import { CalendarEventForm } from "@/features/calendar/CalendarEventForm";
 import { CalendarModal } from "@/features/calendar/CalendarModal";
+import { CALENDAR_END_MINUTES, CALENDAR_SLOT_MINUTES, CALENDAR_START_MINUTES, calendarTimePlacement } from "@/lib/domain/calendar-layout";
 
 export const dynamic="force-dynamic";
 type View="year"|"month"|"week"|"day"|"agenda";
@@ -26,10 +27,11 @@ function range(view:View,selected:Date){
   return {from,to,cells:Array.from({length:Math.round((to.getTime()-from.getTime())/86400000)+1},(_,i)=>addDays(from,i))};
 }
 function move(view:View,date:Date,direction:number){if(view==="year")return new Date(Date.UTC(date.getUTCFullYear()+direction,0,1));if(view==="month"||view==="agenda")return new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+direction,1));return addDays(date,direction*(view==="week"?7:1));}
-const CAL_START=9*60,CAL_END=18*60,CAL_SLOT=30,CAL_SLOTS=Array.from({length:(CAL_END-CAL_START)/CAL_SLOT},(_,i)=>CAL_START+i*CAL_SLOT);
+const CAL_START=CALENDAR_START_MINUTES,CAL_END=CALENDAR_END_MINUTES,CAL_SLOT=CALENDAR_SLOT_MINUTES,CAL_SLOTS=Array.from({length:(CAL_END-CAL_START)/CAL_SLOT},(_,i)=>CAL_START+i*CAL_SLOT);
 const hhmm=(m:number)=>`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
-const slotOf=(time:string)=>{const [h,m]=time.split(":").map(Number);return Math.min(Math.max(h*60+m,CAL_START),CAL_END-CAL_SLOT);};
-function EventLink({event,base,canNavigate}:{event:CalendarEvent;base:string;canNavigate:boolean}){const priorityClass=event.source==="schedule"?`priority-${event.priority.toLowerCase()}`:"";const className=`calendar-event event-${event.source} ${priorityClass}`;const content=<><span>{event.allDay?"종일":event.startTime}</span><strong>{event.isMilestone&&"★ "}{event.title}{event.isRecurring&&" ↻"}</strong>{event.areaLabel&&<small>{event.areaLabel}</small>}</>;if(!event.editable&&!canNavigate)return <div className={className}>{content}</div>;const href=event.editable?`${base}&edit=${encodeURIComponent(event.id)}`:event.sourceUrl??base;return <Link className={className} href={href}>{content}</Link>}
+const durationMinutes=(event:CalendarEvent)=>Math.max(0,(new Date(event.endAt).getTime()-new Date(event.startAt).getTime())/60_000);
+const placementOf=(event:CalendarEvent)=>calendarTimePlacement(event.startTime,durationMinutes(event));
+function EventLink({event,base,canNavigate,timeGrid=false}:{event:CalendarEvent;base:string;canNavigate:boolean;timeGrid?:boolean}){const priorityClass=event.source==="schedule"?`priority-${event.priority.toLowerCase()}`:"";const className=`calendar-event event-${event.source} ${priorityClass}${timeGrid?" time-grid-event":""}`;const placement=timeGrid?placementOf(event):null;const style=placement?{top:`${placement.offsetPx+1}px`,height:`${Math.max(24,placement.heightPx-2)}px`}:undefined;const content=<><span>{event.allDay?"종일":timeGrid&&event.endTime?`${event.startTime}–${event.endTime}`:event.startTime}</span><strong>{event.isMilestone&&"★ "}{event.title}{event.isRecurring&&" ↻"}</strong>{event.areaLabel&&<small>{event.areaLabel}</small>}</>;if(!event.editable&&!canNavigate)return <div className={className} style={style}>{content}</div>;const href=event.editable?`${base}&edit=${encodeURIComponent(event.id)}`:event.sourceUrl??base;return <Link className={className} style={style} href={href}>{content}</Link>}
 
 export default async function CalendarPage({searchParams}:{searchParams:Promise<{view?:string;date?:string;edit?:string;new?:string;time?:string}>}){
   const {projectId,role}=await getLocalContext();const canWrite=role==="ADMIN"||role==="OPERATOR";const q=await searchParams;
@@ -54,7 +56,7 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
           {r.cells.map(d=>{const key=iso(d),items=(byDate[key]??[]).filter(e=>e.allDay);return <div className="calendar-time-allday" key={key}>{items.map(e=><EventLink event={e} base={base} canNavigate={canWrite} key={`${e.source}-${e.id}`}/>)}</div>})}
           {CAL_SLOTS.map(slot=><div style={{display:"contents"}} key={slot}>
             <time className={slot%60===0?"hour":""}>{slot%60===0?hhmm(slot):""}</time>
-            {r.cells.map(d=>{const key=iso(d),items=(byDate[key]??[]).filter(e=>!e.allDay&&slotOf(e.startTime)===slot);return <div className={`calendar-time-cell ${slot%60===0?"hour":""}`} key={key}>{items.map(e=><EventLink event={e} base={base} canNavigate={canWrite} key={`${e.source}-${e.id}`}/>)}{!items.length&&canWrite&&<Link className="calendar-slot-add" aria-label={`${key} ${hhmm(slot)} 일정 등록`} title={`${hhmm(slot)} 일정 등록`} href={`${base}&new=${key}&time=${hhmm(slot)}`}>+</Link>}</div>})}
+            {r.cells.map(d=>{const key=iso(d),items=(byDate[key]??[]).filter(e=>!e.allDay&&placementOf(e).slot===slot);return <div className={`calendar-time-cell ${slot%60===0?"hour":""}`} key={key}>{items.map(e=><EventLink event={e} base={base} canNavigate={canWrite} timeGrid key={`${e.source}-${e.id}`}/>)}{!items.length&&canWrite&&<Link className="calendar-slot-add" aria-label={`${key} ${hhmm(slot)} 일정 등록`} title={`${hhmm(slot)} 일정 등록`} href={`${base}&new=${key}&time=${hhmm(slot)}`}>+</Link>}</div>})}
           </div>)}
         </div>}
         {view==="year"&&<div className="calendar-year">{r.cells.map(monthStart=>{const monthKey=`${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth()+1).padStart(2,"0")}`,monthEvents=events.filter(e=>e.date.startsWith(monthKey));return <section className="calendar-year-month" key={monthKey}>

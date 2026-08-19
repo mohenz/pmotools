@@ -13,6 +13,7 @@ declare module "next-auth" {
       loginId: string;
       role: "ADMIN" | "OPERATOR" | "MEMBER";
       projectId: string;
+      jobTitle: string | null;
     } & DefaultSession["user"];
   }
 }

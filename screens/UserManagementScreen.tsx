@@ -142,7 +142,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
           <label>이름<input value={createDraft.name} onChange={(event) => setCreateDraft((d) => ({ ...d, name: event.target.value }))} required maxLength={50} /></label>
           <label>이메일<input type="email" value={createDraft.email} onChange={(event) => setCreateDraft((d) => ({ ...d, email: event.target.value }))} maxLength={100} /></label>
           <label>회사명<input value={createDraft.department} onChange={(event) => setCreateDraft((d) => ({ ...d, department: event.target.value }))} maxLength={100} /></label>
-          <label>직책<input value={createDraft.jobTitle} onChange={(event) => setCreateDraft((d) => ({ ...d, jobTitle: event.target.value }))} maxLength={100} /></label>
+          <label>직무<input value={createDraft.jobTitle} onChange={(event) => setCreateDraft((d) => ({ ...d, jobTitle: event.target.value }))} maxLength={100} /></label>
           <label>권한
             <select value={createDraft.role} onChange={(event) => setCreateDraft((d) => ({ ...d, role: event.target.value }))}>
               {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
@@ -155,7 +155,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
         <div className="panel-head"><h2>사용자 목록</h2><span>{users.length}명</span></div>
         <div className="table-wrap">
           <table className="dense-table">
-            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직책</th><th>권한</th><th>상태</th><th /></tr></thead>
+            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>권한</th><th>상태</th><th /></tr></thead>
             <tbody>
               {users.map((user) => {
                 const draft = draftFor(user);
@@ -164,7 +164,7 @@ export function UserManagementScreen({ users, q, resetRequests }: { users: Admin
                   <td><input aria-label={`${user.userId} 이름`} value={draft.name} onChange={(event) => updateDraft(user, "name", event.target.value)} required maxLength={50} /></td>
                   <td><input aria-label={`${user.userId} 이메일`} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 회사명`} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
-                  <td><input aria-label={`${user.userId} 직책`} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
+                  <td><input aria-label={`${user.userId} 직무`} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
                   <td>
                     <select className="user-role-select" aria-label={`${user.userId} 권한`} value={user.role} disabled={pending === `role-${user.id}`} onChange={(event) => changeRole(user, event.target.value)}>
                       {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}

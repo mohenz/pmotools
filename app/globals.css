@@ -503,11 +503,12 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .calendar-time-allday { min-height: 26px; padding: 3px 4px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: grid; gap: 3px; }
 .calendar-time-grid time { padding: 2px 8px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--muted-foreground); font: 10px var(--font-mono); text-align: right; }
 .calendar-time-grid time.hour { border-top: 1px solid var(--muted-foreground); padding-top: 4px; }
-.calendar-time-cell { position: relative; height: 100%; padding: 1px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: grid; gap: 2px; align-content: start; }
+.calendar-time-cell { position: relative; height: 100%; padding: 1px; overflow: visible; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: grid; gap: 2px; align-content: start; }
 .calendar-slot-add { display: grid; place-items: center; min-height: 24px; border-radius: var(--radius-sm); color: var(--muted-foreground); font-size: 14px; opacity: 0; }
 .calendar-time-cell:hover .calendar-slot-add { opacity: 1; background: color-mix(in oklch, var(--primary) 6%, var(--card)); color: var(--primary); }
 .calendar-time-cell.hour { border-top: 1px solid var(--muted-foreground); }
 .calendar-time-grid .calendar-event { grid-template-columns: 38px minmax(0,1fr); padding: 2px 6px; font-size: 10px; line-height: 1.25; }
+.calendar-time-grid .calendar-event.time-grid-event { position: absolute; z-index: 1; right: 1px; left: 1px; grid-template-columns: 72px minmax(0,1fr); align-content: start; }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted-foreground); font-size: 11px; }
 .calendar-legend span { display: flex; align-items: center; gap: 5px; }
 .calendar-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--primary); }

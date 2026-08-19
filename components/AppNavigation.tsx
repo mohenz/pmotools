@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Activity, Bell, Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
 import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 import { isMenuVisibleForRole, type MenuPreferenceRow } from "@/lib/domain/menu-preferences";
+import { hasPmPmoAccess } from "@/lib/domain/job-access";
 
 const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, "management-tasks": Activity, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail };
 const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks/dashboard", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages" };
@@ -16,6 +17,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = session?.user?.role ?? "MEMBER";
+  const hasRestrictedToolAccess = hasPmPmoAccess(session?.user?.jobTitle);
   const isAdmin = role === "ADMIN";
   const isManager = isAdmin || role === "OPERATOR";
   const { count: unread } = useUnreadMessageCount();
@@ -24,7 +26,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: TOOL_LABEL[key], sub: TOOL_SUB[key], active: toolActive(key, TOOL_HREF[key]) }));
 
   if (area === "sidebar") {
-    const sidebarTools = menuPrefs.filter((m) => isMenuVisibleForRole(m, role as "ADMIN" | "OPERATOR" | "MEMBER")).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
+    const sidebarTools = menuPrefs.filter((m) => isMenuVisibleForRole(m, role as "ADMIN" | "OPERATOR" | "MEMBER") && (m.key !== "items" && m.key !== "management-tasks" || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
     return <>
       <div className="sidebar-tools">
         <span className="sidebar-label">TOOLS</span>
