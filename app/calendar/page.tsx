@@ -31,18 +31,19 @@ const CAL_START=CALENDAR_START_MINUTES,CAL_END=CALENDAR_END_MINUTES,CAL_SLOT=CAL
 const hhmm=(m:number)=>`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
 const durationMinutes=(event:CalendarEvent)=>Math.max(0,(new Date(event.endAt).getTime()-new Date(event.startAt).getTime())/60_000);
 const placementOf=(event:CalendarEvent)=>calendarTimePlacement(event.startTime,durationMinutes(event));
-function EventLink({event,base,canNavigate,timeGrid=false}:{event:CalendarEvent;base:string;canNavigate:boolean;timeGrid?:boolean}){const priorityClass=event.source==="schedule"?`priority-${event.priority.toLowerCase()}`:"";const className=`calendar-event event-${event.source} ${priorityClass}${timeGrid?" time-grid-event":""}`;const placement=timeGrid?placementOf(event):null;const style=placement?{top:`${placement.offsetPx+1}px`,height:`${Math.max(24,placement.heightPx-2)}px`}:undefined;const content=<><span>{event.allDay?"종일":timeGrid&&event.endTime?`${event.startTime}–${event.endTime}`:event.startTime}</span><strong>{event.isMilestone&&"★ "}{event.title}{event.isRecurring&&" ↻"}</strong>{event.areaLabel&&<small>{event.areaLabel}</small>}</>;if(!event.editable&&!canNavigate)return <div className={className} style={style}>{content}</div>;const href=event.editable?`${base}&edit=${encodeURIComponent(event.id)}`:event.sourceUrl??base;return <Link className={className} style={style} href={href}>{content}</Link>}
+function EventLink({event,base,canNavigate,timeGrid=false}:{event:CalendarEvent;base:string;canNavigate:boolean;timeGrid?:boolean}){const priorityClass=event.source==="schedule"?`priority-${event.priority.toLowerCase()}`:"";const className=`calendar-event event-${event.source} ${priorityClass}${timeGrid?" time-grid-event":""}`;const placement=timeGrid?placementOf(event):null;const style=placement?{top:`${placement.offsetPx+1}px`,height:`${Math.max(24,placement.heightPx-2)}px`}:undefined;const content=<><span>{event.allDay?"종일":timeGrid&&event.endTime?`${event.startTime}–${event.endTime}`:event.startTime}</span><strong>{event.isMilestone&&"★ "}{event.title}{event.isRecurring&&" ↻"}</strong>{event.areaLabel&&<small>{event.areaLabel}</small>}</>;if(event.source==="schedule")return <Link className={className} style={style} href={`${base}&edit=${encodeURIComponent(event.id)}`}>{content}</Link>;if(!canNavigate||!event.sourceUrl)return <div className={className} style={style}>{content}</div>;return <Link className={className} style={style} href={event.sourceUrl}>{content}</Link>}
 
 export default async function CalendarPage({searchParams}:{searchParams:Promise<{view?:string;date?:string;edit?:string;new?:string;time?:string}>}){
-  const {projectId,role}=await getLocalContext();const canWrite=role==="ADMIN"||role==="OPERATOR";const q=await searchParams;
+  const {projectId,userId,role}=await getLocalContext();const canWrite=role==="ADMIN"||role==="OPERATOR";const q=await searchParams;
   const view:View=(["year","month","week","day","agenda"] as View[]).includes(q.view as View)?(q.view as View):"month";
   const today=iso(new Date()),selected=/^\d{4}-\d{2}-\d{2}$/.test(q.date??"")?parse(q.date!):parse(today),r=range(view,selected);
   const base=`/calendar?view=${view}&date=${iso(selected)}`;
-  const [events,codes,members,edit]=await Promise.all([listCalendarEvents(projectId,iso(r.from),iso(r.to)),getCodeOptions(projectId),listProjectMembers(projectId),q.edit?getCalendarEvent(projectId,q.edit):null]);
+  const [events,codes,members,edit]=await Promise.all([listCalendarEvents(projectId,iso(r.from),iso(r.to),{},userId),getCodeOptions(projectId),listProjectMembers(projectId),q.edit?getCalendarEvent(projectId,q.edit,userId):null]);
   const byDate=events.reduce<Record<string,CalendarEvent[]>>((a,e)=>{(a[e.date]??=[]).push(e);return a;},{});
   const title=view==="year"?`${selected.getUTCFullYear()}년`:view==="month"||view==="agenda"?`${selected.getUTCFullYear()}년 ${selected.getUTCMonth()+1}월`:view==="week"?`${iso(r.from)} ~ ${iso(r.to)}`:new Intl.DateTimeFormat("ko-KR",{dateStyle:"full",timeZone:"UTC"}).format(selected);
   const newDate=/^\d{4}-\d{2}-\d{2}$/.test(q.new??"")?q.new!:null;
   const newTime=/^([01]\d|2[0-3]):[0-5]\d$/.test(q.time??"")?q.time!:undefined;
+  const canModifyEvent=Boolean(edit?.editable&&canWrite);
   return <>
     <header className="topbar"><div><h1>캘린더</h1></div><div className="topbar-actions">{canWrite&&<Link className="button secondary" href="/calendar/excel">엑셀</Link>}<Link className="button secondary" href="/calendar/search">검색</Link><Link className="button secondary" href="/calendar/milestones">주요 이벤트</Link>{canWrite&&<Link className="button primary" href={`${base}&new=${iso(selected)}`}>+ 일정 등록</Link>}</div></header>
     <div className="content">
@@ -68,6 +69,6 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
       </section>
       <div className="calendar-legend"><span><i className="priority-high"/>우선순위 상</span><span><i className="priority-medium"/>우선순위 중</span><span><i className="priority-low"/>우선순위 하</span><span><i className="progress"/>목표일</span><span><i className="next_plan"/>차주 계획</span><span><i className="issue"/>이슈</span><span>★ 마일스톤</span><span>↻ 반복 일정</span></div>
     </div>
-    {((newDate&&canWrite)||edit)&&<CalendarModal title={edit?"일정 수정":"일정 등록"} returnUrl={base}><CalendarEventForm areas={codes.tracks} members={members} event={edit} selectedDate={newDate??edit?.date??iso(selected)} selectedTime={newTime} returnUrl={base} canWrite={canWrite}/></CalendarModal>}
+    {((newDate&&canWrite)||edit)&&<CalendarModal title={edit?(canModifyEvent?"일정 수정":"일정 보기"):"일정 등록"} returnUrl={base}><CalendarEventForm areas={codes.tracks} members={members} event={edit} selectedDate={newDate??edit?.date??iso(selected)} selectedTime={newTime} returnUrl={base} canWrite={edit?canModifyEvent:canWrite}/></CalendarModal>}
   </>;
 }

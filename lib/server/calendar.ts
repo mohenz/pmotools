@@ -3,7 +3,9 @@ import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { getCodeOptions } from "@/lib/server/common-codes";
 import { assertManager } from "@/lib/server/permissions";
+import { DomainError } from "@/lib/server/errors";
 import { buildRecurrenceRule, describeRecurrence, expandOccurrences, type RecurrenceInput } from "@/lib/domain/recurrence";
+import { canManageCalendarEvent } from "@/lib/domain/calendar-permissions";
 import type { EventException, Prisma } from "@/lib/generated/prisma/client";
 
 export type EventPerson = { id: string; name: string };
@@ -31,7 +33,7 @@ type OverrideData = { title?: string; description?: string; eventType?: string; 
 const isPriority = (value?: string): value is "HIGH" | "MEDIUM" | "LOW" => value === "HIGH" || value === "MEDIUM" || value === "LOW";
 const like = (query: string) => ({ contains: query, mode: "insensitive" }) as const;
 
-export async function listCalendarEvents(projectId: string, from: string, to: string, filters: CalendarSearchFilters = {}) {
+export async function listCalendarEvents(projectId: string, from: string, to: string, filters: CalendarSearchFilters = {}, viewerUserId?: string) {
   const prisma = getPrisma();
   const rangeFrom = new Date(`${from}T00:00:00.000Z`), rangeTo = new Date(`${to}T23:59:59.999Z`);
   // KST 변환(parts) 때문에 UTC 경계에서 하루가 밀릴 수 있어 타임스탬프 조회는 ±1일 여유를 둔다.
@@ -93,11 +95,11 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
         const start = parts(occStartAt.toISOString()), end = parts(occEndAt.toISOString());
         if (!(start.date <= to && end.date >= from)) continue;
         const overrideAreaLabel = override.groupId !== undefined ? (override.groupId ? labels.get(override.groupId) ?? null : null) : areaLabel;
-        rows.push({ id: `${event.id}::${occDateKey}`, masterId: event.id, source: "schedule", title: override.title ?? event.title, description: override.description ?? event.description, eventType: override.eventType ?? event.eventType, startAt: occStartAt.toISOString(), endAt: occEndAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: override.allDay ?? event.allDay, areaCodeId: override.groupId !== undefined ? override.groupId : event.groupId, areaLabel: overrideAreaLabel, location: override.location ?? event.location, priority: override.priority ?? event.priority, isMilestone: override.isMilestone ?? event.isMilestone, isRecurring: true, occurrenceDate: occDateKey, recurrenceSummary: describeRecurrence(event.recurrenceRule), assignees: toAssignees(event), groupTags: toGroupTags(event), editable: true, sourceUrl: null });
+        rows.push({ id: `${event.id}::${occDateKey}`, masterId: event.id, source: "schedule", title: override.title ?? event.title, description: override.description ?? event.description, eventType: override.eventType ?? event.eventType, startAt: occStartAt.toISOString(), endAt: occEndAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: override.allDay ?? event.allDay, areaCodeId: override.groupId !== undefined ? override.groupId : event.groupId, areaLabel: overrideAreaLabel, location: override.location ?? event.location, priority: override.priority ?? event.priority, isMilestone: override.isMilestone ?? event.isMilestone, isRecurring: true, occurrenceDate: occDateKey, recurrenceSummary: describeRecurrence(event.recurrenceRule), assignees: toAssignees(event), groupTags: toGroupTags(event), editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null });
       }
     } else {
       const start = parts(event.startAt.toISOString()), end = parts(event.endAt.toISOString());
-      if (start.date <= to && end.date >= from) rows.push({ id: event.id, masterId: event.id, source: "schedule", title: event.title, description: event.description, eventType: event.eventType, startAt: event.startAt.toISOString(), endAt: event.endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: event.allDay, areaCodeId: event.groupId, areaLabel, location: event.location, priority: event.priority, isMilestone: event.isMilestone, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: toAssignees(event), groupTags: toGroupTags(event), editable: true, sourceUrl: null });
+      if (start.date <= to && end.date >= from) rows.push({ id: event.id, masterId: event.id, source: "schedule", title: event.title, description: event.description, eventType: event.eventType, startAt: event.startAt.toISOString(), endAt: event.endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: event.allDay, areaCodeId: event.groupId, areaLabel, location: event.location, priority: event.priority, isMilestone: event.isMilestone, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: toAssignees(event), groupTags: toGroupTags(event), editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null });
     }
   }
   for (const row of progress) {
@@ -112,7 +114,7 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
   return rows.sort((a, b) => a.startAt.localeCompare(b.startAt));
 }
 
-export async function getCalendarEvent(projectId: string, id: string) {
+export async function getCalendarEvent(projectId: string, id: string, viewerUserId?: string) {
   const { masterId, occurrenceDate } = parseCompositeId(id);
   const prisma = getPrisma();
   const event = await prisma.calendarEvent.findUnique({ where: { id: masterId }, include: { assignees: { include: { user: true } }, groupTags: { include: { group: true } } } });
@@ -131,10 +133,10 @@ export async function getCalendarEvent(projectId: string, id: string) {
     const endAt = override.endAt ? new Date(override.endAt) : new Date(naturalStart.getTime() + duration);
     const start = parts(startAt.toISOString()), end = parts(endAt.toISOString());
     const groupId = override.groupId !== undefined ? override.groupId : event.groupId;
-    return { id, masterId, source: "schedule", title: override.title ?? event.title, description: override.description ?? event.description, eventType: override.eventType ?? event.eventType, startAt: startAt.toISOString(), endAt: endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: override.allDay ?? event.allDay, areaCodeId: groupId, areaLabel: groupId ? labels.get(groupId) ?? null : null, location: override.location ?? event.location, priority: override.priority ?? event.priority, isMilestone: override.isMilestone ?? event.isMilestone, isRecurring: true, occurrenceDate, recurrenceSummary: describeRecurrence(event.recurrenceRule), assignees, groupTags, editable: true, sourceUrl: null } satisfies CalendarEvent;
+    return { id, masterId, source: "schedule", title: override.title ?? event.title, description: override.description ?? event.description, eventType: override.eventType ?? event.eventType, startAt: startAt.toISOString(), endAt: endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: override.allDay ?? event.allDay, areaCodeId: groupId, areaLabel: groupId ? labels.get(groupId) ?? null : null, location: override.location ?? event.location, priority: override.priority ?? event.priority, isMilestone: override.isMilestone ?? event.isMilestone, isRecurring: true, occurrenceDate, recurrenceSummary: describeRecurrence(event.recurrenceRule), assignees, groupTags, editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null } satisfies CalendarEvent;
   }
   const start = parts(event.startAt.toISOString()), end = parts(event.endAt.toISOString());
-  return { id: event.id, masterId: event.id, source: "schedule", title: event.title, description: event.description, eventType: event.eventType, startAt: event.startAt.toISOString(), endAt: event.endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: event.allDay, areaCodeId: event.groupId, areaLabel: event.groupId ? labels.get(event.groupId) ?? null : null, location: event.location, priority: event.priority, isMilestone: event.isMilestone, isRecurring: Boolean(event.recurrenceRule), occurrenceDate: null, recurrenceSummary: event.recurrenceRule ? describeRecurrence(event.recurrenceRule) : null, assignees, groupTags, editable: true, sourceUrl: null } satisfies CalendarEvent;
+  return { id: event.id, masterId: event.id, source: "schedule", title: event.title, description: event.description, eventType: event.eventType, startAt: event.startAt.toISOString(), endAt: event.endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: event.allDay, areaCodeId: event.groupId, areaLabel: event.groupId ? labels.get(event.groupId) ?? null : null, location: event.location, priority: event.priority, isMilestone: event.isMilestone, isRecurring: Boolean(event.recurrenceRule), occurrenceDate: null, recurrenceSummary: event.recurrenceRule ? describeRecurrence(event.recurrenceRule) : null, assignees, groupTags, editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null } satisfies CalendarEvent;
 }
 
 export async function createCalendarEvent(projectId: string, userId: string, input: unknown) {
@@ -154,11 +156,12 @@ export async function createCalendarEvent(projectId: string, userId: string, inp
 
 export async function updateCalendarEvent(projectId: string, id: string, userId: string, input: unknown, scope: "all" | "single" = "all") {
   await assertManager(projectId, userId);
-  const data = eventSchema.parse(input);
   const { masterId, occurrenceDate } = parseCompositeId(id);
   const prisma = getPrisma();
   const before = await prisma.calendarEvent.findUnique({ where: { id: masterId } });
   if (!before || before.projectId !== projectId) return undefined;
+  if (!canManageCalendarEvent(before.createdBy, userId)) throw new DomainError("FORBIDDEN", "일정 등록자만 수정할 수 있습니다.");
+  const data = eventSchema.parse(input);
 
   if (scope === "single" && occurrenceDate) {
     const overrideData: OverrideData = { title: data.title, description: data.description, eventType: data.eventType, startAt: data.startAt, endAt: data.endAt, allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone };
@@ -189,6 +192,7 @@ export async function deleteCalendarEvent(projectId: string, id: string, userId:
   const prisma = getPrisma();
   const before = await prisma.calendarEvent.findUnique({ where: { id: masterId } });
   if (!before || before.projectId !== projectId) return undefined;
+  if (!canManageCalendarEvent(before.createdBy, userId)) throw new DomainError("FORBIDDEN", "일정 등록자만 삭제할 수 있습니다.");
 
   let exception: EventException | null = null;
   if (scope === "single" && occurrenceDate && before.recurrenceRule) {
@@ -205,10 +209,10 @@ export async function deleteCalendarEvent(projectId: string, id: string, userId:
   return { id: masterId };
 }
 
-export async function searchCalendarEvents(projectId: string, filters: CalendarSearchFilters): Promise<CalendarEvent[]> {
+export async function searchCalendarEvents(projectId: string, filters: CalendarSearchFilters, viewerUserId?: string): Promise<CalendarEvent[]> {
   const from = filters.from ?? new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10);
   const to = filters.to ?? new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
-  const events = await listCalendarEvents(projectId, from, to, filters);
+  const events = await listCalendarEvents(projectId, from, to, filters, viewerUserId);
   // DB에서 좁히지 못하는 반복 일정 회차(예외 override 적용 후 값)를 최종적으로 걸러낸다.
   const query = filters.q?.trim().toLocaleLowerCase("ko");
   return events.filter((event) =>

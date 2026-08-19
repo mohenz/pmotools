@@ -7,9 +7,9 @@ import { searchCalendarEvents } from "@/lib/server/calendar";
 export const dynamic = "force-dynamic";
 
 export default async function CalendarSearchPage({ searchParams }: { searchParams: Promise<{ q?: string; priority?: string; groupId?: string; assigneeId?: string; from?: string; to?: string }> }) {
-  const { projectId } = await getLocalContext();
+  const { projectId, userId } = await getLocalContext();
   const filters = await searchParams;
-  const [results, options, members] = await Promise.all([searchCalendarEvents(projectId, filters), getCodeOptions(projectId), listProjectMembers(projectId)]);
+  const [results, options, members] = await Promise.all([searchCalendarEvents(projectId, filters, userId), getCodeOptions(projectId), listProjectMembers(projectId)]);
   return <>
     <header className="topbar"><div><h1>일정 검색</h1><p>기간·담당자·업무그룹·우선순위를 조합해 일정을 찾습니다.</p></div><Link className="button secondary" href="/calendar">캘린더로</Link></header>
     <div className="content">
