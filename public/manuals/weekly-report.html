@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PMOTOOLS 위클리리포트 사용자 매뉴얼</title>
+  <style>
+    :root{--ink:#172033;--muted:#64748b;--line:#dbe3ee;--soft:#f5f8fc;--brand:#2457d6;--brand-soft:#eaf0ff;--warn:#a15c00;--warn-soft:#fff5df;--danger:#b42318;--ok:#08765b}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#eef2f7;color:var(--ink);font:15px/1.7 system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif}.page{width:min(1120px,calc(100% - 32px));margin:32px auto;background:#fff;box-shadow:0 16px 48px #20314d20}.hero{padding:56px 64px;background:linear-gradient(135deg,#172554,#2457d6);color:#fff}.eyebrow{margin:0 0 8px;font-size:13px;font-weight:800;letter-spacing:.14em}.hero h1{margin:0;font-size:38px;line-height:1.25}.hero p{max-width:720px;margin:14px 0 0;color:#dbe7ff;font-size:17px}.meta{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:28px;color:#c7d7ff;font-size:13px}.layout{display:grid;grid-template-columns:240px minmax(0,1fr);align-items:start}.toc{position:sticky;top:16px;padding:30px 24px}.toc strong{display:block;margin-bottom:10px;font-size:13px;letter-spacing:.08em}.toc a{display:block;padding:6px 8px;border-radius:7px;color:var(--muted);text-decoration:none}.toc a:hover{background:var(--brand-soft);color:var(--brand)}main{min-width:0;padding:40px 56px 64px;border-left:1px solid var(--line)}section{scroll-margin-top:20px;margin-bottom:52px}h2{margin:0 0 20px;padding-bottom:10px;border-bottom:2px solid var(--ink);font-size:25px}h3{margin:28px 0 10px;font-size:18px}h4{margin:18px 0 8px;font-size:15px}p{margin:8px 0}.lead{font-size:17px}.role-grid,.flow-grid,.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}.card h3{margin:0 0 8px}.card ul{margin-bottom:0}.role.admin{border-top:4px solid var(--brand)}.role.user{border-top:4px solid var(--ok)}.route{display:inline-block;padding:3px 8px;border-radius:6px;background:#111827;color:#fff;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}.steps{margin:14px 0 0;padding:0;counter-reset:step;list-style:none}.steps>li{position:relative;margin:0 0 14px;padding:16px 18px 16px 54px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}.steps>li:before{position:absolute;top:15px;left:16px;display:grid;width:26px;height:26px;place-items:center;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;content:counter(step);counter-increment:step}.note,.warning,.danger{margin:16px 0;padding:13px 16px;border-left:4px solid var(--brand);border-radius:8px;background:var(--brand-soft)}.warning{border-color:var(--warn);background:var(--warn-soft)}.danger{border-color:var(--danger);background:#fff0ee}.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:800}.open{background:var(--warn-soft);color:var(--warn)}.closed{background:#e5f7f1;color:var(--ok)}table{width:100%;border-collapse:collapse;margin:14px 0}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:var(--soft)}kbd{padding:2px 6px;border:1px solid #c7d0dd;border-bottom-width:2px;border-radius:5px;background:#fff;font:12px ui-monospace,monospace}ul{margin:8px 0;padding-left:22px}.checklist li{margin:6px 0}.footer{padding:20px 64px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}@media(max-width:800px){.page{width:100%;margin:0;box-shadow:none}.hero{padding:36px 24px}.hero h1{font-size:30px}.layout{display:block}.toc{position:static;border-bottom:1px solid var(--line)}main{padding:32px 24px;border:0}.role-grid,.flow-grid,.card-grid{grid-template-columns:1fr}}@media print{body{background:#fff;font-size:11pt}.page{width:auto;margin:0;box-shadow:none}.hero{padding:28px 36px;background:#fff!important;color:#000;border-bottom:2px solid #000}.hero p,.meta{color:#333}.layout{display:block}.toc{display:none}main{padding:28px 36px;border:0}section{break-before:page;margin:0}section:first-child{break-before:auto}.card,.steps>li,.note,.warning,.danger{break-inside:avoid}a{color:inherit}.footer{padding:16px 36px}}
+  </style>
+</head>
+<body>
+<article class="page">
+  <header class="hero">
+    <p class="eyebrow">PMOTOOLS · USER GUIDE</p>
+    <h1>위클리리포트 사용자 매뉴얼</h1>
+    <p>관리자의 리포트 생성·확정·관리 절차와 업무모듈 담당자의 작성·조회 절차를 한 문서에서 안내합니다.</p>
+    <div class="meta"><span>대상: 관리자 / 운영자 / 일반 사용자</span><span>기준 화면: PMOTOOLS 위클리리포트</span><span>작성일: 2026-08-19</span></div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="목차">
+      <strong>목차</strong>
+      <a href="#overview">1. 기능 개요</a>
+      <a href="#roles">2. 권한별 기능</a>
+      <a href="#admin">3. 관리자 매뉴얼</a>
+      <a href="#user">4. 사용자 매뉴얼</a>
+      <a href="#status">5. 상태와 작성 기준</a>
+      <a href="#print">6. 조회 및 인쇄</a>
+      <a href="#trouble">7. 문제 해결</a>
+      <a href="#check">8. 운영 체크리스트</a>
+    </nav>
+
+    <main>
+      <section id="overview">
+        <h2>1. 기능 개요</h2>
+        <p class="lead">위클리리포트는 선택한 월·주차를 기준으로 활성 업무모듈별 실적, 계획, 이슈 및 요청사항을 취합하는 기능입니다.</p>
+        <div class="flow-grid">
+          <div class="card"><h3>실적 기간</h3><p>선택한 계획 주차의 <strong>전주 월요일~금요일</strong>입니다.</p></div>
+          <div class="card"><h3>계획 기간</h3><p>선택한 주차의 <strong>월요일~금요일</strong>입니다.</p></div>
+        </div>
+        <div class="note"><strong>생성 기준</strong><br>리포트 생성 시 그룹 관리에서 <strong>활성 상태인 업무모듈</strong>만 포함됩니다. 비활성 업무모듈은 신규 리포트에 생성되지 않습니다.</div>
+        <h3>기본 업무 흐름</h3>
+        <ol class="steps">
+          <li>관리자가 연도·월·주차를 선택하여 위클리리포트를 생성합니다.</li>
+          <li>업무모듈 담당자가 배정된 모듈의 실적·계획·이슈를 작성합니다.</li>
+          <li>관리자가 작성 현황과 내용을 검토합니다.</li>
+          <li>관리자가 <strong>PM 확인</strong>을 실행하여 내용을 확정하고 입력을 잠급니다.</li>
+          <li>필요한 경우 인쇄 화면에서 보고서를 출력하거나 PDF로 저장합니다.</li>
+        </ol>
+      </section>
+
+      <section id="roles">
+        <h2>2. 권한별 기능</h2>
+        <div class="role-grid">
+          <div class="card role admin"><h3>관리자·운영자</h3><ul><li>위클리리포트 생성</li><li>전체 업무모듈 작성·수정</li><li>PM 확인 및 확인 취소</li><li>리포트 검색·상세 조회·인쇄</li><li>리포트 삭제</li></ul></div>
+          <div class="card role user"><h3>일반 사용자</h3><ul><li>리포트 목록 및 상세 조회</li><li>본인에게 배정된 업무모듈 작성·수정</li><li>인쇄 화면 조회</li><li>PM 확인 완료 후 읽기 전용 조회</li></ul></div>
+        </div>
+        <div class="warning"><strong>업무모듈 배정</strong><br>일반 사용자는 사용자-그룹 매핑으로 배정된 업무모듈만 수정할 수 있습니다. 수정 버튼이 나타나지 않으면 관리자에게 업무모듈 배정 상태를 확인해 달라고 요청하십시오.</div>
+      </section>
+
+      <section id="admin">
+        <h2>3. 관리자 매뉴얼</h2>
+        <h3>3.1 생성 전 준비</h3>
+        <ul class="checklist"><li>설정 &gt; 그룹 관리에서 업무모듈 명칭과 활성 상태를 확인합니다.</li><li>사용자별 담당 업무모듈이 올바르게 배정되어 있는지 확인합니다.</li><li>생성하려는 월·주차의 리포트가 이미 존재하는지 확인합니다.</li></ul>
+
+        <h3>3.2 위클리리포트 생성</h3>
+        <p>경로: <span class="route">설정 → 위클리리포트 관리</span></p>
+        <ol class="steps">
+          <li><strong>연도</strong>, <strong>월</strong>, <strong>주차</strong>를 선택합니다.</li>
+          <li>화면에 표시되는 실적 기간과 계획 기간을 확인합니다.</li>
+          <li><strong>위클리 리포트 생성</strong>을 선택합니다.</li>
+          <li>생성이 완료되면 해당 리포트의 상세 화면으로 이동합니다.</li>
+        </ol>
+        <div class="warning">같은 프로젝트·주차의 리포트는 중복 생성할 수 없습니다. “이미 생성되어 있습니다”라는 메시지가 나타나면 관리 목록에서 기존 리포트를 조회하십시오.</div>
+
+        <h3>3.3 전체 작성 현황 검토</h3>
+        <p>경로: <span class="route">위클리리포트 → 리포트 목록 → 리포트명</span></p>
+        <table><thead><tr><th>항목</th><th>확인 내용</th></tr></thead><tbody><tr><td>작성 현황</td><td>완료 모듈 수 / 전체 모듈 수를 확인합니다.</td></tr><tr><td>실적</td><td>해당 기간에 완료하거나 진행한 업무를 확인합니다.</td></tr><tr><td>계획</td><td>다음 주 수행 계획과 목표를 확인합니다.</td></tr><tr><td>이슈 및 요청사항</td><td>의사결정, 지원 또는 조치가 필요한 내용을 확인합니다.</td></tr></tbody></table>
+        <p>업무모듈명을 선택하면 작성 창이 열립니다. 관리자·운영자는 모든 업무모듈을 수정할 수 있습니다.</p>
+
+        <h3>3.4 PM 확인 및 확인 취소</h3>
+        <ol class="steps"><li>상세 화면에서 모든 업무모듈의 내용을 검토합니다.</li><li><strong>PM 확인</strong>을 선택하고 확인 메시지에 동의합니다.</li><li>상태가 <span class="badge closed">PM 확인 완료</span>로 변경되었는지 확인합니다.</li></ol>
+        <div class="danger"><strong>확정 효과</strong><br>PM 확인 완료 상태에서는 모든 사용자의 입력이 잠깁니다. 수정이 필요하면 관리자가 <strong>PM 확인 취소</strong>를 선택해 상태를 다시 <span class="badge open">작성 중</span>으로 변경해야 합니다.</div>
+
+        <h3>3.5 리포트 삭제</h3>
+        <p>경로: <span class="route">설정 → 위클리리포트 관리 → 삭제</span></p>
+        <ol class="steps"><li>검색창에서 리포트명 또는 프로젝트명으로 대상을 찾습니다.</li><li>삭제할 리포트의 기간과 상태를 다시 확인합니다.</li><li><strong>삭제</strong>를 선택하고 경고창에서 최종 확인합니다.</li></ol>
+        <div class="danger"><strong>삭제 주의</strong><br>해당 주차의 업무모듈별 위클리리포트가 모두 삭제되며 복구할 수 없습니다. 같은 주차의 주간실적과 인력변동 데이터는 유지됩니다.</div>
+      </section>
+
+      <section id="user">
+        <h2>4. 사용자 매뉴얼</h2>
+        <h3>4.1 리포트 찾기</h3>
+        <p>경로: <span class="route">위클리리포트 → 리포트 목록</span></p>
+        <ol class="steps"><li>리포트명 또는 프로젝트명을 검색합니다.</li><li>실적 기간, 계획 기간, 작성 현황과 상태를 확인합니다.</li><li>리포트명을 선택하여 상세 화면을 엽니다.</li></ol>
+
+        <h3>4.2 담당 업무모듈 작성</h3>
+        <ol class="steps"><li>상세 표에서 본인의 담당 업무모듈을 찾습니다.</li><li><strong>클릭하여 작성</strong>이 표시된 업무모듈명을 선택합니다.</li><li><strong>실적</strong>, <strong>계획</strong>, <strong>이슈 및 요청사항</strong>을 작성합니다. 각 항목은 최대 2,000자입니다.</li><li><strong>저장</strong>을 선택한 후 상세 표에 내용이 반영됐는지 확인합니다.</li></ol>
+        <div class="note"><strong>작성 권장 방식</strong><br>실적과 계획은 업무 단위로 줄을 나눠 작성하고, 완료 여부·목표일·담당자를 구체적으로 표시하십시오. 이슈에는 필요한 의사결정이나 지원 요청을 함께 적는 것이 좋습니다.</div>
+
+        <h3>4.3 수정이 불가능한 경우</h3>
+        <ul><li>리포트 상태가 <span class="badge closed">PM 확인 완료</span>인지 확인합니다.</li><li>본인이 해당 업무모듈에 배정되어 있는지 확인합니다.</li><li>다른 주차의 리포트를 열지 않았는지 실적·계획 기간을 확인합니다.</li></ul>
+      </section>
+
+      <section id="status">
+        <h2>5. 상태와 작성 기준</h2>
+        <table><thead><tr><th>상태</th><th>의미</th><th>수정 가능 여부</th></tr></thead><tbody><tr><td><span class="badge open">작성 중</span></td><td>업무모듈별 내용을 입력·검토하는 단계</td><td>관리자 전체 가능, 일반 사용자는 배정 모듈만 가능</td></tr><tr><td><span class="badge closed">PM 확인 완료</span></td><td>관리자가 검토하고 확정한 단계</td><td>모든 사용자 수정 불가</td></tr></tbody></table>
+        <h3>작성 완료 집계 기준</h3>
+        <p>업무모듈의 <strong>실적</strong>과 <strong>계획</strong>이 모두 입력되어야 작성 완료 모듈로 집계됩니다. 이슈가 없으면 이슈 및 요청사항은 비워둘 수 있습니다.</p>
+      </section>
+
+      <section id="print">
+        <h2>6. 조회 및 인쇄</h2>
+        <ol class="steps"><li>리포트 상세 화면 오른쪽 위의 <strong>인쇄 화면</strong>을 선택합니다.</li><li>업무모듈별 실적, 계획, 이슈 및 요청사항을 최종 확인합니다.</li><li>브라우저의 인쇄 기능 <kbd>Ctrl</kbd> + <kbd>P</kbd>를 실행합니다.</li><li>프린터로 출력하거나 대상을 “PDF로 저장”으로 선택합니다.</li></ol>
+        <div class="note">인쇄 화면은 선택한 주차의 업무모듈별 내용을 순서대로 표시합니다. 출력 전에 빈 항목과 리포트 주차를 확인하십시오.</div>
+      </section>
+
+      <section id="trouble">
+        <h2>7. 문제 해결</h2>
+        <table><thead><tr><th>상황</th><th>확인 및 조치</th></tr></thead><tbody>
+          <tr><td>생성 버튼을 사용할 수 없음</td><td>선택한 월에 해당 주차가 존재하는지 확인합니다.</td></tr>
+          <tr><td>활성 업무모듈이 없다는 메시지</td><td>그룹 관리에서 최소 1개 업무모듈을 활성화합니다.</td></tr>
+          <tr><td>이미 생성된 리포트라는 메시지</td><td>위클리리포트 목록 또는 관리 목록에서 같은 주차를 검색합니다.</td></tr>
+          <tr><td>업무모듈을 수정할 수 없음</td><td>PM 확인 상태와 사용자-업무모듈 배정을 확인합니다.</td></tr>
+          <tr><td>작성 현황이 완료로 증가하지 않음</td><td>해당 모듈의 실적과 계획이 모두 입력되었는지 확인합니다.</td></tr>
+          <tr><td>리포트가 목록에 보이지 않음</td><td>검색어를 지우고 페이지를 이동하거나, 관리자에게 생성 여부를 확인합니다.</td></tr>
+        </tbody></table>
+      </section>
+
+      <section id="check">
+        <h2>8. 운영 체크리스트</h2>
+        <div class="card-grid">
+          <div class="card"><h3>관리자</h3><ul class="checklist"><li>□ 활성 업무모듈 확인</li><li>□ 담당 사용자 배정 확인</li><li>□ 실적·계획 기간 확인 후 생성</li><li>□ 전체 모듈 작성 현황 확인</li><li>□ 이슈 및 요청사항 검토</li><li>□ PM 확인 완료</li><li>□ 인쇄본/PDF 최종 확인</li></ul></div>
+          <div class="card"><h3>사용자</h3><ul class="checklist"><li>□ 올바른 주차 리포트 선택</li><li>□ 담당 모듈 실적 작성</li><li>□ 다음 주 계획 작성</li><li>□ 이슈 및 지원 요청 작성</li><li>□ 저장 후 내용 반영 확인</li><li>□ 마감 전에 수정 완료</li></ul></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="footer">PMOTOOLS 위클리리포트 사용자 매뉴얼 · 본 문서는 브라우저에서 열거나 인쇄하여 PDF로 저장할 수 있습니다.</footer>
+</article>
+</body>
+</html>

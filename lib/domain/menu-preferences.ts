@@ -10,6 +10,7 @@ export const DEFAULT_MENU_ITEMS = [
   { key: "weekly-progress", label: "주간실적" },
   { key: "staff-changes", label: "인력변동" },
   { key: "messages", label: "쪽지" },
+  { key: "manuals", label: "매뉴얼" },
 ] as const;
 
 export type MenuPreferenceRow = { key: string; label: string; visibleAdmin: boolean; visibleOperator: boolean; visibleMember: boolean; sortOrder: number };
