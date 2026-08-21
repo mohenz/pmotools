@@ -77,6 +77,7 @@ model User {
   updatedAnnouncements          Announcement[]                @relation("AnnouncementUpdater")
   createdManagementTasks        ManagementTask[]              @relation("ManagementTaskCreator")
   createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
+  generatedWeeklySummaries      WeeklySummary[]               @relation("WeeklySummaryGenerator")
 
   @@map("users")
 }
@@ -621,6 +622,7 @@ model Week {
   reports      WeeklyReport[]
   progress     WeeklyProgress[]
   staffChanges StaffChange[]
+  summary      WeeklySummary?
 
   @@unique([projectId, weekKey])
   @@map("weeks")
@@ -646,6 +648,22 @@ model WeeklyReport {
 
   @@unique([weekId, groupId])
   @@map("weekly_reports")
+}
+
+model WeeklySummary {
+  id          String   @id @default(uuid())
+  weekId      String   @unique
+  summary     String
+  sourceHash  String
+  model       String
+  generatedBy String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  week      Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  generator User @relation("WeeklySummaryGenerator", fields: [generatedBy], references: [id], onDelete: Restrict)
+
+  @@map("weekly_summaries")
 }
 
 model WeeklyProgress {

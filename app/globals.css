@@ -601,6 +601,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .weekly-report-summary > div:last-child { border-right: 0; }
 .weekly-report-summary span { color: var(--muted-foreground); font-size: 11px; }
 .weekly-report-summary strong { font-size: 13px; }
+.weekly-summary-modal { width: min(600px, calc(100vw - 32px)); }
+.weekly-summary-text { margin: 0; white-space: pre-wrap; line-height: 1.7; }
 .weekly-report-detail-panel { padding: 0; overflow: hidden; }
 .weekly-report-detail-panel .table-wrap { border: 0; border-radius: 0; }
 .weekly-report-table { table-layout: fixed; }

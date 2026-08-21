@@ -17,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@google/genai": "^2.18.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@radix-ui/react-alert-dialog": "^1.1.23",

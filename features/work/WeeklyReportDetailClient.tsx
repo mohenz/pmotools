@@ -8,8 +8,8 @@ import type { WeeklyReportDetail } from "@/lib/server/work-management";
 
 type Report = WeeklyReportDetail["reports"][number];
 
-async function jsonRequest(url: string, method: string, body: unknown) {
-  const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+async function jsonRequest(url: string, method: string, body?: unknown) {
+  const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload?.error?.message ?? "요청 처리 중 오류가 발생했습니다.");
   return payload;
