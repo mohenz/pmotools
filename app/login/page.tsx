@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { PublicReadOnlyModal } from "@/components/PublicReadOnlyModal";
 
 function LoginForm() {
   const router = useRouter();
@@ -41,13 +42,13 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const [publicView, setPublicView] = useState<"calendar" | "meetrooms" | null>(null);
   return (
     <div className="auth-center">
       <div className="auth-card">
         <div className="auth-brand">
           <img src="/pmotools-logo.png" alt="PMOTOOLS" />
           <h1>PMOTOOLS</h1>
-          <p>Project Management Tools</p>
         </div>
         <div className="auth-divider" />
         <Suspense fallback={null}>
@@ -57,7 +58,12 @@ export default function LoginPage() {
           <Link href="/signup">회원가입</Link>
           <Link href="/reset-password">비밀번호 초기화</Link>
         </div>
+        <div className="public-view-links" aria-label="로그인 없이 조회">
+          <button type="button" onClick={() => setPublicView("calendar")}>캘린더 조회</button>
+          <button type="button" onClick={() => setPublicView("meetrooms")}>회의실 예약현황 조회</button>
+        </div>
       </div>
+      {publicView ? <PublicReadOnlyModal view={publicView} onClose={() => setPublicView(null)} /> : null}
     </div>
   );
 }
