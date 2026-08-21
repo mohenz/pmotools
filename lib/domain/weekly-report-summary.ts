@@ -4,14 +4,31 @@ export type WeeklySummaryModule = { areaLabel: string; achievements: string; nex
 
 export const SUMMARY_MODEL = "gemini-3.6-flash";
 
+export const SUMMARY_SECTION_TITLES = ["이번 주 핵심 성과", "다음 주 계획", "주의가 필요한 이슈/의사결정"] as const;
+
 export const SUMMARY_SYSTEM_PROMPT = `당신은 프로젝트 PM을 보조하는 어시스턴트입니다.
 아래는 한 주차의 업무모듈별 실적/계획/이슈/의사결정 기록입니다.
 전체를 종합해 PM이 임원 보고에 바로 쓸 수 있는 한국어 요약을 작성하세요.
-- "이번 주 핵심 성과", "다음 주 계획", "주의가 필요한 이슈/의사결정" 3개 섹션으로 구성하세요.
+- ${SUMMARY_SECTION_TITLES.map((title) => `"${title}"`).join(", ")} 3개 섹션으로 구성하세요.
 - 모듈명을 단순 나열하지 말고 내용 기준으로 통합·재구성하세요.
 - 원문에 없는 내용을 추정하거나 지어내지 마세요.
 - 각 섹션 3~5개 불릿, 전체 400자 내외로 작성하세요.
 - 마크다운 기호(**, #, - 등)를 쓰지 말고 일반 텍스트로 작성하세요. 섹션 제목 뒤에는 줄바꿈만 넣고, 불릿은 "• "로 시작하세요.`;
+
+export type SummarySection = { title: string; content: string };
+
+export function parseSummarySections(text: string): SummarySection[] {
+  const escaped = SUMMARY_SECTION_TITLES.map((title) => title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const parts = text.split(new RegExp(`(${escaped.join("|")})`, "g")).map((part) => part.trim()).filter(Boolean);
+  const sections: SummarySection[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    if ((SUMMARY_SECTION_TITLES as readonly string[]).includes(parts[i])) {
+      sections.push({ title: parts[i], content: parts[i + 1] ?? "" });
+      i++;
+    }
+  }
+  return sections.length ? sections : [{ title: "요약", content: text }];
+}
 
 export function computeSourceHash(modules: WeeklySummaryModule[]): string {
   const content = modules.map((m) => `${m.areaLabel}|${m.achievements}|${m.nextPlan}|${m.issues}|${m.decisions}`).join("\n---\n");

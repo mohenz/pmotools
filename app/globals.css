@@ -608,8 +608,15 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .weekly-report-summary > div:last-child { border-right: 0; }
 .weekly-report-summary span { color: var(--muted-foreground); font-size: 11px; }
 .weekly-report-summary strong { font-size: 13px; }
-.weekly-summary-modal { width: min(600px, calc(100vw - 32px)); }
+.weekly-summary-screen .panel-head { align-items: flex-start; }
+.weekly-summary-screen-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.weekly-summary-stale { margin: 0 0 10px; padding: 8px 10px; border-radius: var(--radius); background: var(--warning-bg); color: var(--warning); font-size: 12px; font-weight: 600; }
 .weekly-summary-text { margin: 0; white-space: pre-wrap; line-height: 1.7; }
+.weekly-summary-meta { margin: 10px 0 0; color: var(--muted-foreground); font-size: 11px; }
+.weekly-summary-print-modal { width: min(700px, calc(100vw - 32px)); }
+.weekly-summary-print-table { width: 100%; table-layout: fixed; }
+.weekly-summary-print-table th { width: 180px; padding: 12px; vertical-align: top; background: var(--muted); text-align: left; }
+.weekly-summary-print-table td { padding: 12px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; line-height: 1.65; }
 .weekly-report-detail-panel { padding: 0; overflow: hidden; }
 .weekly-report-detail-panel .table-wrap { border: 0; border-radius: 0; }
 .weekly-report-table { table-layout: fixed; }
