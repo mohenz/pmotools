@@ -41,9 +41,15 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
 
   return <div className={`message-row ${read ? "" : "unread"}`}>
     <div className="message-row-head" onClick={toggle}>
-      <span><b>{invitation.messageType === "CALENDAR_INVITATION" ? "일정 초청" : "회의실 예약 초청"} · </b>보낸 사람: {invitation.senderName} ({invitation.senderUserId})</span>
-      <span className="mono">{new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short" }).format(new Date(invitation.createdAt))}</span>
-      {!read && <span className="badge issue">미확인</span>}
+      <span className="message-row-sender"><b>{invitation.messageType === "CALENDAR_INVITATION" ? "일정 초청" : "회의실 예약 초청"} · </b>보낸 사람: {invitation.senderName} ({invitation.senderUserId})</span>
+      {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation && <span className="message-row-schedule">
+        <strong>{invitation.calendarInvitation.title}{invitation.calendarInvitation.isRecurring && " · 반복 일정"}</strong>
+        <span>{invitationPeriod(invitation.calendarInvitation.startAt, invitation.calendarInvitation.endAt, invitation.calendarInvitation.allDay)}</span>
+      </span>}
+      <span className="message-row-meta">
+        <span className="mono">{new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short" }).format(new Date(invitation.createdAt))}</span>
+        {!read && <span className="badge issue">미확인</span>}
+      </span>
     </div>
     {open && <div className="message-row-body">
       {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation ? <div className="message-invitation-detail">
