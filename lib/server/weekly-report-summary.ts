@@ -59,7 +59,7 @@ export async function generateWeeklySummary(projectId: string, userId: string, w
   const response = await getGeminiClient().models.generateContent({
     model: SUMMARY_MODEL,
     contents: prompt,
-    config: { systemInstruction: SUMMARY_SYSTEM_PROMPT, maxOutputTokens: 4096 },
+    config: { systemInstruction: SUMMARY_SYSTEM_PROMPT, maxOutputTokens: 16384 },
   });
   const summaryText = response.text?.trim();
   if (!summaryText) throw new DomainError("INVALID_STATE", "요약을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
