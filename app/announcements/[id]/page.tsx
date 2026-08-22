@@ -9,5 +9,5 @@ export default async function AnnouncementPage({ params }: { params: Promise<{ i
   const { projectId, userId, role } = await getLocalContext();
   const announcement = await getAnnouncement(projectId, userId, (await params).id, true);
   if (!announcement) notFound();
-  return <AnnouncementDetailScreen announcement={announcement} isManager={role === "ADMIN" || role === "OPERATOR"} />;
+  return <AnnouncementDetailScreen announcement={announcement} isManager={role === "ADMIN" || role === "OPERATOR" || role === "SUPER_ADMIN"} />;
 }

@@ -7,7 +7,7 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { AdminUserListResult, AdminUserRow } from "@/lib/server/admin";
 import type { PasswordResetRequestRow } from "@/lib/server/password-reset-requests";
 
-const ROLE_LABEL: Record<string, string> = { ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
+const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "슈퍼관리자", ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
 type ProfileDraft = { name: string; email: string; department: string; jobTitle: string };
 const emptyCreateDraft = { userId: "", name: "", email: "", department: "", jobTitle: "", role: "MEMBER" };

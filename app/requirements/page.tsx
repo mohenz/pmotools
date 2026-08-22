@@ -16,7 +16,7 @@ export default async function RequirementsPage({ searchParams }: { searchParams:
     page: typeof params.page === "string" ? Number(params.page) || 1 : 1,
   };
   const { projectId, role } = await getLocalContext();
-  const isManager = role === "ADMIN" || role === "OPERATOR";
+  const isManager = role === "ADMIN" || role === "OPERATOR" || role === "SUPER_ADMIN";
   const [result, codes] = await Promise.all([listRequirements(projectId, filters), listRequirementCodeOptions(projectId)]);
   return <RequirementListScreen result={result} filters={filters} divisions={codes.divisions} isManager={isManager} />;
 }

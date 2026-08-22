@@ -2,7 +2,7 @@ import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
-import { assertManager } from "@/lib/server/permissions";
+import { assertSuperAdmin } from "@/lib/server/permissions";
 import {
   SUMMARY_MODEL, SUMMARY_SYSTEM_PROMPT,
   buildSummaryPrompt, computeSourceHash, hasSummarizableContent,
@@ -46,7 +46,7 @@ export async function getWeeklySummary(projectId: string, weekId: string): Promi
 }
 
 export async function generateWeeklySummary(projectId: string, userId: string, weekId: string): Promise<WeeklySummaryRecord> {
-  await assertManager(projectId, userId);
+  await assertSuperAdmin(projectId, userId);
   const loaded = await loadModules(projectId, weekId);
   if (!loaded) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
   if (loaded.week.status !== "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료된 리포트만 AI 요약을 생성할 수 있습니다.");

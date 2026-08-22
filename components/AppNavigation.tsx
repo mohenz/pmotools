@@ -18,7 +18,8 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   const { data: session } = useSession();
   const role = session?.user?.role ?? "MEMBER";
   const hasRestrictedToolAccess = hasPmPmoAccess(session?.user?.jobTitle);
-  const isAdmin = role === "ADMIN";
+  const isSuperAdmin = role === "SUPER_ADMIN";
+  const isAdmin = isSuperAdmin || role === "ADMIN";
   const isManager = isAdmin || role === "OPERATOR";
   const { count: unread } = useUnreadMessageCount();
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
@@ -26,7 +27,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: TOOL_LABEL[key], sub: TOOL_SUB[key], active: toolActive(key, TOOL_HREF[key]) }));
 
   if (area === "sidebar") {
-    const sidebarTools = menuPrefs.filter((m) => isMenuVisibleForRole(m, role as "ADMIN" | "OPERATOR" | "MEMBER") && (m.key !== "items" && m.key !== "management-tasks" || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
+    const sidebarTools = menuPrefs.filter((m) => isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (m.key !== "items" && m.key !== "management-tasks" || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
     return <>
       <div className="sidebar-tools">
         <span className="sidebar-label">TOOLS</span>

@@ -9,5 +9,5 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
   const q = typeof params.q === "string" ? params.q : "";
   const page = typeof params.page === "string" ? Number(params.page) || 1 : 1;
   const { projectId, userId, role } = await getLocalContext();
-  return <AnnouncementListScreen result={await listAnnouncements(projectId, userId, q, page)} q={q} isManager={role === "ADMIN" || role === "OPERATOR"} />;
+  return <AnnouncementListScreen result={await listAnnouncements(projectId, userId, q, page)} q={q} isManager={role === "ADMIN" || role === "OPERATOR" || role === "SUPER_ADMIN"} />;
 }

@@ -19,5 +19,5 @@ export default async function MeetingRoomsPage({ searchParams }: { searchParams:
     context ? listRecurringMeetings(projectId, context.id, false) : Promise.resolve([]),
     context ? listProjectMembers(projectId) : Promise.resolve([]),
   ]);
-  return <MeetingRoomScreen initialDate={date} initialRooms={rooms} initialReservations={reservations} initialRecurring={JSON.parse(JSON.stringify(recurring))} members={members} currentUserId={context?.id ?? null} isAdmin={context?.role === "ADMIN"} readOnly={!context} embedded={query.embedded === "1"} />;
+  return <MeetingRoomScreen initialDate={date} initialRooms={rooms} initialReservations={reservations} initialRecurring={JSON.parse(JSON.stringify(recurring))} members={members} currentUserId={context?.id ?? null} isAdmin={context?.role === "ADMIN" || context?.role === "SUPER_ADMIN"} readOnly={!context} embedded={query.embedded === "1"} />;
 }

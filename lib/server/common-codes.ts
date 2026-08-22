@@ -18,7 +18,7 @@ const updateCodeSchema = z.object({ label: z.string().trim().min(1).max(100), so
 
 async function assertAdmin(projectId: string, userId: string) {
   const role = await getMemberRole(projectId, userId);
-  if (role !== "ADMIN") throw new DomainError("FORBIDDEN", "공통코드 설정 권한이 없습니다.");
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") throw new DomainError("FORBIDDEN", "공통코드 설정 권한이 없습니다.");
 }
 function metadata(groupCode: string, minScore: number | null | undefined) {
   if (groupCode !== "escalation_level") return null;

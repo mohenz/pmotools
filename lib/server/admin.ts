@@ -34,15 +34,16 @@ export async function listUsersPage(projectId: string, adminUserId: string, filt
   return { users: members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString() })), total, page, pageSize, totalPages };
 }
 
-const roleSchema = z.object({ role: z.enum(["ADMIN", "OPERATOR", "MEMBER"]) });
+const ADMIN_TIER_ROLES = ["ADMIN", "SUPER_ADMIN"] as const;
+const roleSchema = z.object({ role: z.enum(["SUPER_ADMIN", "ADMIN", "OPERATOR", "MEMBER"]) });
 export async function updateUserRole(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
   const data = roleSchema.parse(input);
   const prisma = getPrisma();
   const member = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: targetUserId } } });
   if (!member) throw new DomainError("NOT_FOUND", "해당 프로젝트의 사용자를 찾을 수 없습니다.");
-  if (member.role === "ADMIN" && data.role !== "ADMIN") {
-    const adminCount = await prisma.projectMember.count({ where: { projectId, role: "ADMIN" } });
+  if ((ADMIN_TIER_ROLES as readonly string[]).includes(member.role) && !(ADMIN_TIER_ROLES as readonly string[]).includes(data.role)) {
+    const adminCount = await prisma.projectMember.count({ where: { projectId, role: { in: [...ADMIN_TIER_ROLES] } } });
     if (adminCount <= 1) throw new DomainError("LAST_ACTIVE_CODE", "프로젝트에는 최소 한 명의 관리자가 필요합니다.");
   }
   const updated = await prisma.projectMember.update({ where: { id: member.id }, data: { role: data.role } });
@@ -85,7 +86,7 @@ const createUserSchema = z.object({
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   department: z.string().trim().max(100).nullable().optional(),
   jobTitle: z.string().trim().max(100).nullable().optional(),
-  role: z.enum(["ADMIN", "OPERATOR", "MEMBER"]),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "OPERATOR", "MEMBER"]),
 });
 export async function createUser(projectId: string, adminUserId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
@@ -130,9 +131,9 @@ export async function deleteUser(projectId: string, adminUserId: string, targetU
     include: { user: true },
   });
   if (!member || !member.isActive || member.user.deletedAt) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
-  if (member.role === "ADMIN") {
+  if ((ADMIN_TIER_ROLES as readonly string[]).includes(member.role)) {
     const adminCount = await prisma.projectMember.count({
-      where: { projectId, role: "ADMIN", isActive: true, user: { deletedAt: null } },
+      where: { projectId, role: { in: [...ADMIN_TIER_ROLES] }, isActive: true, user: { deletedAt: null } },
     });
     if (adminCount <= 1) throw new DomainError("LAST_ACTIVE_CODE", "프로젝트에는 최소 한 명의 관리자가 필요합니다.");
   }

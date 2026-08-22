@@ -15,8 +15,8 @@ export const DEFAULT_MENU_ITEMS = [
 
 export type MenuPreferenceRow = { key: string; label: string; visibleAdmin: boolean; visibleOperator: boolean; visibleMember: boolean; sortOrder: number };
 
-export function isMenuVisibleForRole(pref: MenuPreferenceRow, role: "ADMIN" | "OPERATOR" | "MEMBER") {
-  if (role === "ADMIN") return pref.visibleAdmin;
+export function isMenuVisibleForRole(pref: MenuPreferenceRow, role: "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") {
+  if (role === "SUPER_ADMIN" || role === "ADMIN") return pref.visibleAdmin;
   if (role === "OPERATOR") return pref.visibleOperator;
   return pref.visibleMember;
 }

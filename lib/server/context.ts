@@ -12,13 +12,19 @@ export async function getLocalContext() {
 
 export async function requireAdminContext() {
   const context = await getLocalContext();
-  if (context.role !== "ADMIN") redirect("/");
+  if (context.role !== "ADMIN" && context.role !== "SUPER_ADMIN") redirect("/");
   return context;
 }
 
 export async function requireManagerContext() {
   const context = await getLocalContext();
-  if (context.role !== "ADMIN" && context.role !== "OPERATOR") redirect("/calendar");
+  if (context.role !== "ADMIN" && context.role !== "OPERATOR" && context.role !== "SUPER_ADMIN") redirect("/calendar");
+  return context;
+}
+
+export async function requireSuperAdminContext() {
+  const context = await getLocalContext();
+  if (context.role !== "SUPER_ADMIN") redirect("/");
   return context;
 }
 

@@ -20,7 +20,7 @@ export function RequirementDetailScreen({ detail, options }: { detail: Detail; o
   const { requirement, events, changes } = detail;
   const [editing, setEditing] = useState(false);
   const { data: session } = useSession();
-  const isManager = session?.user?.role === "ADMIN" || session?.user?.role === "OPERATOR";
+  const isManager = session?.user?.role === "ADMIN" || session?.user?.role === "OPERATOR" || session?.user?.role === "SUPER_ADMIN";
   return <>
     <header className="topbar"><div><p className="mono requirement-id">{requirement.requirementId || "요구사항 ID 미입력"}</p><h1>{requirement.title}</h1></div><div className="topbar-actions"><Link className="button secondary" href="/requirements">목록으로</Link>{isManager && <button className="button primary" type="button" onClick={() => setEditing((v) => !v)}>{editing ? "취소" : "수정하기"}</button>}{isManager && <Link className="button secondary" href={`/requirements/${requirement.id}/changes/new`}>변경요청</Link>}{isManager && <Link className="button secondary" href="/requirements/changes">변경관리</Link>}</div></header>
     <div className="content">

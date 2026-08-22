@@ -55,7 +55,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const profile = token.userId ? await getPrisma().user.findUnique({ where: { id: token.userId as string }, select: { jobTitle: true } }) : null;
       session.user.id = token.userId as string;
       session.user.loginId = token.loginId as string;
-      session.user.role = token.role as "ADMIN" | "OPERATOR" | "MEMBER";
+      session.user.role = token.role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER";
       session.user.projectId = token.projectId as string;
       session.user.jobTitle = profile?.jobTitle ?? null;
       return session;
