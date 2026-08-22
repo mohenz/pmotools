@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-
 export type WeeklySummaryModule = { areaLabel: string; achievements: string; nextPlan: string; issues: string; decisions: string };
 
 export const SUMMARY_MODEL = "gemini-3.6-flash";
@@ -30,9 +28,20 @@ export function parseSummarySections(text: string): SummarySection[] {
   return sections.length ? sections : [{ title: "요약", content: text }];
 }
 
+// 리포트 원문이 바뀌었는지만 감지하는 변경 지문이라 암호학적 해시가 필요 없다.
+// node:crypto를 쓰면 이 파일을 참조하는 클라이언트 컴포넌트의 웹팩 번들이 깨지므로 순수 JS 해시로 대체한다.
 export function computeSourceHash(modules: WeeklySummaryModule[]): string {
   const content = modules.map((m) => `${m.areaLabel}|${m.achievements}|${m.nextPlan}|${m.issues}|${m.decisions}`).join("\n---\n");
-  return crypto.createHash("sha256").update(content).digest("hex");
+  let hash1 = 0xdeadbeef;
+  let hash2 = 0x41c6ce57;
+  for (let i = 0; i < content.length; i++) {
+    const code = content.charCodeAt(i);
+    hash1 = Math.imul(hash1 ^ code, 2654435761);
+    hash2 = Math.imul(hash2 ^ code, 1597334677);
+  }
+  hash1 = Math.imul(hash1 ^ (hash1 >>> 16), 2246822507) ^ Math.imul(hash2 ^ (hash2 >>> 13), 3266489909);
+  hash2 = Math.imul(hash2 ^ (hash2 >>> 16), 2246822507) ^ Math.imul(hash1 ^ (hash1 >>> 13), 3266489909);
+  return (hash1 >>> 0).toString(16).padStart(8, "0") + (hash2 >>> 0).toString(16).padStart(8, "0");
 }
 
 export function hasSummarizableContent(modules: WeeklySummaryModule[]): boolean {
