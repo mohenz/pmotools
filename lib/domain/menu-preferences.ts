@@ -1,6 +1,7 @@
 export const DEFAULT_MENU_ITEMS = [
   { key: "portfolio", label: "통합 현황" },
   { key: "management-tasks", label: "프로젝트통합모니터링" },
+  { key: "pmo-daily", label: "PMO Daily" },
   { key: "calendar", label: "캘린더" },
   { key: "meetrooms", label: "회의실" },
   { key: "items", label: "이슈 관리" },

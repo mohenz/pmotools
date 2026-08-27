@@ -78,6 +78,9 @@ model User {
   updatedAnnouncements          Announcement[]                @relation("AnnouncementUpdater")
   createdManagementTasks        ManagementTask[]              @relation("ManagementTaskCreator")
   assignedManagementTasks       ManagementTaskAssignee[]
+  createdPmoDailySnapshots      PmoDailySnapshot[]            @relation("PmoDailySnapshotCreator")
+  createdPmoDelayedTasks        PmoDelayedTask[]              @relation("PmoDelayedTaskCreator")
+  assignedPmoDelayedTasks       PmoDelayedTaskAssignee[]
   createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
   generatedWeeklySummaries      WeeklySummary[]               @relation("WeeklySummaryGenerator")
 
@@ -180,6 +183,8 @@ model Project {
   managementTasks           ManagementTask[]
   managementTaskSequence    ManagementTaskSequence?
   managementTaskLinks       ManagementTaskLink[]
+  pmoDailySnapshots         PmoDailySnapshot[]
+  pmoDelayedTaskSequences   PmoDelayedTaskSequence?
 
   @@map("projects")
 }
@@ -228,6 +233,7 @@ model Groups {
   calendarEvents  CalendarEvent[]
   eventTags       EventGroupTag[]
   managementTasks ManagementTask[]
+  pmoDelayedTasks PmoDelayedTask[]
 
   @@unique([projectId, groupType, code])
   @@map("groups")
@@ -620,6 +626,88 @@ model ManagementTaskLink {
 }
 
 // ---------------------------------------------------------------------------
+// PMO Daily
+// ---------------------------------------------------------------------------
+
+enum PmoDelayedTaskStatus {
+  IDENTIFIED
+  ACTION_IN_PROGRESS
+  NORMALIZED
+  CLOSED
+}
+
+model PmoDailySnapshot {
+  id                 String   @id @default(uuid())
+  projectId          String
+  reportDate         DateTime @db.Date
+  plannedTaskCount   Int      @default(0)
+  actualTaskCount    Int      @default(0)
+  totalTaskCount     Int      @default(0)
+  completedTaskCount Int      @default(0)
+  createdBy          String
+  version            Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User             @relation("PmoDailySnapshotCreator", fields: [createdBy], references: [id])
+  delayedTasks PmoDelayedTask[]
+
+  @@unique([projectId, reportDate])
+  @@index([projectId, reportDate])
+  @@map("pmo_daily_snapshots")
+}
+
+model PmoDelayedTask {
+  id              String               @id @default(uuid())
+  displayId       String               @unique
+  snapshotId      String
+  groupId         String
+  description     String
+  plannedProgress Int
+  actualProgress  Int
+  plannedEndDate  DateTime?            @db.Date
+  delayReason     String               @default("")
+  responsePlan    String               @default("")
+  status          PmoDelayedTaskStatus @default(IDENTIFIED)
+  createdBy       String
+  version         Int                  @default(1)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  archivedAt      DateTime?
+
+  snapshot  PmoDailySnapshot         @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  group     Groups                   @relation(fields: [groupId], references: [id])
+  creator   User                     @relation("PmoDelayedTaskCreator", fields: [createdBy], references: [id])
+  assignees PmoDelayedTaskAssignee[]
+
+  @@index([snapshotId, archivedAt])
+  @@index([groupId])
+  @@map("pmo_delayed_tasks")
+}
+
+model PmoDelayedTaskAssignee {
+  taskId String
+  userId String
+
+  task PmoDelayedTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("pmo_delayed_task_assignees")
+}
+
+model PmoDelayedTaskSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("pmo_delayed_task_sequences")
+}
+
+// ---------------------------------------------------------------------------
 // 주차 / 주간보고 / 주간실적 / 인력변동
 // ---------------------------------------------------------------------------
 
@@ -859,18 +947,18 @@ enum MessageType {
 }
 
 model Message {
-  id                   String              @id @default(uuid())
+  id                   String      @id @default(uuid())
   senderId             String
   receiverId           String
-  messageType          MessageType         @default(DIRECT)
+  messageType          MessageType @default(DIRECT)
   contentEncrypted     String?
   contentIv            String?
   viewPasswordHash     String?
   calendarEventId      String?
   meetingReservationId String?
   systemPayload        Json?
-  isRead               Boolean             @default(false)
-  createdAt            DateTime            @default(now())
+  isRead               Boolean     @default(false)
+  createdAt            DateTime    @default(now())
 
   sender             User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver           User                @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)

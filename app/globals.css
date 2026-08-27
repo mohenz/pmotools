@@ -254,6 +254,23 @@ td.mono, td[data-numeric] { text-align: right; }
 .table-link:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
 .management-task-id { width: 1%; }
 .management-task-score { font-weight: 700; }
+.pmo-date-filter { display: flex; align-items: end; gap: 8px; }
+.pmo-date-filter label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 12px; }
+.pmo-date-filter.panel { justify-content: flex-end; padding: 12px 16px; }
+.pmo-list-filters label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 12px; }
+.pmo-daily-list-table th,.pmo-daily-list-table td { white-space: nowrap; }
+.pmo-daily-content { display: grid; gap: 18px; }
+.pmo-progress-form { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 10px; }
+.pmo-metric { display: grid; min-height: 92px; align-content: center; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+.pmo-metric > span:first-child { color: var(--muted-foreground); font-size: 12px; font-weight: 600; }
+.pmo-metric strong { font-size: 24px; }
+.pmo-metric.success strong { color: var(--success); }.pmo-metric.warning strong { color: var(--warning); }.pmo-metric.danger strong { color: var(--destructive); }.pmo-metric.primary strong { color: var(--primary); }
+.pmo-metric.editable > span:last-child { display: flex; align-items: center; gap: 5px; }.pmo-metric.editable input { width: 90px; font-size: 20px; font-weight: 700; }.pmo-metric.editable small { color: var(--muted-foreground); }
+.pmo-progress-save { grid-column: 1 / -1; justify-self: end; }
+.pmo-task-form { display: grid; gap: 12px; margin-bottom: 14px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--accent); }
+.pmo-task-list { display: grid; gap: 10px; }.pmo-task-row { display: grid; grid-template-columns: minmax(210px, 1.2fr) minmax(280px, 1fr) minmax(260px, 1fr) auto; align-items: center; gap: 16px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.pmo-task-row > div:first-child { display: grid; gap: 4px; }.pmo-task-row > div:first-child span,.pmo-task-row > div:first-child small { color: var(--muted-foreground); }.pmo-task-row dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; }.pmo-task-row dl div { display: grid; gap: 3px; }.pmo-task-row dt { color: var(--muted-foreground); font-size: 11px; }.pmo-task-row dd { margin: 0; font-size: 13px; font-weight: 700; }.pmo-task-reason { display: grid; gap: 7px; }.pmo-task-reason p { display: grid; gap: 2px; margin: 0; font-size: 12px; }.pmo-task-reason b { color: var(--muted-foreground); }
+.pmo-message { position: sticky; bottom: 16px; z-index: 4; background: var(--card); color: var(--foreground); }
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: var(--radius-full); background: var(--secondary); color: var(--secondary-foreground); font-size: 11px; font-weight: 700; }
 .badge.issue, .badge.level-c_level { background: var(--destructive-bg); color: var(--destructive); }
 .badge.risk { background: var(--info-bg); color: var(--info); }
@@ -713,6 +730,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 }
 
 @media (max-width: 980px) {
+  .pmo-progress-form { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .pmo-task-row { grid-template-columns: 1fr; align-items: stretch; }
   .sidebar { display: none; }
   .workspace-nav { padding: 0 16px; gap: 10px; }
   .mobile-global-link { display: block; }
@@ -734,6 +753,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 }
 
 @media (max-width: 620px) {
+  .pmo-date-filter { width: 100%; align-items: stretch; flex-direction: column; }
+  .pmo-progress-form { grid-template-columns: 1fr; }
   .workspace-nav { position: static; min-height: auto; align-items: stretch; flex-wrap: wrap; padding-top: 10px; }
   .workspace-tool-name { padding-top: 5px; }
   .tool-tabs { order: 3; width: 100%; min-height: 44px; }

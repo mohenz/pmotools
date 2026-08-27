@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Activity, Bell, BookOpen, Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
+import { Activity, Bell, BookOpen, Building2, CalendarDays, ClipboardList, FileText, LayoutDashboard, ListChecks, Mail, ShieldAlert, TrendingUp, Users } from "lucide-react";
 import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 import { isMenuVisibleForRole, type MenuPreferenceRow } from "@/lib/domain/menu-preferences";
 import { hasPmPmoAccess } from "@/lib/domain/job-access";
 
-const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, "management-tasks": Activity, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail, manuals: BookOpen };
-const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks/dashboard", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
-const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", "management-tasks": "Monitoring", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages", manuals: "User Guide" };
-const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "프로젝트통합모니터링", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "매뉴얼" };
+const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, "management-tasks": Activity, "pmo-daily": ListChecks, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail, manuals: BookOpen };
+const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks/dashboard", "pmo-daily": "/pmo-daily", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
+const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", "management-tasks": "Monitoring", "pmo-daily": "Daily Control", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages", manuals: "User Guide" };
+const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "프로젝트통합모니터링", "pmo-daily": "PMO Daily", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "매뉴얼" };
 
 export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[] }) {
   const pathname = usePathname();
@@ -27,7 +27,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
   const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: TOOL_LABEL[key], sub: TOOL_SUB[key], active: toolActive(key, TOOL_HREF[key]) }));
 
   if (area === "sidebar") {
-    const sidebarTools = menuPrefs.filter((m) => isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (m.key !== "items" && m.key !== "management-tasks" || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
+    const sidebarTools = menuPrefs.filter((m) => isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (!["items", "management-tasks", "pmo-daily"].includes(m.key) || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
     return <>
       <div className="sidebar-tools">
         <span className="sidebar-label">TOOLS</span>
@@ -67,6 +67,7 @@ export function AppNavigation({ area, menuPrefs = [] }: { area: "sidebar" | "wor
     const moduleTabs: Record<string, {href:string;label:string}[]> = {
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks/dashboard": [{href:"/management-tasks/dashboard",label:"대시보드"},{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"}],
+      "/pmo-daily": [{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/calendar",label:"일정관리"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"},{href:"/weekly-reports/print",label:"보고서 출력"},{href:"/api/v1/work-export?type=reports",label:"Excel용 CSV"}],
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},...(isManager?[{href:"/portfolio",label:"공정률 현황"}]:[]),{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
       "/staff-changes": [{href:"/staff-changes",label:"투입·철수 관리"},{href:"/api/v1/work-export?type=staff",label:"Excel용 CSV"}],
