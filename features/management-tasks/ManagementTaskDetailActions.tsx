@@ -34,7 +34,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
   async function saveDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await mutate(`/api/v1/management-tasks/${task.id}`, "PATCH", {
+    const saved = await mutate(`/api/v1/management-tasks/${task.id}`, "PATCH", {
       groupId: form.get("groupId"), name: form.get("name"), registrationDate: form.get("registrationDate"),
       assigneeIds, status: form.get("status"), purpose: form.get("purpose"), impactAnalysis: form.get("impactAnalysis"),
       prepContent: form.get("prepContent"), prepPercent: percents.prep,
@@ -43,6 +43,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
       issueContent: form.get("issueContent"), issuePercent: percents.issue,
       closeContent: form.get("closeContent"), closePercent: percents.close,
     }, "details");
+    if (saved) router.push(`/management-tasks/${task.id}`);
   }
 
   async function archive() {

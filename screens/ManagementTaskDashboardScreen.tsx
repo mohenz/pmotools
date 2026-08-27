@@ -42,7 +42,7 @@ export function ManagementTaskTable({ tasks }: { tasks: ManagementTaskRow[] }) {
       <td>{task.assignees.map((assignee) => assignee.name).join(", ") || "-"}</td>
       <td>{MANAGEMENT_TASK_STATUSES.find((status) => status.value === task.status)?.label}</td>
       <td>{task.registrationDate}</td>
-      <td className="mono">{task.totalScore}점</td>
+      <td className="mono management-task-score">{task.totalScore}점</td>
       <td><span className={`badge band-${task.band}`}>{BAND_LABEL[task.band]}</span></td>
     </tr>)}</tbody></table></div>;
 }
