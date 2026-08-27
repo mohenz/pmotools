@@ -1,12 +1,20 @@
 export type ManagementTaskAxisKey = "prep" | "owner" | "progress" | "issue" | "close";
 
 export const MANAGEMENT_TASK_AXES: { key: ManagementTaskAxisKey; label: string }[] = [
-  { key: "prep", label: "준비사항" },
-  { key: "owner", label: "담당자" },
-  { key: "progress", label: "수행현황" },
-  { key: "issue", label: "이슈관리" },
-  { key: "close", label: "작업종료" },
+  { key: "prep", label: "일정관리" },
+  { key: "owner", label: "범위관리" },
+  { key: "progress", label: "자원관리" },
+  { key: "issue", label: "소통관리" },
+  { key: "close", label: "품질관리" },
 ];
+
+export const MANAGEMENT_TASK_STATUSES = [
+  { value: "IDENTIFIED", label: "식별" },
+  { value: "IN_PROGRESS", label: "진행" },
+  { value: "ISSUE_TRANSFERRED", label: "이슈이관" },
+  { value: "RISK_TRANSFERRED", label: "리스크이관" },
+  { value: "CLOSED", label: "종료" },
+] as const;
 
 export type ManagementTaskPercents = Record<ManagementTaskAxisKey, number>;
 

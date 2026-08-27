@@ -77,6 +77,7 @@ model User {
   createdAnnouncements          Announcement[]                @relation("AnnouncementAuthor")
   updatedAnnouncements          Announcement[]                @relation("AnnouncementUpdater")
   createdManagementTasks        ManagementTask[]              @relation("ManagementTaskCreator")
+  assignedManagementTasks       ManagementTaskAssignee[]
   createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
   generatedWeeklySummaries      WeeklySummary[]               @relation("WeeklySummaryGenerator")
 
@@ -529,41 +530,65 @@ enum ManagementTaskBand {
   GREEN
 }
 
+enum ManagementTaskStatus {
+  IDENTIFIED
+  IN_PROGRESS
+  ISSUE_TRANSFERRED
+  RISK_TRANSFERRED
+  CLOSED
+}
+
 model ManagementTask {
-  id               String             @id @default(uuid())
-  displayId        String             @unique
+  id               String               @id @default(uuid())
+  displayId        String               @unique
   projectId        String
   groupId          String // WORK_MODULE Groups row (assertWorkModuleGroup으로 검증)
   name             String
-  registrationDate DateTime           @db.Date
-  prepContent      String             @default("")
-  prepPercent      Int                @default(0)
-  ownerContent     String             @default("")
-  ownerPercent     Int                @default(0)
-  progressContent  String             @default("")
-  progressPercent  Int                @default(0)
-  issueContent     String             @default("")
-  issuePercent     Int                @default(0)
-  closeContent     String             @default("")
-  closePercent     Int                @default(0)
-  totalScore       Int                @default(0)
-  band             ManagementTaskBand @default(RED)
+  registrationDate DateTime             @db.Date
+  status           ManagementTaskStatus @default(IDENTIFIED)
+  purpose          String               @default("")
+  impactAnalysis   String               @default("")
+  prepContent      String               @default("")
+  prepPercent      Int                  @default(0)
+  ownerContent     String               @default("")
+  ownerPercent     Int                  @default(0)
+  progressContent  String               @default("")
+  progressPercent  Int                  @default(0)
+  issueContent     String               @default("")
+  issuePercent     Int                  @default(0)
+  closeContent     String               @default("")
+  closePercent     Int                  @default(0)
+  totalScore       Int                  @default(0)
+  band             ManagementTaskBand   @default(RED)
   createdBy        String
-  version          Int                @default(1)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   archivedAt       DateTime?
 
-  project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  group            Groups               @relation(fields: [groupId], references: [id])
-  creator          User                 @relation("ManagementTaskCreator", fields: [createdBy], references: [id])
-  predecessorLinks ManagementTaskLink[] @relation("TaskSuccessor")
-  successorLinks   ManagementTaskLink[] @relation("TaskPredecessor")
+  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group            Groups                   @relation(fields: [groupId], references: [id])
+  creator          User                     @relation("ManagementTaskCreator", fields: [createdBy], references: [id])
+  predecessorLinks ManagementTaskLink[]     @relation("TaskSuccessor")
+  successorLinks   ManagementTaskLink[]     @relation("TaskPredecessor")
+  assignees        ManagementTaskAssignee[]
 
   @@index([projectId, archivedAt])
   @@index([projectId, groupId])
   @@index([projectId, band])
   @@map("management_tasks")
+}
+
+model ManagementTaskAssignee {
+  taskId String
+  userId String
+
+  task ManagementTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("management_task_assignees")
 }
 
 model ManagementTaskSequence {

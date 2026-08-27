@@ -90,6 +90,7 @@ async function main() {
       passwordHash: hashSync(ADMIN_TEMP_PASSWORD, 12),
       email: "local.pmo@example.com",
       department: "PMO",
+      jobTitle: "PMO",
       role: "ADMIN",
     },
   });

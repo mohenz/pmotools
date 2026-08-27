@@ -252,6 +252,7 @@ tbody tr.high-risk-row:hover { background: color-mix(in oklch, var(--destructive
 td.mono, td[data-numeric] { text-align: right; }
 .title-cell { max-width: 320px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
 .table-link:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.management-task-id { width: 1%; }
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: var(--radius-full); background: var(--secondary); color: var(--secondary-foreground); font-size: 11px; font-weight: 700; }
 .badge.issue, .badge.level-c_level { background: var(--destructive-bg); color: var(--destructive); }
 .badge.risk { background: var(--info-bg); color: var(--info); }
@@ -297,6 +298,9 @@ textarea { resize: vertical; }
 fieldset legend { margin-bottom: 7px; padding: 0; }
 fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.management-axis-grid { grid-template-columns: minmax(0, 1fr) 92px; align-items: stretch; }
+.management-axis-grid > label { grid-template-rows: auto 1fr; }
+.management-axis-grid > label:last-child input { min-width: 0; height: 100%; padding-inline: 8px; text-align: right; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips button { min-height: 36px; padding: 6px 12px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--card); color: var(--muted-foreground); cursor: pointer; }
 .chips button.selected { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }

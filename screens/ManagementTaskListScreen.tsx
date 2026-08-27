@@ -20,7 +20,7 @@ export function ManagementTaskListScreen({ result, filters, groups }: { result: 
     <div className="content">
       {filters.band && <div className="active-filter"><span>대시보드 조건이 적용되었습니다.</span><Link href="/management-tasks">전체 조건 해제</Link></div>}
       <form className="filters" method="get">
-        <input name="q" defaultValue={filters.q} placeholder="ID·이름 검색" aria-label="검색어" />
+        <input name="q" defaultValue={filters.q} placeholder="ID·관리업무항목명 검색" aria-label="검색어" />
         <select name="groupId" defaultValue={filters.groupId} aria-label="업무모듈"><option value="">전체 업무모듈</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}</select>
         <select name="band" defaultValue={filters.band} aria-label="상태"><option value="">전체 상태</option><option value="red">위험</option><option value="yellow">주의</option><option value="green">양호</option></select>
         <button className="button secondary" type="submit">조회</button>

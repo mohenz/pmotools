@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BAND_LABEL } from "@/lib/domain/management-tasks";
+import { BAND_LABEL, MANAGEMENT_TASK_STATUSES } from "@/lib/domain/management-tasks";
 import type { ManagementTaskDashboard, ManagementTaskRow } from "@/lib/server/management-tasks";
 import { ManagementTaskDashboardView } from "@/features/management-tasks/ManagementTaskDashboardView";
 
@@ -34,11 +34,13 @@ function Kpi({ href, label, value, note, critical = false }: { href: string; lab
 }
 
 export function ManagementTaskTable({ tasks }: { tasks: ManagementTaskRow[] }) {
-  return <div className="table-wrap"><table><thead><tr><th>ID</th><th>이름</th><th>업무모듈</th><th>등록일</th><th>총점</th><th>상태</th></tr></thead>
+  return <div className="table-wrap"><table><thead><tr><th className="management-task-id">ID</th><th>관리업무항목명</th><th>업무모듈</th><th>담당자</th><th>진행현황</th><th>등록일</th><th>총점</th><th>평가상태</th></tr></thead>
     <tbody>{tasks.map((task) => <tr key={task.id}>
-      <td className="mono"><Link className="table-link" href={`/management-tasks/${task.id}`}>{task.displayId}</Link></td>
+      <td className="mono management-task-id"><Link className="table-link" href={`/management-tasks/${task.id}`}>{task.displayId}</Link></td>
       <td className="title-cell"><Link className="table-link" href={`/management-tasks/${task.id}`}>{task.name}</Link></td>
       <td>{task.groupLabel}</td>
+      <td>{task.assignees.map((assignee) => assignee.name).join(", ") || "-"}</td>
+      <td>{MANAGEMENT_TASK_STATUSES.find((status) => status.value === task.status)?.label}</td>
       <td>{task.registrationDate}</td>
       <td className="mono">{task.totalScore}점</td>
       <td><span className={`badge band-${task.band}`}>{BAND_LABEL[task.band]}</span></td>

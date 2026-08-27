@@ -18,6 +18,10 @@ const baseTaskSchema = z.object({
   groupId: z.string().uuid(),
   name: z.string().trim().min(1).max(200),
   registrationDate: z.string().date(),
+  assigneeIds: z.array(z.string().uuid()).max(50).default([]),
+  status: z.enum(["IDENTIFIED", "IN_PROGRESS", "ISSUE_TRANSFERRED", "RISK_TRANSFERRED", "CLOSED"]),
+  purpose: contentSchema,
+  impactAnalysis: contentSchema,
   prepContent: contentSchema, prepPercent: percentSchema,
   ownerContent: contentSchema, ownerPercent: percentSchema,
   progressContent: contentSchema, progressPercent: percentSchema,
@@ -33,6 +37,9 @@ export const unlinkTaskSchema = z.object({ linkId: z.string().uuid(), version: z
 export type ManagementTaskRow = {
   id: string; displayId: string; projectId: string; groupId: string; groupLabel: string; groupCode: string;
   name: string; registrationDate: string;
+  assignees: { id: string; userId: string; name: string }[];
+  status: "IDENTIFIED" | "IN_PROGRESS" | "ISSUE_TRANSFERRED" | "RISK_TRANSFERRED" | "CLOSED";
+  purpose: string; impactAnalysis: string;
   prepContent: string; prepPercent: number;
   ownerContent: string; ownerPercent: number;
   progressContent: string; progressPercent: number;
@@ -47,7 +54,7 @@ export type ManagementTaskFilters = { q?: string; groupId?: string; band?: strin
 export type ManagementTaskSearchResult = { id: string; displayId: string; name: string };
 export type ManagementTaskDashboard = { summary: { red: number; yellow: number; green: number; total: number }; projectScore: number | null; projectBand: "red" | "yellow" | "green" | null; tasks: ManagementTaskRow[] };
 
-const managementTaskInclude = { group: true } as const;
+const managementTaskInclude = { group: true, assignees: { include: { user: true } } } as const;
 type ManagementTaskWithGroup = Prisma.ManagementTaskGetPayload<{ include: typeof managementTaskInclude }>;
 
 const dateStr = (value: Date) => value.toISOString().slice(0, 10);
@@ -56,6 +63,8 @@ function toRow(row: ManagementTaskWithGroup): ManagementTaskRow {
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, groupId: row.groupId, groupLabel: row.group.label, groupCode: row.group.code,
     name: row.name, registrationDate: dateStr(row.registrationDate),
+    assignees: row.assignees.map(({ user }) => ({ id: user.id, userId: user.userId, name: user.name })),
+    status: row.status, purpose: row.purpose, impactAnalysis: row.impactAnalysis,
     prepContent: row.prepContent, prepPercent: row.prepPercent,
     ownerContent: row.ownerContent, ownerPercent: row.ownerPercent,
     progressContent: row.progressContent, progressPercent: row.progressPercent,
@@ -143,16 +152,23 @@ export function getManagementTaskDashboard(projectId: string) {
 
 export async function createManagementTask(projectId: string, userId: string, input: unknown) {
   const data = createManagementTaskSchema.parse(input);
+  const assigneeIds = [...new Set(data.assigneeIds)];
   await assertManager(projectId, userId);
   await assertWorkModuleGroup(projectId, data.groupId);
   const { totalScore: score, band } = computeScore(data);
   const prisma = getPrisma();
+  if (assigneeIds.length) {
+    const validCount = await prisma.projectMember.count({ where: { projectId, userId: { in: assigneeIds }, isActive: true, user: { status: "ACTIVE" } } });
+    if (validCount !== assigneeIds.length) throw new DomainError("INVALID_CODE", "담당자 목록에 유효하지 않은 사용자가 있습니다.");
+  }
   const { task, displayId } = await prisma.$transaction(async (tx) => {
     const sequence = await tx.managementTaskSequence.upsert({ where: { projectId }, create: { projectId, value: 1 }, update: { value: { increment: 1 } } });
     const displayId = `MT-${new Date().getUTCFullYear()}-${String(sequence.value).padStart(6, "0")}`;
     const task = await tx.managementTask.create({
       data: {
         displayId, projectId, groupId: data.groupId, name: data.name, registrationDate: new Date(data.registrationDate),
+        status: data.status, purpose: data.purpose, impactAnalysis: data.impactAnalysis,
+        assignees: assigneeIds.length ? { createMany: { data: assigneeIds.map((assigneeId) => ({ userId: assigneeId })) } } : undefined,
         prepContent: data.prepContent, prepPercent: data.prepPercent,
         ownerContent: data.ownerContent, ownerPercent: data.ownerPercent,
         progressContent: data.progressContent, progressPercent: data.progressPercent,
@@ -170,10 +186,15 @@ export async function createManagementTask(projectId: string, userId: string, in
 
 export async function updateManagementTask(projectId: string, userId: string, id: string, input: unknown) {
   const data = updateManagementTaskSchema.parse(input);
+  const assigneeIds = [...new Set(data.assigneeIds)];
   await assertManager(projectId, userId);
   await assertWorkModuleGroup(projectId, data.groupId);
   const { totalScore: score, band } = computeScore(data);
   const prisma = getPrisma();
+  if (assigneeIds.length) {
+    const validCount = await prisma.projectMember.count({ where: { projectId, userId: { in: assigneeIds }, isActive: true, user: { status: "ACTIVE" } } });
+    if (validCount !== assigneeIds.length) throw new DomainError("INVALID_CODE", "담당자 목록에 유효하지 않은 사용자가 있습니다.");
+  }
   const { before, version } = await prisma.$transaction(async (tx) => {
     const before = await tx.managementTask.findUnique({ where: { id } });
     if (!before || before.projectId !== projectId) throw new DomainError("NOT_FOUND", "관리업무항목을 찾을 수 없습니다.");
@@ -183,6 +204,8 @@ export async function updateManagementTask(projectId: string, userId: string, id
       where: { id },
       data: {
         groupId: data.groupId, name: data.name, registrationDate: new Date(data.registrationDate),
+        status: data.status, purpose: data.purpose, impactAnalysis: data.impactAnalysis,
+        assignees: { deleteMany: {}, ...(assigneeIds.length ? { createMany: { data: assigneeIds.map((assigneeId) => ({ userId: assigneeId })) } } : {}) },
         prepContent: data.prepContent, prepPercent: data.prepPercent,
         ownerContent: data.ownerContent, ownerPercent: data.ownerPercent,
         progressContent: data.progressContent, progressPercent: data.progressPercent,

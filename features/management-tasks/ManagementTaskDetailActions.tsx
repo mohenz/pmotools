@@ -3,17 +3,20 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { BAND_LABEL, MANAGEMENT_TASK_AXES, scoreBand, totalScore, type ManagementTaskPercents } from "@/lib/domain/management-tasks";
+import { BAND_LABEL, MANAGEMENT_TASK_AXES, MANAGEMENT_TASK_STATUSES, scoreBand, totalScore, type ManagementTaskPercents } from "@/lib/domain/management-tasks";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ManagementTaskLinkSummary, ManagementTaskRow } from "@/lib/server/management-tasks";
 import { TaskLinkPicker } from "@/features/management-tasks/TaskLinkPicker";
+import type { ProjectMemberOption } from "@/lib/server/users";
+import { PersonPicker } from "@/components/PersonPicker";
 
-export function ManagementTaskDetailActions({ task, predecessors, successors, groups }: { task: ManagementTaskRow; predecessors: ManagementTaskLinkSummary[]; successors: ManagementTaskLinkSummary[]; groups: CommonCode[] }) {
+export function ManagementTaskDetailActions({ task, predecessors, successors, groups, members }: { task: ManagementTaskRow; predecessors: ManagementTaskLinkSummary[]; successors: ManagementTaskLinkSummary[]; groups: CommonCode[]; members: ProjectMemberOption[] }) {
   const router = useRouter();
   const [version, setVersion] = useState(task.version);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState("");
   const [percents, setPercents] = useState<ManagementTaskPercents>({ prep: task.prepPercent, owner: task.ownerPercent, progress: task.progressPercent, issue: task.issuePercent, close: task.closePercent });
+  const [assigneeIds, setAssigneeIds] = useState(task.assignees.map((assignee) => assignee.id));
   const score = useMemo(() => totalScore(percents), [percents]);
   const band = scoreBand(score);
 
@@ -33,6 +36,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
     const form = new FormData(event.currentTarget);
     await mutate(`/api/v1/management-tasks/${task.id}`, "PATCH", {
       groupId: form.get("groupId"), name: form.get("name"), registrationDate: form.get("registrationDate"),
+      assigneeIds, status: form.get("status"), purpose: form.get("purpose"), impactAnalysis: form.get("impactAnalysis"),
       prepContent: form.get("prepContent"), prepPercent: percents.prep,
       ownerContent: form.get("ownerContent"), ownerPercent: percents.owner,
       progressContent: form.get("progressContent"), progressPercent: percents.progress,
@@ -60,12 +64,18 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
         <label>등록일자<input type="date" name="registrationDate" required defaultValue={task.registrationDate} /></label>
       </div>
       <label>관리업무항목명<input name="name" required maxLength={200} defaultValue={task.name} /></label>
+      <div className="form-grid">
+        <div><span className="field-label">담당자</span><div className="attendee-picker"><PersonPicker people={members} selectedIds={assigneeIds} selectedNames={[]} allowGuests={false} onChange={(ids) => setAssigneeIds(ids)} /></div></div>
+        <label>진행현황<select name="status" defaultValue={task.status}>{MANAGEMENT_TASK_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
+      </div>
+      <label>관리목적<textarea name="purpose" rows={2} maxLength={2000} defaultValue={task.purpose} /></label>
+      <label>영향도분석<textarea name="impactAnalysis" rows={2} maxLength={2000} defaultValue={task.impactAnalysis} /></label>
 
       {MANAGEMENT_TASK_AXES.map((axis) => {
         const contentField = `${axis.key}Content` as const;
         return <fieldset key={axis.key}>
           <legend>{axis.label} <small>({percents[axis.key]}% · {Math.round(percents[axis.key] * 0.2)}점)</small></legend>
-          <div className="form-grid">
+          <div className="form-grid management-axis-grid">
             <label>내용<textarea name={contentField} rows={2} maxLength={2000} defaultValue={task[contentField]} /></label>
             <label>평가점수(%)<input type="number" min={0} max={100} value={percents[axis.key]} onChange={(e) => setPercents((prev) => ({ ...prev, [axis.key]: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))} /></label>
           </div>
