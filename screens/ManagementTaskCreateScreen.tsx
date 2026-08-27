@@ -44,11 +44,11 @@ export function ManagementTaskCreateScreen({ groups, members }: { groups: Common
   }
 
   return <>
-    <header className="topbar"><div><h1>관리업무항목 등록</h1><p>업무모듈별 관리업무항목 신규 생성</p></div></header>
+    <header className="topbar"><div><h1>관리업무항목 등록</h1><p>업무그룹별 관리업무항목 신규 생성</p></div></header>
     <div className="content"><section className="panel form-panel"><form onSubmit={submit}>
-      {!ready && <p className="form-error" role="alert">등록된 업무모듈(Track)이 없습니다. 설정에서 업무모듈을 먼저 등록해 주세요.</p>}
+      {!ready && <p className="form-error" role="alert">등록된 업무그룹(Track)이 없습니다. 설정에서 업무그룹을 먼저 등록해 주세요.</p>}
       <div className="form-grid">
-        <label>업무모듈<select name="groupId" required>{groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select></label>
+        <label>업무그룹<select name="groupId" required>{groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select></label>
         <label>등록일자<input type="date" name="registrationDate" required defaultValue={today()} /></label>
       </div>
       <label>관리업무항목명<input name="name" required maxLength={200} placeholder="예: 결제 인터페이스 연동" /></label>

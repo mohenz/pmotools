@@ -142,7 +142,7 @@ erDiagram
 - 이벤트-담당자는 N:M (`event_assignees`), 이벤트-업무그룹도 N:M (별도 매핑 테이블, ERD의 `EVENTS }o--o{ GROUPS`)
 
 ### 2.4 `groups` / `user_group_map`
-- `group_type`으로 "조직 그룹(회사/부서)"과 "업무모듈 그룹"을 한 테이블에서 타입 구분하여 관리 (역할은 `users.role`로 별도 관리)
+- `group_type`으로 "조직 그룹(회사/부서)"과 "업무그룹"을 한 테이블에서 타입 구분하여 관리 (역할은 `users.role`로 별도 관리)
 - 그룹별 `color`를 지정하여 캘린더 좌측 필터 목록에서 카테고리 색상으로 활용 (첨부 디자인 참고)
 
 ### 2.5 `messages` (쪽지)

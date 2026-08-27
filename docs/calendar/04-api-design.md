@@ -22,7 +22,7 @@
 | GET | `/api/users/{id}` | 사용자 상세 | O |
 | PATCH | `/api/users/{id}/role` | 역할 변경 | A |
 | PATCH | `/api/users/{id}/status` | 계정 잠금/해제 | A |
-| GET | `/api/groups` | 그룹 목록 (조직/업무모듈) | M |
+| GET | `/api/groups` | 그룹 목록 (조직/업무그룹) | M |
 | POST | `/api/groups` | 그룹 생성 | A |
 | PATCH | `/api/groups/{id}` | 그룹 수정(색상 포함) | A |
 | POST | `/api/groups/{id}/members` | 그룹원 추가/제거 | A |

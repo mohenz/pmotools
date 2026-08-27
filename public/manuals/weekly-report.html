@@ -13,7 +13,7 @@
   <header class="hero">
     <p class="eyebrow">PMOTOOLS · USER GUIDE</p>
     <h1>위클리리포트 사용자 매뉴얼</h1>
-    <p>관리자의 리포트 생성·확정·관리 절차와 업무모듈 담당자의 작성·조회 절차를 한 문서에서 안내합니다.</p>
+    <p>관리자의 리포트 생성·확정·관리 절차와 업무그룹 담당자의 작성·조회 절차를 한 문서에서 안내합니다.</p>
     <div class="meta"><span>대상: 관리자 / 운영자 / 일반 사용자</span><span>기준 화면: PMOTOOLS 위클리리포트</span><span>작성일: 2026-08-19</span></div>
   </header>
 
@@ -33,16 +33,16 @@
     <main>
       <section id="overview">
         <h2>1. 기능 개요</h2>
-        <p class="lead">위클리리포트는 선택한 월·주차를 기준으로 활성 업무모듈별 실적, 계획, 이슈 및 요청사항을 취합하는 기능입니다.</p>
+        <p class="lead">위클리리포트는 선택한 월·주차를 기준으로 활성 업무그룹별 실적, 계획, 이슈 및 요청사항을 취합하는 기능입니다.</p>
         <div class="flow-grid">
           <div class="card"><h3>실적 기간</h3><p>선택한 계획 주차의 <strong>전주 월요일~금요일</strong>입니다.</p></div>
           <div class="card"><h3>계획 기간</h3><p>선택한 주차의 <strong>월요일~금요일</strong>입니다.</p></div>
         </div>
-        <div class="note"><strong>생성 기준</strong><br>리포트 생성 시 그룹 관리에서 <strong>활성 상태인 업무모듈</strong>만 포함됩니다. 비활성 업무모듈은 신규 리포트에 생성되지 않습니다.</div>
+        <div class="note"><strong>생성 기준</strong><br>리포트 생성 시 그룹 관리에서 <strong>활성 상태인 업무그룹</strong>만 포함됩니다. 비활성 업무그룹은 신규 리포트에 생성되지 않습니다.</div>
         <h3>기본 업무 흐름</h3>
         <ol class="steps">
           <li>관리자가 연도·월·주차를 선택하여 위클리리포트를 생성합니다.</li>
-          <li>업무모듈 담당자가 배정된 모듈의 실적·계획·이슈를 작성합니다.</li>
+          <li>업무그룹 담당자가 배정된 모듈의 실적·계획·이슈를 작성합니다.</li>
           <li>관리자가 작성 현황과 내용을 검토합니다.</li>
           <li>관리자가 <strong>PM 확인</strong>을 실행하여 내용을 확정하고 입력을 잠급니다.</li>
           <li>필요한 경우 인쇄 화면에서 보고서를 출력하거나 PDF로 저장합니다.</li>
@@ -52,16 +52,16 @@
       <section id="roles">
         <h2>2. 권한별 기능</h2>
         <div class="role-grid">
-          <div class="card role admin"><h3>관리자·운영자</h3><ul><li>위클리리포트 생성</li><li>전체 업무모듈 작성·수정</li><li>PM 확인 및 확인 취소</li><li>리포트 검색·상세 조회·인쇄</li><li>리포트 삭제</li></ul></div>
-          <div class="card role user"><h3>일반 사용자</h3><ul><li>리포트 목록 및 상세 조회</li><li>본인에게 배정된 업무모듈 작성·수정</li><li>인쇄 화면 조회</li><li>PM 확인 완료 후 읽기 전용 조회</li></ul></div>
+          <div class="card role admin"><h3>관리자·운영자</h3><ul><li>위클리리포트 생성</li><li>전체 업무그룹 작성·수정</li><li>PM 확인 및 확인 취소</li><li>리포트 검색·상세 조회·인쇄</li><li>리포트 삭제</li></ul></div>
+          <div class="card role user"><h3>일반 사용자</h3><ul><li>리포트 목록 및 상세 조회</li><li>본인에게 배정된 업무그룹 작성·수정</li><li>인쇄 화면 조회</li><li>PM 확인 완료 후 읽기 전용 조회</li></ul></div>
         </div>
-        <div class="warning"><strong>업무모듈 배정</strong><br>일반 사용자는 사용자-그룹 매핑으로 배정된 업무모듈만 수정할 수 있습니다. 수정 버튼이 나타나지 않으면 관리자에게 업무모듈 배정 상태를 확인해 달라고 요청하십시오.</div>
+        <div class="warning"><strong>업무그룹 배정</strong><br>일반 사용자는 사용자-그룹 매핑으로 배정된 업무그룹만 수정할 수 있습니다. 수정 버튼이 나타나지 않으면 관리자에게 업무그룹 배정 상태를 확인해 달라고 요청하십시오.</div>
       </section>
 
       <section id="admin">
         <h2>3. 관리자 매뉴얼</h2>
         <h3>3.1 생성 전 준비</h3>
-        <ul class="checklist"><li>설정 &gt; 그룹 관리에서 업무모듈 명칭과 활성 상태를 확인합니다.</li><li>사용자별 담당 업무모듈이 올바르게 배정되어 있는지 확인합니다.</li><li>생성하려는 월·주차의 리포트가 이미 존재하는지 확인합니다.</li></ul>
+        <ul class="checklist"><li>설정 &gt; 그룹 관리에서 업무그룹 명칭과 활성 상태를 확인합니다.</li><li>사용자별 담당 업무그룹이 올바르게 배정되어 있는지 확인합니다.</li><li>생성하려는 월·주차의 리포트가 이미 존재하는지 확인합니다.</li></ul>
 
         <h3>3.2 위클리리포트 생성</h3>
         <p>경로: <span class="route">설정 → 위클리리포트 관리</span></p>
@@ -76,16 +76,16 @@
         <h3>3.3 전체 작성 현황 검토</h3>
         <p>경로: <span class="route">위클리리포트 → 리포트 목록 → 리포트명</span></p>
         <table><thead><tr><th>항목</th><th>확인 내용</th></tr></thead><tbody><tr><td>작성 현황</td><td>완료 모듈 수 / 전체 모듈 수를 확인합니다.</td></tr><tr><td>실적</td><td>해당 기간에 완료하거나 진행한 업무를 확인합니다.</td></tr><tr><td>계획</td><td>다음 주 수행 계획과 목표를 확인합니다.</td></tr><tr><td>이슈 및 요청사항</td><td>의사결정, 지원 또는 조치가 필요한 내용을 확인합니다.</td></tr></tbody></table>
-        <p>업무모듈명을 선택하면 작성 창이 열립니다. 관리자·운영자는 모든 업무모듈을 수정할 수 있습니다.</p>
+        <p>업무그룹명을 선택하면 작성 창이 열립니다. 관리자·운영자는 모든 업무그룹을 수정할 수 있습니다.</p>
 
         <h3>3.4 PM 확인 및 확인 취소</h3>
-        <ol class="steps"><li>상세 화면에서 모든 업무모듈의 내용을 검토합니다.</li><li><strong>PM 확인</strong>을 선택하고 확인 메시지에 동의합니다.</li><li>상태가 <span class="badge closed">PM 확인 완료</span>로 변경되었는지 확인합니다.</li></ol>
+        <ol class="steps"><li>상세 화면에서 모든 업무그룹의 내용을 검토합니다.</li><li><strong>PM 확인</strong>을 선택하고 확인 메시지에 동의합니다.</li><li>상태가 <span class="badge closed">PM 확인 완료</span>로 변경되었는지 확인합니다.</li></ol>
         <div class="danger"><strong>확정 효과</strong><br>PM 확인 완료 상태에서는 모든 사용자의 입력이 잠깁니다. 수정이 필요하면 관리자가 <strong>PM 확인 취소</strong>를 선택해 상태를 다시 <span class="badge open">작성 중</span>으로 변경해야 합니다.</div>
 
         <h3>3.5 리포트 삭제</h3>
         <p>경로: <span class="route">설정 → 위클리리포트 관리 → 삭제</span></p>
         <ol class="steps"><li>검색창에서 리포트명 또는 프로젝트명으로 대상을 찾습니다.</li><li>삭제할 리포트의 기간과 상태를 다시 확인합니다.</li><li><strong>삭제</strong>를 선택하고 경고창에서 최종 확인합니다.</li></ol>
-        <div class="danger"><strong>삭제 주의</strong><br>해당 주차의 업무모듈별 위클리리포트가 모두 삭제되며 복구할 수 없습니다. 같은 주차의 주간실적과 인력변동 데이터는 유지됩니다.</div>
+        <div class="danger"><strong>삭제 주의</strong><br>해당 주차의 업무그룹별 위클리리포트가 모두 삭제되며 복구할 수 없습니다. 같은 주차의 주간실적과 인력변동 데이터는 유지됩니다.</div>
       </section>
 
       <section id="user">
@@ -94,34 +94,34 @@
         <p>경로: <span class="route">위클리리포트 → 리포트 목록</span></p>
         <ol class="steps"><li>리포트명 또는 프로젝트명을 검색합니다.</li><li>실적 기간, 계획 기간, 작성 현황과 상태를 확인합니다.</li><li>리포트명을 선택하여 상세 화면을 엽니다.</li></ol>
 
-        <h3>4.2 담당 업무모듈 작성</h3>
-        <ol class="steps"><li>상세 표에서 본인의 담당 업무모듈을 찾습니다.</li><li><strong>클릭하여 작성</strong>이 표시된 업무모듈명을 선택합니다.</li><li><strong>실적</strong>, <strong>계획</strong>, <strong>이슈 및 요청사항</strong>을 작성합니다. 각 항목은 최대 2,000자입니다.</li><li><strong>저장</strong>을 선택한 후 상세 표에 내용이 반영됐는지 확인합니다.</li></ol>
+        <h3>4.2 담당 업무그룹 작성</h3>
+        <ol class="steps"><li>상세 표에서 본인의 담당 업무그룹을 찾습니다.</li><li><strong>클릭하여 작성</strong>이 표시된 업무그룹명을 선택합니다.</li><li><strong>실적</strong>, <strong>계획</strong>, <strong>이슈 및 요청사항</strong>을 작성합니다. 각 항목은 최대 2,000자입니다.</li><li><strong>저장</strong>을 선택한 후 상세 표에 내용이 반영됐는지 확인합니다.</li></ol>
         <div class="note"><strong>작성 권장 방식</strong><br>실적과 계획은 업무 단위로 줄을 나눠 작성하고, 완료 여부·목표일·담당자를 구체적으로 표시하십시오. 이슈에는 필요한 의사결정이나 지원 요청을 함께 적는 것이 좋습니다.</div>
 
         <h3>4.3 수정이 불가능한 경우</h3>
-        <ul><li>리포트 상태가 <span class="badge closed">PM 확인 완료</span>인지 확인합니다.</li><li>본인이 해당 업무모듈에 배정되어 있는지 확인합니다.</li><li>다른 주차의 리포트를 열지 않았는지 실적·계획 기간을 확인합니다.</li></ul>
+        <ul><li>리포트 상태가 <span class="badge closed">PM 확인 완료</span>인지 확인합니다.</li><li>본인이 해당 업무그룹에 배정되어 있는지 확인합니다.</li><li>다른 주차의 리포트를 열지 않았는지 실적·계획 기간을 확인합니다.</li></ul>
       </section>
 
       <section id="status">
         <h2>5. 상태와 작성 기준</h2>
-        <table><thead><tr><th>상태</th><th>의미</th><th>수정 가능 여부</th></tr></thead><tbody><tr><td><span class="badge open">작성 중</span></td><td>업무모듈별 내용을 입력·검토하는 단계</td><td>관리자 전체 가능, 일반 사용자는 배정 모듈만 가능</td></tr><tr><td><span class="badge closed">PM 확인 완료</span></td><td>관리자가 검토하고 확정한 단계</td><td>모든 사용자 수정 불가</td></tr></tbody></table>
+        <table><thead><tr><th>상태</th><th>의미</th><th>수정 가능 여부</th></tr></thead><tbody><tr><td><span class="badge open">작성 중</span></td><td>업무그룹별 내용을 입력·검토하는 단계</td><td>관리자 전체 가능, 일반 사용자는 배정 모듈만 가능</td></tr><tr><td><span class="badge closed">PM 확인 완료</span></td><td>관리자가 검토하고 확정한 단계</td><td>모든 사용자 수정 불가</td></tr></tbody></table>
         <h3>작성 완료 집계 기준</h3>
-        <p>업무모듈의 <strong>실적</strong>과 <strong>계획</strong>이 모두 입력되어야 작성 완료 모듈로 집계됩니다. 이슈가 없으면 이슈 및 요청사항은 비워둘 수 있습니다.</p>
+        <p>업무그룹의 <strong>실적</strong>과 <strong>계획</strong>이 모두 입력되어야 작성 완료 모듈로 집계됩니다. 이슈가 없으면 이슈 및 요청사항은 비워둘 수 있습니다.</p>
       </section>
 
       <section id="print">
         <h2>6. 조회 및 인쇄</h2>
-        <ol class="steps"><li>리포트 상세 화면 오른쪽 위의 <strong>인쇄 화면</strong>을 선택합니다.</li><li>업무모듈별 실적, 계획, 이슈 및 요청사항을 최종 확인합니다.</li><li>브라우저의 인쇄 기능 <kbd>Ctrl</kbd> + <kbd>P</kbd>를 실행합니다.</li><li>프린터로 출력하거나 대상을 “PDF로 저장”으로 선택합니다.</li></ol>
-        <div class="note">인쇄 화면은 선택한 주차의 업무모듈별 내용을 순서대로 표시합니다. 출력 전에 빈 항목과 리포트 주차를 확인하십시오.</div>
+        <ol class="steps"><li>리포트 상세 화면 오른쪽 위의 <strong>인쇄 화면</strong>을 선택합니다.</li><li>업무그룹별 실적, 계획, 이슈 및 요청사항을 최종 확인합니다.</li><li>브라우저의 인쇄 기능 <kbd>Ctrl</kbd> + <kbd>P</kbd>를 실행합니다.</li><li>프린터로 출력하거나 대상을 “PDF로 저장”으로 선택합니다.</li></ol>
+        <div class="note">인쇄 화면은 선택한 주차의 업무그룹별 내용을 순서대로 표시합니다. 출력 전에 빈 항목과 리포트 주차를 확인하십시오.</div>
       </section>
 
       <section id="trouble">
         <h2>7. 문제 해결</h2>
         <table><thead><tr><th>상황</th><th>확인 및 조치</th></tr></thead><tbody>
           <tr><td>생성 버튼을 사용할 수 없음</td><td>선택한 월에 해당 주차가 존재하는지 확인합니다.</td></tr>
-          <tr><td>활성 업무모듈이 없다는 메시지</td><td>그룹 관리에서 최소 1개 업무모듈을 활성화합니다.</td></tr>
+          <tr><td>활성 업무그룹이 없다는 메시지</td><td>그룹 관리에서 최소 1개 업무그룹을 활성화합니다.</td></tr>
           <tr><td>이미 생성된 리포트라는 메시지</td><td>위클리리포트 목록 또는 관리 목록에서 같은 주차를 검색합니다.</td></tr>
-          <tr><td>업무모듈을 수정할 수 없음</td><td>PM 확인 상태와 사용자-업무모듈 배정을 확인합니다.</td></tr>
+          <tr><td>업무그룹을 수정할 수 없음</td><td>PM 확인 상태와 사용자-업무그룹 배정을 확인합니다.</td></tr>
           <tr><td>작성 현황이 완료로 증가하지 않음</td><td>해당 모듈의 실적과 계획이 모두 입력되었는지 확인합니다.</td></tr>
           <tr><td>리포트가 목록에 보이지 않음</td><td>검색어를 지우고 페이지를 이동하거나, 관리자에게 생성 여부를 확인합니다.</td></tr>
         </tbody></table>
@@ -130,7 +130,7 @@
       <section id="check">
         <h2>8. 운영 체크리스트</h2>
         <div class="card-grid">
-          <div class="card"><h3>관리자</h3><ul class="checklist"><li>□ 활성 업무모듈 확인</li><li>□ 담당 사용자 배정 확인</li><li>□ 실적·계획 기간 확인 후 생성</li><li>□ 전체 모듈 작성 현황 확인</li><li>□ 이슈 및 요청사항 검토</li><li>□ PM 확인 완료</li><li>□ 인쇄본/PDF 최종 확인</li></ul></div>
+          <div class="card"><h3>관리자</h3><ul class="checklist"><li>□ 활성 업무그룹 확인</li><li>□ 담당 사용자 배정 확인</li><li>□ 실적·계획 기간 확인 후 생성</li><li>□ 전체 모듈 작성 현황 확인</li><li>□ 이슈 및 요청사항 검토</li><li>□ PM 확인 완료</li><li>□ 인쇄본/PDF 최종 확인</li></ul></div>
           <div class="card"><h3>사용자</h3><ul class="checklist"><li>□ 올바른 주차 리포트 선택</li><li>□ 담당 모듈 실적 작성</li><li>□ 다음 주 계획 작성</li><li>□ 이슈 및 지원 요청 작성</li><li>□ 저장 후 내용 반영 확인</li><li>□ 마감 전에 수정 완료</li></ul></div>
         </div>
       </section>

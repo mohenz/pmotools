@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import type { AdminUserListResult, AdminUserRow } from "@/lib/server/admin";
+import type { AdminUserListResult, AdminUserRow, GroupRow } from "@/lib/server/admin";
 import type { PasswordResetRequestRow } from "@/lib/server/password-reset-requests";
 
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "슈퍼관리자", ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
@@ -21,7 +21,7 @@ function queryString(filters: UserFilters, overrides: Record<string, string | nu
   return params.toString();
 }
 
-export function UserManagementScreen({ result, filters, resetRequests }: { result: AdminUserListResult; filters: UserFilters; resetRequests: PasswordResetRequestRow[] }) {
+export function UserManagementScreen({ result, filters, resetRequests, workGroups }: { result: AdminUserListResult; filters: UserFilters; resetRequests: PasswordResetRequestRow[]; workGroups: GroupRow[] }) {
   const { users } = result;
   const pageLinkCount = Math.min(10, result.totalPages);
   const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
@@ -33,6 +33,7 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
   const [drafts, setDrafts] = useState<Record<string, ProfileDraft>>({});
   const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
   const [resetDrafts, setResetDrafts] = useState<Record<string, string>>({});
+  const [workGroupDrafts, setWorkGroupDrafts] = useState<Record<string, string[]>>({});
 
   async function resolveRequest(requestId: string) {
     setPending(`resolve-${requestId}`); setMessage("");
@@ -88,6 +89,17 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
     setDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
     router.refresh();
   }
+  function selectedWorkGroups(user: AdminUserRow) { return workGroupDrafts[user.id] ?? user.workGroups.map((group) => group.id); }
+  async function saveWorkGroups(user: AdminUserRow, groupId: string | null) {
+    const groupIds = groupId ? [groupId] : [];
+    setWorkGroupDrafts((prev) => ({ ...prev, [user.id]: groupIds }));
+    setPending(`groups-${user.id}`); setMessage("");
+    const response = await fetch(`/api/v1/admin/users/${user.id}/work-groups`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ groupId }) });
+    const payload = await response.json().catch(() => null); setPending("");
+    if (!response.ok) { setMessage(payload?.error?.message ?? "업무그룹을 저장하지 못했습니다."); return; }
+    setWorkGroupDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
+    router.refresh();
+  }
   async function deleteAccount(user: AdminUserRow) {
     setPending(`delete-${user.id}`); setMessage(""); setTempPassword(null);
     const response = await fetch(`/api/v1/admin/users/${user.id}`, { method: "DELETE" });
@@ -117,7 +129,7 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
   }
 
   return <>
-    <header className="topbar"><div><h1>사용자 관리</h1><p>사용자 등록, 정보 수정, 권한 변경, 계정 잠금, 비밀번호 강제 초기화를 관리합니다.</p></div></header>
+    <header className="topbar"><div><h1>사용자 관리</h1><p>사용자 등록, 정보 수정, 업무그룹 배정, 권한 변경, 계정 잠금, 비밀번호 강제 초기화를 관리합니다.</p></div></header>
     <div className="content settings-content">
       {message && <p className="form-error action-message" role="alert">{message}</p>}
       {tempPassword && <p className="form-success action-message" role="status">{tempPassword.userId} 임시 비밀번호: <strong className="mono">{tempPassword.value}</strong> (다시 표시되지 않습니다. 사용자에게 안전하게 전달하세요.)</p>}
@@ -170,7 +182,7 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
         <div className="panel-head"><h2>사용자 목록</h2><span>{result.total}명</span></div>
         <div className="table-wrap">
           <table className="dense-table">
-            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>권한</th><th>상태</th><th /></tr></thead>
+            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>업무그룹</th><th>권한</th><th>상태</th><th /></tr></thead>
             <tbody>
               {users.map((user) => {
                 const draft = draftFor(user);
@@ -180,6 +192,7 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
                   <td><input aria-label={`${user.userId} 이메일`} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 회사명`} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 직무`} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
+                  <td><WorkGroupSelector user={user} groups={workGroups} selectedIds={selectedWorkGroups(user)} pending={pending === `groups-${user.id}`} onSave={(groupId) => saveWorkGroups(user, groupId)} /></td>
                   <td>
                     <select className="user-role-select" aria-label={`${user.userId} 권한`} value={user.role} disabled={pending === `role-${user.id}`} onChange={(event) => changeRole(user, event.target.value)}>
                       {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
@@ -210,7 +223,7 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
                   </td>
                 </tr>;
               })}
-              {!users.length && <tr><td colSpan={8} className="empty">검색 결과가 없습니다.</td></tr>}
+              {!users.length && <tr><td colSpan={9} className="empty">검색 결과가 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -230,4 +243,8 @@ export function UserManagementScreen({ result, filters, resetRequests }: { resul
       </nav>}
     </div>
   </>;
+}
+
+function WorkGroupSelector({ user, groups, selectedIds, pending, onSave }: { user: AdminUserRow; groups: GroupRow[]; selectedIds: string[]; pending: boolean; onSave: (groupId: string | null) => Promise<void> }) {
+  return <select className="user-work-group-select" aria-label={`${user.userId} 업무그룹`} value={selectedIds[0] ?? ""} disabled={pending} onChange={(event) => onSave(event.target.value || null)}><option value="">미지정</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select>;
 }

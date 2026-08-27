@@ -34,7 +34,7 @@ export async function listCommonCodeGroups(projectId: string): Promise<CommonCod
     .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko"));
 }
 
-// Track(업무모듈)은 Groups(WORK_MODULE)로 이관됨 — CommonCode와 동일한 형태로 감싸서 반환해 기존 소비 코드를 그대로 유지한다.
+// Track(업무그룹)은 Groups(WORK_MODULE)로 이관됨 — CommonCode와 동일한 형태로 감싸서 반환해 기존 소비 코드를 그대로 유지한다.
 async function listTrackGroupsAsCommonCodes(projectId: string, includeInactive: boolean): Promise<CommonCode[]> {
   const prisma = getPrisma();
   const groups = await prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", ...(includeInactive ? {} : { isActive: true }) } });

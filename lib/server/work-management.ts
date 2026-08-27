@@ -174,7 +174,7 @@ export async function generateWeeklyReport(projectId: string, userId: string, in
       orderBy: { sortOrder: "asc" },
       select: { id: true },
     });
-    if (!modules.length) throw new DomainError("INVALID_STATE", "활성 업무모듈을 먼저 등록해 주세요.");
+    if (!modules.length) throw new DomainError("INVALID_STATE", "활성 업무그룹을 먼저 등록해 주세요.");
 
     const existing = await tx.week.findUnique({ where: { projectId_weekKey: { projectId, weekKey: period.weekKey } } });
     if (existing?.status === "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료된 리포트입니다. 먼저 확인을 취소해 주세요.");
@@ -222,11 +222,11 @@ export async function saveWeeklyReport(projectId: string, userId: string, input:
     getMemberRole(projectId, userId),
     prisma.userGroupMap.findUnique({ where: { userId_groupId: { userId, groupId: data.areaCodeId } } }),
   ]);
-  if (!week || !group) throw new DomainError("NOT_FOUND", "리포트 주차 또는 업무모듈을 찾을 수 없습니다.");
+  if (!week || !group) throw new DomainError("NOT_FOUND", "리포트 주차 또는 업무그룹을 찾을 수 없습니다.");
   if (week.status === "closed") throw new DomainError("INVALID_STATE", "PM 확인이 완료되어 수정할 수 없습니다.");
-  if (!isManagerRole(role) && !assignment) throw new DomainError("FORBIDDEN", "담당 업무모듈만 수정할 수 있습니다.");
+  if (!isManagerRole(role) && !assignment) throw new DomainError("FORBIDDEN", "담당 업무그룹만 수정할 수 있습니다.");
   const existing = await prisma.weeklyReport.findUnique({ where: { weekId_groupId: { weekId: data.weekId, groupId: data.areaCodeId } } });
-  if (!existing) throw new DomainError("NOT_FOUND", "생성된 업무모듈 리포트를 찾을 수 없습니다.");
+  if (!existing) throw new DomainError("NOT_FOUND", "생성된 업무그룹 리포트를 찾을 수 없습니다.");
   const saved = existing
     ? await prisma.weeklyReport.update({ where: { id: existing.id }, data: { achievements: data.achievements, nextPlan: data.nextPlan, issues: data.issues, decisions: data.decisions, notes: data.notes, version: { increment: 1 } } })
     : existing;

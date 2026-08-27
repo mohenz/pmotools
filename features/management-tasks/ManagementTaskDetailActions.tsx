@@ -61,7 +61,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
   return <>
     <section className="panel form-panel detail-edit"><div className="panel-head"><h2>기본 정보 수정</h2><span>버전 {version}</span></div><form onSubmit={saveDetails}>
       <div className="form-grid">
-        <label>업무모듈<select name="groupId" defaultValue={task.groupId}>{groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select></label>
+        <label>업무그룹<select name="groupId" defaultValue={task.groupId}>{groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select></label>
         <label>등록일자<input type="date" name="registrationDate" required defaultValue={task.registrationDate} /></label>
       </div>
       <label>관리업무항목명<input name="name" required maxLength={200} defaultValue={task.name} /></label>

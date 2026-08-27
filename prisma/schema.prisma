@@ -49,6 +49,7 @@ model User {
 
   memberships                   ProjectMember[]
   groupMemberships              UserGroupMap[]
+  ledWorkGroups                 Groups[]                      @relation("WorkGroupLeader")
   createdItems                  Item[]                        @relation("ItemCreator")
   ownedItems                    Item[]                        @relation("ItemOwner")
   itemEvents                    ItemEvent[]
@@ -83,6 +84,7 @@ model User {
   assignedPmoDelayedTasks       PmoDelayedTaskAssignee[]
   createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
   generatedWeeklySummaries      WeeklySummary[]               @relation("WeeklySummaryGenerator")
+  workLogs                      WorkLog[]                     @relation("WorkLogAssignee")
 
   @@map("users")
 }
@@ -185,6 +187,8 @@ model Project {
   managementTaskLinks       ManagementTaskLink[]
   pmoDailySnapshots         PmoDailySnapshot[]
   pmoDelayedTaskSequences   PmoDelayedTaskSequence?
+  workLogs                  WorkLog[]
+  workLogSequence           WorkLogSequence?
 
   @@map("projects")
 }
@@ -192,6 +196,7 @@ model Project {
 model MenuPreference {
   projectId       String
   menuKey         String
+  label           String
   visibleAdmin    Boolean @default(true)
   visibleOperator Boolean @default(true)
   visibleMember   Boolean @default(true)
@@ -204,7 +209,7 @@ model MenuPreference {
 }
 
 // ---------------------------------------------------------------------------
-// 그룹 (조직그룹 + 업무모듈 통합 — 기존 Track 흡수)
+// 그룹 (조직그룹 + 업무그룹 통합 — 기존 Track 흡수)
 // ---------------------------------------------------------------------------
 
 enum GroupType {
@@ -221,10 +226,12 @@ model Groups {
   color     String?
   sortOrder Int       @default(0)
   isActive  Boolean   @default(true)
+  leaderId  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  leader          User?            @relation("WorkGroupLeader", fields: [leaderId], references: [id], onDelete: SetNull)
   userMap         UserGroupMap[]
   items           Item[]
   weeklyReports   WeeklyReport[]
@@ -234,8 +241,10 @@ model Groups {
   eventTags       EventGroupTag[]
   managementTasks ManagementTask[]
   pmoDelayedTasks PmoDelayedTask[]
+  workLogs        WorkLog[]
 
   @@unique([projectId, groupType, code])
+  @@index([leaderId])
   @@map("groups")
 }
 
@@ -248,6 +257,50 @@ model UserGroupMap {
 
   @@id([userId, groupId])
   @@map("user_group_map")
+}
+
+// ---------------------------------------------------------------------------
+// 업무일지
+// ---------------------------------------------------------------------------
+
+enum WorkLogStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model WorkLog {
+  id               String        @id @default(uuid())
+  displayId        String        @unique
+  projectId        String
+  workDate         DateTime      @db.Date
+  groupId          String
+  assigneeId       String
+  wbsNumber        String        @default("")
+  status           WorkLogStatus @default(IN_PROGRESS)
+  workContent      String
+  referenceContent String        @default("")
+  notes            String        @default("")
+  version          Int           @default(1)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group    Groups  @relation(fields: [groupId], references: [id])
+  assignee User    @relation("WorkLogAssignee", fields: [assigneeId], references: [id])
+
+  @@index([projectId, workDate])
+  @@index([projectId, assigneeId, workDate])
+  @@index([groupId])
+  @@map("work_logs")
+}
+
+model WorkLogSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("work_log_sequences")
 }
 
 // ---------------------------------------------------------------------------

@@ -6,10 +6,10 @@ import { assertAdmin } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import type { GroupType, UserRole, UserStatus } from "@/lib/generated/prisma/client";
 
-export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; jobTitle: string | null; role: UserRole; status: UserStatus; createdAt: string };
+export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; jobTitle: string | null; role: UserRole; status: UserStatus; createdAt: string; workGroups: { id: string; label: string }[] };
 export type AdminUserListResult = { users: AdminUserRow[]; total: number; page: number; pageSize: number; totalPages: number };
 export type AdminUserFilters = { q?: string; page?: number; pageSize?: number | "all" };
-export type GroupRow = { id: string; groupType: GroupType; code: string; label: string; color: string | null; sortOrder: number; isActive: boolean };
+export type GroupRow = { id: string; groupType: GroupType; code: string; label: string; color: string | null; sortOrder: number; isActive: boolean; leader: { id: string; userId: string; name: string } | null };
 
 export async function listUsers(projectId: string, adminUserId: string, q?: string): Promise<AdminUserRow[]> {
   return (await listUsersPage(projectId, adminUserId, { q, pageSize: "all" })).users;
@@ -26,12 +26,32 @@ export async function listUsersPage(projectId: string, adminUserId: string, filt
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
   const members = await prisma.projectMember.findMany({
     where,
-    include: { user: true },
+    include: { user: { include: { groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE", isActive: true } }, include: { group: true } } } } },
     orderBy: { user: { userId: "asc" } },
     skip: (page - 1) * pageSize,
     take: pageSize,
   });
-  return { users: members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString() })), total, page, pageSize, totalPages };
+  return { users: members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString(), workGroups: member.user.groupMemberships.map(({ group }) => ({ id: group.id, label: group.label })).sort((a, b) => a.label.localeCompare(b.label, "ko")) })), total, page, pageSize, totalPages };
+}
+
+const workGroupsSchema = z.object({ groupId: z.string().uuid().nullable() });
+export async function updateUserWorkGroups(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
+  await assertAdmin(projectId, adminUserId);
+  const data = workGroupsSchema.parse(input), groupIds = data.groupId ? [data.groupId] : [];
+  const prisma = getPrisma();
+  const [member, groups, current] = await Promise.all([
+    prisma.projectMember.findFirst({ where: { projectId, userId: targetUserId, isActive: true }, select: { id: true } }),
+    groupIds.length ? prisma.groups.findMany({ where: { id: { in: groupIds }, projectId, groupType: "WORK_MODULE", isActive: true }, select: { id: true, label: true } }) : Promise.resolve([]),
+    prisma.userGroupMap.findMany({ where: { userId: targetUserId, group: { projectId, groupType: "WORK_MODULE" } }, include: { group: true } }),
+  ]);
+  if (!member) throw new DomainError("NOT_FOUND", "해당 프로젝트의 사용자를 찾을 수 없습니다.");
+  if (groups.length !== groupIds.length) throw new DomainError("INVALID_CODE", "유효하지 않은 업무그룹이 포함되어 있습니다.");
+  await prisma.$transaction(async (tx) => {
+    await tx.userGroupMap.deleteMany({ where: { userId: targetUserId, group: { projectId, groupType: "WORK_MODULE" } } });
+    if (groupIds.length) await tx.userGroupMap.createMany({ data: groupIds.map((groupId) => ({ userId: targetUserId, groupId })) });
+  });
+  await writeAuditLog(projectId, adminUserId, "USER_WORK_GROUPS_UPDATE", "user_group_map", targetUserId, { groupIds: current.map(({ groupId }) => groupId) }, { groupIds });
+  return { id: targetUserId, workGroups: groups.sort((a, b) => a.label.localeCompare(b.label, "ko")) };
 }
 
 const ADMIN_TIER_ROLES = ["ADMIN", "SUPER_ADMIN"] as const;
@@ -147,31 +167,38 @@ export async function deleteUser(projectId: string, adminUserId: string, targetU
 }
 
 export async function listGroups(projectId: string, groupType?: GroupType): Promise<GroupRow[]> {
-  const groups = await getPrisma().groups.findMany({ where: { projectId, ...(groupType ? { groupType } : {}) } });
-  return groups.map((group) => ({ id: group.id, groupType: group.groupType, code: group.code, label: group.label, color: group.color, sortOrder: group.sortOrder, isActive: group.isActive })).sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko"));
+  const groups = await getPrisma().groups.findMany({ where: { projectId, ...(groupType ? { groupType } : {}) }, include: { leader: { select: { id: true, userId: true, name: true } } } });
+  return groups.map((group) => ({ id: group.id, groupType: group.groupType, code: group.code, label: group.label, color: group.color, sortOrder: group.sortOrder, isActive: group.isActive, leader: group.leader })).sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko"));
 }
 
 const codePattern = /^[A-Za-z][A-Za-z0-9_-]*$/;
-const createGroupSchema = z.object({ groupType: z.enum(["WORK_MODULE", "COMPANY"]), code: z.string().trim().min(1).max(50).regex(codePattern), label: z.string().trim().min(1).max(100), color: z.string().trim().max(20).nullable().optional(), sortOrder: z.number().int().min(0).max(9999) });
+const createGroupSchema = z.object({ groupType: z.enum(["WORK_MODULE", "COMPANY"]), code: z.string().trim().min(1).max(50).regex(codePattern), label: z.string().trim().min(1).max(100), color: z.string().trim().max(20).nullable().optional(), sortOrder: z.number().int().min(0).max(9999), leaderId: z.string().uuid().nullable().optional() });
 export async function createGroup(projectId: string, adminUserId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
   const data = createGroupSchema.parse(input);
   const prisma = getPrisma();
+  if (data.leaderId) await assertProjectUser(projectId, data.leaderId);
   const existing = await prisma.groups.findFirst({ where: { projectId, groupType: data.groupType, code: { equals: data.code, mode: "insensitive" } } });
   if (existing) throw new DomainError("DUPLICATE_CODE", "동일한 그룹 코드가 이미 존재합니다.");
-  const group = await prisma.groups.create({ data: { projectId, groupType: data.groupType, code: data.code, label: data.label, color: data.color || null, sortOrder: data.sortOrder } });
+  const group = await prisma.groups.create({ data: { projectId, groupType: data.groupType, code: data.code, label: data.label, color: data.color || null, sortOrder: data.sortOrder, leaderId: data.groupType === "WORK_MODULE" ? data.leaderId || null : null } });
   await writeAuditLog(projectId, adminUserId, "GROUPS_INSERT", "groups", group.id, null, group);
   return group;
 }
 
-const updateGroupSchema = z.object({ label: z.string().trim().min(1).max(100), color: z.string().trim().max(20).nullable().optional(), sortOrder: z.number().int().min(0).max(9999), isActive: z.boolean() });
+const updateGroupSchema = z.object({ label: z.string().trim().min(1).max(100), color: z.string().trim().max(20).nullable().optional(), sortOrder: z.number().int().min(0).max(9999), isActive: z.boolean(), leaderId: z.string().uuid().nullable().optional() });
 export async function updateGroup(projectId: string, adminUserId: string, groupId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
   const data = updateGroupSchema.parse(input);
   const prisma = getPrisma();
   const current = await prisma.groups.findUnique({ where: { id: groupId } });
   if (!current || current.projectId !== projectId) throw new DomainError("NOT_FOUND", "그룹을 찾을 수 없습니다.");
-  const updated = await prisma.groups.update({ where: { id: groupId }, data: { label: data.label, color: data.color || null, sortOrder: data.sortOrder, isActive: data.isActive } });
+  if (data.leaderId) await assertProjectUser(projectId, data.leaderId);
+  const updated = await prisma.groups.update({ where: { id: groupId }, data: { label: data.label, color: data.color || null, sortOrder: data.sortOrder, isActive: data.isActive, leaderId: current.groupType === "WORK_MODULE" ? data.leaderId || null : null } });
   await writeAuditLog(projectId, adminUserId, "GROUPS_UPDATE", "groups", groupId, current, updated);
   return updated;
+}
+
+async function assertProjectUser(projectId: string, userId: string) {
+  const member = await getPrisma().projectMember.findFirst({ where: { projectId, userId, isActive: true, user: { status: "ACTIVE", deletedAt: null } }, select: { id: true } });
+  if (!member) throw new DomainError("INVALID_CODE", "업무리더로 지정할 수 없는 사용자입니다.");
 }

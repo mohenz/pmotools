@@ -19,7 +19,7 @@ export function PmoDailyListScreen({ result, filters }: { result: Result; filter
   return <>
     <header className="topbar"><div><h1>PMO Daily</h1><p>총 {result.total}건 · 일자별 프로젝트 통제 기록</p></div><Link className="button primary" href="/pmo-daily/new">+ 신규 작성</Link></header>
     <div className="content">
-      <form className="filters pmo-list-filters" method="get">
+      <form className="filters inline-filter pmo-list-filters" method="get">
         <label>시작일<input type="date" name="dateFrom" defaultValue={filters.dateFrom} /></label>
         <label>종료일<input type="date" name="dateTo" defaultValue={filters.dateTo} /></label>
         <button className="button secondary" type="submit">조회</button>

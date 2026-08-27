@@ -14,7 +14,7 @@ export async function listMenuPreferences(projectId: string): Promise<MenuPrefer
     .map((item, index) => {
       const saved = byKey.get(item.key);
       return {
-        key: item.key, label: item.label,
+        key: item.key, label: saved?.label ?? item.label,
         visibleAdmin: saved?.visibleAdmin ?? true, visibleOperator: saved?.visibleOperator ?? true, visibleMember: saved?.visibleMember ?? true,
         sortOrder: saved?.sortOrder ?? index,
       };
@@ -24,6 +24,7 @@ export async function listMenuPreferences(projectId: string): Promise<MenuPrefer
 
 const updateSchema = z.array(z.object({
   key: z.enum(DEFAULT_MENU_ITEMS.map((item) => item.key) as [string, ...string[]]),
+  label: z.string().trim().min(1, "메뉴명을 입력해 주세요.").max(40, "메뉴명은 40자 이하여야 합니다."),
   visibleAdmin: z.boolean(),
   visibleOperator: z.boolean(),
   visibleMember: z.boolean(),
@@ -36,8 +37,8 @@ export async function updateMenuPreferences(projectId: string, actorId: string, 
   const prisma = getPrisma();
   await prisma.$transaction(data.map((item) => prisma.menuPreference.upsert({
     where: { projectId_menuKey: { projectId, menuKey: item.key } },
-    create: { projectId, menuKey: item.key, visibleAdmin: item.visibleAdmin, visibleOperator: item.visibleOperator, visibleMember: item.visibleMember, sortOrder: item.sortOrder },
-    update: { visibleAdmin: item.visibleAdmin, visibleOperator: item.visibleOperator, visibleMember: item.visibleMember, sortOrder: item.sortOrder },
+    create: { projectId, menuKey: item.key, label: item.label, visibleAdmin: item.visibleAdmin, visibleOperator: item.visibleOperator, visibleMember: item.visibleMember, sortOrder: item.sortOrder },
+    update: { label: item.label, visibleAdmin: item.visibleAdmin, visibleOperator: item.visibleOperator, visibleMember: item.visibleMember, sortOrder: item.sortOrder },
   })));
   await writeAuditLog(projectId, actorId, "MENU_PREFERENCES_UPDATE", "menu_preferences", projectId, null, data);
   return listMenuPreferences(projectId);

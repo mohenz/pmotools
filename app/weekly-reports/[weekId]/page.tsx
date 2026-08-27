@@ -10,7 +10,7 @@ export default async function WeeklyReportDetailPage({ params }: { params: Promi
   const { projectId, userId, role } = await getLocalContext();
   const detail = await getWeeklyReportDetail(projectId, userId, weekId);
   return <>
-    <header className="topbar"><div><h1>{detail.reportName}</h1><p>업무모듈별 실적, 계획, 이슈 및 요청사항을 통합 조회합니다.</p></div><div className="topbar-actions">{role === "SUPER_ADMIN" && <Link className="button secondary" href={`/weekly-reports/${detail.id}/summary`}>요약정보</Link>}</div></header>
+    <header className="topbar"><div><h1>{detail.reportName}</h1><p>업무그룹별 실적, 계획, 이슈 및 요청사항을 통합 조회합니다.</p></div><div className="topbar-actions">{role === "SUPER_ADMIN" && <Link className="button secondary" href={`/weekly-reports/${detail.id}/summary`}>요약정보</Link>}</div></header>
     <div className="content weekly-report-content"><WeeklyReportDetailClient detail={detail} /></div>
   </>;
 }
