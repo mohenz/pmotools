@@ -18,7 +18,7 @@ function queryString(filters: Filters, overrides: Record<string, string | number
 export function ItemListScreen({ result, filters, options }: { result: Result; filters: Filters; options: { categories: CommonCode[] } }) {
   const exportQuery = queryString(filters, { page: undefined });
   return <>
-    <header className="topbar"><div><h1>전체 목록</h1><p>총 {result.total}건 · 서버 검색 및 필터</p></div><div className="topbar-actions"><a className="button secondary" href={`/api/v1/items/export${exportQuery ? `?${exportQuery}` : ""}`}>CSV 내보내기</a><Link className="button primary" href="/items/new">+ 신규 등록</Link></div></header>
+    <header className="topbar"><div><h1>전체 목록</h1><p>총 {result.total}건 · 서버 검색 및 필터</p></div><div className="topbar-actions"><a className="button secondary" href={`/api/v1/items/export${exportQuery ? `?${exportQuery}` : ""}`}>CSV 내보내기</a></div></header>
     <div className="content">
       {(filters.open || filters.stale || filters.probability || filters.impact || filters.category) && <div className="active-filter"><span>대시보드 조건이 적용되었습니다.</span><Link href="/items">전체 조건 해제</Link></div>}
       <form className="filters" method="get">
@@ -30,6 +30,7 @@ export function ItemListScreen({ result, filters, options }: { result: Result; f
         <select name="impact" defaultValue={filters.impact} aria-label="영향"><option value="">전체 영향</option>{impacts.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
         {filters.open && <input type="hidden" name="open" value="true" />}{filters.stale && <input type="hidden" name="stale" value="true" />}
         <button className="button secondary" type="submit">조회</button>
+        <Link className="button primary filter-primary-action" href="/items/new">+ 신규 등록</Link>
       </form>
       <section className="panel compact">{result.items.length ? <ItemTable items={result.items} /> : <div className="empty">조건에 맞는 이슈·리스크가 없습니다.</div>}</section>
       {result.totalPages > 1 && <nav className="pagination" aria-label="페이지 이동">

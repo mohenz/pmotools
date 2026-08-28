@@ -24,7 +24,7 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
   const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
   const pageNumbers = Array.from({ length: pageLinkCount }, (_, index) => firstPage + index);
   return <>
-    <header className="topbar"><div><h1>요구사항정의서</h1><p>총 {result.total}건</p></div><div className="topbar-actions">{isManager && <Link className="button primary" href="/requirements/new">+ 신규 등록</Link>}</div></header>
+    <header className="topbar"><div><h1>요구사항정의서</h1><p>총 {result.total}건</p></div></header>
     <div className="content">
       <form className="filters requirement-filter-panel" method="get">
         {filters.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
@@ -34,6 +34,7 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
         <select name="priority" defaultValue={filters.priority} aria-label="우선순위"><option value="">전체 우선순위</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select>
         <select name="importance" defaultValue={filters.importance} aria-label="중요도"><option value="">전체 중요도</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select>
         <button className="button secondary" type="submit">조회</button>
+        {isManager && <Link className="button primary filter-primary-action" href="/requirements/new">+ 신규 등록</Link>}
       </form>
       <section className="panel compact">
         {result.requirements.length ? <div className="table-wrap"><table>
