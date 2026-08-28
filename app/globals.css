@@ -712,13 +712,18 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .weekly-report-edit-form label:last-of-type { grid-column: 1 / -1; }
 .weekly-report-edit-form textarea { resize: vertical; line-height: 1.6; }
 .weekly-report-edit-form .form-error,.weekly-report-edit-form .modal-actions { grid-column: 1 / -1; }
-.weekly-report-form-content { grid-template-columns: minmax(0, 1fr); justify-items: center; }
-.weekly-report-page-form { width: min(100%, 1100px); max-width: none; padding: clamp(16px, 2.4cqi, 26px); }
-.weekly-report-page-form .weekly-report-edit-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 2cqi, 20px); }
+.weekly-report-form-topbar { gap: 16px; }
+.weekly-report-form-heading { min-width: 0; }
+.weekly-report-form-heading h1,.weekly-report-form-heading p { overflow-wrap: anywhere; }
+.weekly-report-form-back { flex: 0 0 auto; }
+.weekly-report-form-content { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.weekly-report-page-form { width: 100%; max-width: none; padding: clamp(18px, 2.4cqi, 30px); }
+.weekly-report-page-form .weekly-report-edit-form { width: 100%; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 2cqi, 20px); }
 .weekly-report-page-form .weekly-report-field { min-width: 0; }
+.weekly-report-page-form .weekly-report-field > span { line-height: 1.4; }
 .weekly-report-page-form .weekly-report-field-wide { grid-column: 1 / -1; }
-.weekly-report-page-form textarea { width: 100%; min-width: 0; min-height: clamp(220px, 24cqi, 300px); resize: vertical; }
-.weekly-report-page-form .weekly-report-field-wide textarea { min-height: clamp(160px, 18cqi, 220px); }
+.weekly-report-page-form textarea { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: clamp(260px, 30vh, 360px); overflow-wrap: anywhere; resize: vertical; }
+.weekly-report-page-form .weekly-report-field-wide textarea { min-height: clamp(200px, 24vh, 280px); }
 .weekly-report-page-form textarea[readonly] { background: var(--muted); color: var(--muted-foreground); cursor: default; }
 .weekly-report-page-form .form-actions { grid-column: 1 / -1; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid var(--border); }
 
@@ -733,6 +738,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 }
 
 @container workspace (max-width: 520px) {
+  .weekly-report-form-content { padding: 12px; }
+  .weekly-report-page-form { padding: 14px; }
   .weekly-report-form-topbar .button { width: 100%; }
   .weekly-report-page-form textarea,
   .weekly-report-page-form .weekly-report-field-wide textarea { min-height: 170px; font-size: 16px; }

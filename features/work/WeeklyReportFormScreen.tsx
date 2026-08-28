@@ -45,7 +45,7 @@ export function WeeklyReportFormScreen({ reportName, report }: { reportName: str
   }
 
   return <>
-    <header className="topbar weekly-report-form-topbar"><div><h1>{report.areaLabel} 위클리리포트 {mode}</h1><p>{reportName} · 각 항목은 최대 2,000자까지 입력할 수 있습니다.</p></div><Link className="button secondary" href={detailHref}>상세 화면으로</Link></header>
+    <header className="topbar weekly-report-form-topbar"><div className="weekly-report-form-heading"><h1>{report.areaLabel} 위클리리포트 {mode}</h1><p>{reportName} · 각 항목은 최대 2,000자까지 입력할 수 있습니다.</p></div><Link className="button secondary weekly-report-form-back" href={detailHref}>상세 화면으로</Link></header>
     <div className="content weekly-report-form-content">
       <section className="panel form-panel weekly-report-page-form">
         <form className="weekly-report-edit-form" onSubmit={save}>
