@@ -655,9 +655,10 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .print-report header { margin-bottom: 20px; text-align: center; }
 .print-report section { margin: 18px 0; page-break-inside: avoid; }
 .print-report article { margin: 18px 0 28px; overflow: hidden; border: 1.5px solid #6b7280; border-radius: 8px; page-break-inside: avoid; }
-.print-report article h3 { margin: 0; padding: 10px 14px; border-bottom: 1px solid #9ca3af; background: #f3f4f6; font-size: 16px; print-color-adjust: exact; }
+.print-report article h3 { margin: 0; padding: 10px 14px; border-bottom: 1px solid #9ca3af; background: #f3f4f6; color: #111827; font-size: 16px; print-color-adjust: exact; }
 .print-report article table { margin: 0; }
-.print-report article table th { border-right: 1px solid #d1d5db; }
+.print-report article table th { border-right: 1px solid #d1d5db; background: #f3f4f6; color: #374151; print-color-adjust: exact; }
+.print-report article table td { background: #fff; color: #111827; print-color-adjust: exact; }
 .print-report article table th,.print-report article table td { border-bottom: 1px solid #d1d5db; }
 .print-report article table tr:last-child th,.print-report article table tr:last-child td { border-bottom: 0; }
 .print-report table { width: 100%; table-layout: fixed; }
