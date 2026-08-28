@@ -43,3 +43,37 @@ export function calendarTimePlacement(startTime: string, durationMinutes: number
     heightPx: Math.max(CALENDAR_ROW_HEIGHT, (visibleEnd - visibleStart) * pixelsPerMinute),
   };
 }
+
+export type CalendarOverlapItem = { id: string; startTime: string; durationMinutes: number };
+export type CalendarOverlapPlacement = { column: number; columnCount: number };
+
+export function calendarOverlapLayout(items: CalendarOverlapItem[]) {
+  const sorted = items.map((item) => {
+    const start = minutes(item.startTime);
+    return { ...item, start, end: start + Math.max(item.durationMinutes, CALENDAR_SLOT_MINUTES) };
+  }).sort((a, b) => a.start - b.start || b.end - a.end || a.id.localeCompare(b.id));
+  const result: Record<string, CalendarOverlapPlacement> = {};
+  let active: Array<{ end: number; column: number }> = [];
+  let clusterIds: string[] = [];
+  let clusterColumnCount = 0;
+
+  const finishCluster = () => {
+    for (const id of clusterIds) result[id].columnCount = clusterColumnCount;
+    clusterIds = [];
+    clusterColumnCount = 0;
+  };
+
+  for (const item of sorted) {
+    active = active.filter((entry) => entry.end > item.start);
+    if (active.length === 0 && clusterIds.length > 0) finishCluster();
+    const occupied = new Set(active.map((entry) => entry.column));
+    let column = 0;
+    while (occupied.has(column)) column += 1;
+    result[item.id] = { column, columnCount: 1 };
+    clusterIds.push(item.id);
+    active.push({ end: item.end, column });
+    clusterColumnCount = Math.max(clusterColumnCount, column + 1);
+  }
+  if (clusterIds.length > 0) finishCluster();
+  return result;
+}

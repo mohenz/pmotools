@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calendarDateKey, calendarDayDifference, calendarTimePlacement, calendarTodayKey } from "@/lib/domain/calendar-layout";
+import { calendarDateKey, calendarDayDifference, calendarOverlapLayout, calendarTimePlacement, calendarTodayKey } from "@/lib/domain/calendar-layout";
 
 describe("calendarTodayKey", () => {
   it("한국시간 자정 이후에는 UTC 날짜가 아닌 한국 날짜를 반환한다", () => {
@@ -32,5 +32,30 @@ describe("calendarTimePlacement", () => {
 
   it("캘린더 종료 시각을 넘어가는 높이는 화면 범위로 제한한다", () => {
     expect(calendarTimePlacement("17:30", 120)).toEqual({ slot: 1050, offsetPx: 0, heightPx: 36 });
+  });
+});
+
+describe("calendarOverlapLayout", () => {
+  it("같은 시간의 일정을 서로 다른 열에 배치한다", () => {
+    expect(calendarOverlapLayout([
+      { id: "a", startTime: "10:00", durationMinutes: 120 },
+      { id: "b", startTime: "10:00", durationMinutes: 60 },
+      { id: "c", startTime: "10:30", durationMinutes: 30 },
+    ])).toEqual({ a: { column: 0, columnCount: 3 }, b: { column: 1, columnCount: 3 }, c: { column: 2, columnCount: 3 } });
+  });
+
+  it("종료 시각과 시작 시각이 같은 일정은 열을 재사용한다", () => {
+    expect(calendarOverlapLayout([
+      { id: "a", startTime: "10:00", durationMinutes: 60 },
+      { id: "b", startTime: "11:00", durationMinutes: 60 },
+    ])).toEqual({ a: { column: 0, columnCount: 1 }, b: { column: 0, columnCount: 1 } });
+  });
+
+  it("연쇄적으로 겹치는 일정은 하나의 충돌 그룹으로 계산한다", () => {
+    expect(calendarOverlapLayout([
+      { id: "a", startTime: "10:00", durationMinutes: 60 },
+      { id: "b", startTime: "10:30", durationMinutes: 60 },
+      { id: "c", startTime: "11:00", durationMinutes: 60 },
+    ])).toEqual({ a: { column: 0, columnCount: 2 }, b: { column: 1, columnCount: 2 }, c: { column: 0, columnCount: 2 } });
   });
 });

@@ -599,6 +599,9 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .calendar-time-cell.hour { border-top: 1px solid var(--muted-foreground); }
 .calendar-time-grid .calendar-event { grid-template-columns: 38px minmax(0,1fr); padding: 2px 6px; font-size: 10px; line-height: 1.25; }
 .calendar-time-grid .calendar-event.time-grid-event { position: absolute; z-index: 1; right: 1px; left: 1px; grid-template-columns: 72px minmax(0,1fr); align-content: start; }
+.calendar-time-grid .calendar-event.time-grid-event.overlapping { grid-template-columns: minmax(0,1fr); gap: 1px; }
+.calendar-time-grid .calendar-event.time-grid-event.overlapping > strong,
+.calendar-time-grid .calendar-event.time-grid-event.overlapping > small { grid-column: 1; }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted-foreground); font-size: 11px; }
 .calendar-legend span { display: flex; align-items: center; gap: 5px; }
 .calendar-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--primary); }
