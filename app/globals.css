@@ -712,23 +712,30 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .weekly-report-edit-form label:last-of-type { grid-column: 1 / -1; }
 .weekly-report-edit-form textarea { resize: vertical; line-height: 1.6; }
 .weekly-report-edit-form .form-error,.weekly-report-edit-form .modal-actions { grid-column: 1 / -1; }
-.weekly-report-form-content { justify-items: stretch; }
-.weekly-report-page-form { width: 100%; max-width: 1100px; }
-.weekly-report-page-form .weekly-report-edit-form { grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); }
-.weekly-report-page-form textarea { width: 100%; min-width: 0; resize: vertical; }
-.weekly-report-page-form .form-actions { grid-column: 1 / -1; }
+.weekly-report-form-content { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.weekly-report-page-form { width: min(100%, 1100px); max-width: none; padding: clamp(16px, 2.4cqi, 26px); }
+.weekly-report-page-form .weekly-report-edit-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 2cqi, 20px); }
+.weekly-report-page-form .weekly-report-field { min-width: 0; }
+.weekly-report-page-form .weekly-report-field-wide { grid-column: 1 / -1; }
+.weekly-report-page-form textarea { width: 100%; min-width: 0; min-height: clamp(220px, 24cqi, 300px); resize: vertical; }
+.weekly-report-page-form .weekly-report-field-wide textarea { min-height: clamp(160px, 18cqi, 220px); }
+.weekly-report-page-form textarea[readonly] { background: var(--muted); color: var(--muted-foreground); cursor: default; }
+.weekly-report-page-form .form-actions { grid-column: 1 / -1; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid var(--border); }
 
-@container workspace (max-width: 760px) {
+@container workspace (max-width: 820px) {
   .weekly-report-form-topbar { align-items: stretch; flex-direction: column; }
   .weekly-report-form-topbar .button { align-self: flex-start; }
-  .weekly-report-page-form { padding: clamp(12px, 3vw, 16px); }
+  .weekly-report-page-form { padding: clamp(14px, 3cqi, 18px); }
   .weekly-report-page-form .weekly-report-edit-form { grid-template-columns: minmax(0, 1fr); }
-  .weekly-report-page-form .weekly-report-edit-form label { grid-column: 1; }
-  .weekly-report-page-form textarea { min-height: 180px; }
+  .weekly-report-page-form .weekly-report-field { grid-column: 1; }
+  .weekly-report-page-form textarea,
+  .weekly-report-page-form .weekly-report-field-wide textarea { min-height: 210px; }
 }
 
-@container workspace (max-width: 480px) {
+@container workspace (max-width: 520px) {
   .weekly-report-form-topbar .button { width: 100%; }
+  .weekly-report-page-form textarea,
+  .weekly-report-page-form .weekly-report-field-wide textarea { min-height: 170px; font-size: 16px; }
   .weekly-report-page-form .form-actions { align-items: stretch; flex-direction: column-reverse; }
   .weekly-report-page-form .form-actions .button { width: 100%; }
 }

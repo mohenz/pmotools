@@ -49,9 +49,9 @@ export function WeeklyReportFormScreen({ reportName, report }: { reportName: str
     <div className="content weekly-report-form-content">
       <section className="panel form-panel weekly-report-page-form">
         <form className="weekly-report-edit-form" onSubmit={save}>
-          <label>실적<textarea name="achievements" rows={10} maxLength={2000} defaultValue={report.achievements} readOnly={!report.canEdit} /></label>
-          <label>계획<textarea name="nextPlan" rows={10} maxLength={2000} defaultValue={report.nextPlan} readOnly={!report.canEdit} /></label>
-          <label>이슈 및 요청사항<textarea name="issues" rows={7} maxLength={2000} defaultValue={report.issues} readOnly={!report.canEdit} /></label>
+          <label className="weekly-report-field"><span>실적</span><textarea name="achievements" rows={10} maxLength={2000} defaultValue={report.achievements} readOnly={!report.canEdit} /></label>
+          <label className="weekly-report-field"><span>계획</span><textarea name="nextPlan" rows={10} maxLength={2000} defaultValue={report.nextPlan} readOnly={!report.canEdit} /></label>
+          <label className="weekly-report-field weekly-report-field-wide"><span>이슈 및 요청사항</span><textarea name="issues" rows={7} maxLength={2000} defaultValue={report.issues} readOnly={!report.canEdit} /></label>
           {message && <p className="form-error" role="alert">{message}</p>}
           <div className="form-actions"><Link className="button secondary" href={detailHref}>{report.canEdit ? "취소" : "돌아가기"}</Link>{report.canEdit && <button className="button primary" type="submit" disabled={pending}>{pending ? "저장 중…" : "저장"}</button>}</div>
         </form>
