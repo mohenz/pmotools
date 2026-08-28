@@ -8,7 +8,7 @@ export default async function PrintReport({ searchParams }: { searchParams: Prom
   const rows = await listWeeklyReports(projectId, week);
   const weeks = Map.groupBy(rows, (row) => row.weekId);
   return <div className="print-report-shell">
-    <WeeklyReportPrintActions autoPrint={pdf === "1"} />
+    <WeeklyReportPrintActions autoPrint={pdf === "1"} weekId={week} />
     <div className="print-report"><header><h1>위클리 리포트</h1><p>{week ? rows[0]?.weekLabel : "전체 위클리리포트"}</p></header>
       {rows.length ? Array.from(weeks.entries()).map(([weekId, reports]) => <section className="weekly-pdf-week" key={weekId}>
         <h2>{reports[0].weekLabel}</h2>

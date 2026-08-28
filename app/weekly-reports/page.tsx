@@ -20,12 +20,13 @@ export default async function WeeklyReportsPage({ searchParams }: { searchParams
         <div className="panel-head"><h2>위클리 리포트 목록</h2><span>총 {result.total}건</span></div>
         <form className="weekly-report-search" method="get"><input name="q" defaultValue={q} placeholder="리포트명 또는 프로젝트명 검색" aria-label="위클리리포트 검색" /><button className="button secondary">검색</button></form>
         <div className="table-wrap"><table>
-          <thead><tr><th>리포트명</th><th>실적 기간</th><th>계획 기간</th><th>작성 현황</th><th>상태</th><th>생성일</th></tr></thead>
+          <thead><tr><th>리포트명</th><th>실적 기간</th><th>계획 기간</th><th>작성 현황</th><th>상태</th><th>생성일</th><th>기능</th></tr></thead>
           <tbody>{result.rows.length ? result.rows.map((row) => <tr key={row.id}>
             <td className="title-cell"><Link className="table-link" href={`/weekly-reports/${row.id}`}>{row.reportName}</Link></td>
             <td>{row.actualStart} ~ {row.actualEnd}</td><td>{row.planStart} ~ {row.planEnd}</td><td>{row.completedCount} / {row.moduleCount}</td>
             <td><span className={`weekly-status ${row.status}`}>{row.status === "closed" ? "PM 확인 완료" : "작성 중"}</span></td><td>{row.createdAt.slice(0, 10)}</td>
-          </tr>) : <tr><td className="empty-table" colSpan={6}>생성된 위클리리포트가 없습니다.</td></tr>}</tbody>
+            <td><Link className="button secondary small" href={`/weekly-reports/${row.id}`}>리포트 보기</Link></td>
+          </tr>) : <tr><td className="empty-table" colSpan={7}>생성된 위클리리포트가 없습니다.</td></tr>}</tbody>
         </table></div>
         <nav className="pagination" aria-label="페이지 이동">
           {result.page > 1 ? <Link href={hrefFor(q, result.page - 1)}>이전</Link> : <span className="disabled" aria-disabled="true">이전</span>}

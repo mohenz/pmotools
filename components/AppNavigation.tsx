@@ -68,7 +68,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/management-tasks/dashboard": [{href:"/management-tasks/dashboard",label:"대시보드"},{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"}],
       "/pmo-daily": [{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/calendar",label:"일정관리"}],
       "/work-logs": [{href:"/work-logs",label:"업무일지 목록"},{href:"/work-logs/new",label:"업무일지 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"업무일지 관리"}]:[])],
-      "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"},{href:"/weekly-reports/print?pdf=1",label:"PDF 파일 생성"}],
+      "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},...(isManager?[{href:"/portfolio",label:"공정률 현황"}]:[]),{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
       "/staff-changes": [{href:"/staff-changes",label:"투입·철수 관리"},{href:"/api/v1/work-export?type=staff",label:"Excel용 CSV"}],
       "/calendar": [{href:"/calendar",label:"캘린더"},{href:"/calendar/milestones",label:"주요 이벤트"}],
