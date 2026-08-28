@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canViewWorkLog } from "./work-logs";
+import { canDeleteWorkLog, canViewWorkLog } from "./work-logs";
 
 describe("canViewWorkLog", () => {
   const base = { viewerUserId: "viewer", assigneeId: "writer", groupLeaderId: "leader", manager: false };
@@ -18,5 +18,19 @@ describe("canViewWorkLog", () => {
 
   it("rejects an unrelated user", () => {
     expect(canViewWorkLog(base)).toBe(false);
+  });
+});
+
+describe("canDeleteWorkLog", () => {
+  const base = { viewerUserId: "viewer", assigneeId: "writer", groupLeaderId: "leader", manager: false };
+
+  it("allows the author, manager, and work-group leader to delete logically", () => {
+    expect(canDeleteWorkLog({ ...base, viewerUserId: "writer" })).toBe(true);
+    expect(canDeleteWorkLog({ ...base, manager: true })).toBe(true);
+    expect(canDeleteWorkLog({ ...base, viewerUserId: "leader" })).toBe(true);
+  });
+
+  it("rejects an unrelated user", () => {
+    expect(canDeleteWorkLog(base)).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { getMemberRole, isManagerRole } from "@/lib/server/permissions";
-import { canViewWorkLog } from "@/lib/domain/work-logs";
+import { canDeleteWorkLog, canViewWorkLog } from "@/lib/domain/work-logs";
 
 const dateValue = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
@@ -20,6 +20,7 @@ const workLogBaseSchema = z.object({
 });
 export const createWorkLogSchema = workLogBaseSchema;
 export const updateWorkLogSchema = workLogBaseSchema.extend({ version: z.number().int().positive() });
+export const deleteWorkLogSchema = z.object({ version: z.number().int().positive() });
 
 export type WorkLogFilters = { q?: string; dateFrom?: string; dateTo?: string; groupId?: string; assigneeId?: string; status?: string; page?: number; pageSize?: number | "all" };
 
@@ -85,7 +86,7 @@ export async function listWorkLogs(projectId: string, filters: WorkLogFilters = 
     ...(Object.keys(workDate).length ? { workDate } : {}),
     ...(filters.groupId ? { groupId: filters.groupId } : allowedGroupIds ? { groupId: { in: allowedGroupIds } } : {}),
     ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
-    ...(statusSchema.safeParse(filters.status).success ? { status: filters.status as "IN_PROGRESS" | "COMPLETED" } : {}),
+    status: statusSchema.safeParse(filters.status).success ? filters.status as "IN_PROGRESS" | "COMPLETED" : { not: "DELETED" as const },
     ...(q ? { OR: [
       { displayId: { contains: q, mode: "insensitive" as const } },
       { wbsNumber: { contains: q, mode: "insensitive" as const } },
@@ -107,12 +108,12 @@ export async function listWorkLogs(projectId: string, filters: WorkLogFilters = 
 }
 
 export async function getWorkLogDetail(projectId: string, id: string, viewerUserId: string) {
-  const row = await getPrisma().workLog.findFirst({ where: { id, projectId }, include: { group: true, assignee: true } });
+  const row = await getPrisma().workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } }, include: { group: true, assignee: true } });
   if (!row) return null;
   const role = await getMemberRole(projectId, viewerUserId);
   const canView = canViewWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) });
   if (!canView) return null;
-  return { id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, assigneeUserId: row.assignee.userId, wbsNumber: row.wbsNumber, status: row.status, workContent: row.workContent, referenceContent: row.referenceContent, notes: row.notes, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), editable: row.assigneeId === viewerUserId };
+  return { id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, assigneeUserId: row.assignee.userId, wbsNumber: row.wbsNumber, status: row.status, workContent: row.workContent, referenceContent: row.referenceContent, notes: row.notes, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), editable: row.assigneeId === viewerUserId, deletable: canDeleteWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) }) };
 }
 
 export async function createWorkLog(projectId: string, userId: string, input: unknown) {
@@ -134,12 +135,25 @@ export async function updateWorkLog(projectId: string, userId: string, id: strin
   const data = updateWorkLogSchema.parse(input);
   await assertWorkGroup(projectId, data.groupId);
   const prisma = getPrisma();
-  const current = await prisma.workLog.findFirst({ where: { id, projectId } });
+  const current = await prisma.workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } } });
   if (!current) throw new DomainError("NOT_FOUND", "업무일지를 찾을 수 없습니다.");
   if (current.assigneeId !== userId) throw new DomainError("FORBIDDEN", "본인이 작성한 업무일지만 수정할 수 있습니다.");
   if (current.version !== data.version) throw new DomainError("VERSION_CONFLICT", "다른 화면에서 먼저 수정했습니다. 다시 확인해 주세요.");
   const row = await prisma.workLog.update({ where: { id }, data: { workDate: dateValue(data.workDate), groupId: data.groupId, wbsNumber: data.wbsNumber, status: data.status, workContent: data.workContent, referenceContent: data.referenceContent, notes: data.notes, version: { increment: 1 } } });
   await writeAuditLog(projectId, userId, "WORK_LOG_UPDATE", "work_logs", row.id, current, data);
+  return { id: row.id, version: row.version };
+}
+
+export async function deleteWorkLog(projectId: string, userId: string, id: string, input: unknown) {
+  const data = deleteWorkLogSchema.parse(input);
+  const prisma = getPrisma();
+  const current = await prisma.workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } }, include: { group: { select: { leaderId: true } } } });
+  if (!current) throw new DomainError("NOT_FOUND", "업무일지를 찾을 수 없습니다.");
+  const role = await getMemberRole(projectId, userId);
+  if (!canDeleteWorkLog({ viewerUserId: userId, assigneeId: current.assigneeId, groupLeaderId: current.group.leaderId, manager: isManagerRole(role) })) throw new DomainError("FORBIDDEN", "업무일지 삭제 권한이 없습니다.");
+  if (current.version !== data.version) throw new DomainError("VERSION_CONFLICT", "다른 화면에서 먼저 수정했습니다. 다시 확인해 주세요.");
+  const row = await prisma.workLog.update({ where: { id }, data: { status: "DELETED", version: { increment: 1 } } });
+  await writeAuditLog(projectId, userId, "WORK_LOG_DELETE", "work_logs", id, { status: current.status, version: current.version }, { status: row.status, version: row.version });
   return { id: row.id, version: row.version };
 }
 

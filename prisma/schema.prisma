@@ -266,6 +266,7 @@ model UserGroupMap {
 enum WorkLogStatus {
   IN_PROGRESS
   COMPLETED
+  DELETED
 }
 
 model WorkLog {

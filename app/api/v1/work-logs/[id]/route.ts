@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLocalContext } from "@/lib/server/context";
-import { getWorkLogDetail, updateWorkLog } from "@/lib/server/work-logs";
+import { deleteWorkLog, getWorkLogDetail, updateWorkLog } from "@/lib/server/work-logs";
 import { mutationErrorResponse } from "@/lib/server/http";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,5 +14,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params, { projectId, userId } = await getLocalContext();
   try { return NextResponse.json({ data: await updateWorkLog(projectId, userId, id, await request.json()) }); }
+  catch (error) { return mutationErrorResponse(error); }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const { id } = await context.params, { projectId, userId } = await getLocalContext();
+  try { return NextResponse.json({ data: await deleteWorkLog(projectId, userId, id, await request.json()) }); }
   catch (error) { return mutationErrorResponse(error); }
 }
