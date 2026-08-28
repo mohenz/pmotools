@@ -12,7 +12,7 @@ export default async function RequirementsPage({ searchParams }: { searchParams:
     divisionCodeId: typeof params.divisionCodeId === "string" ? params.divisionCodeId : "",
     priority: typeof params.priority === "string" ? params.priority : "",
     importance: typeof params.importance === "string" ? params.importance : "",
-    pageSize: params.pageSize === "all" ? "all" as const : typeof params.pageSize === "string" && [20, 40, 80, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20,
+    pageSize: params.pageSize === "all" ? "all" as const : typeof params.pageSize === "string" && [20, 40, 60, 80, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20,
     page: typeof params.page === "string" ? Number(params.page) || 1 : 1,
   };
   const { projectId, role } = await getLocalContext();

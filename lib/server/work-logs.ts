@@ -21,7 +21,7 @@ const workLogBaseSchema = z.object({
 export const createWorkLogSchema = workLogBaseSchema;
 export const updateWorkLogSchema = workLogBaseSchema.extend({ version: z.number().int().positive() });
 
-export type WorkLogFilters = { q?: string; dateFrom?: string; dateTo?: string; groupId?: string; assigneeId?: string; status?: string; page?: number; pageSize?: number };
+export type WorkLogFilters = { q?: string; dateFrom?: string; dateTo?: string; groupId?: string; assigneeId?: string; status?: string; page?: number; pageSize?: number | "all" };
 
 export async function hasWorkLogManagementAccess(projectId: string, userId: string) {
   const [role, ledGroup] = await Promise.all([
@@ -78,7 +78,6 @@ export async function getWorkLogIdentity(projectId: string, userId: string) {
 }
 
 export async function listWorkLogs(projectId: string, filters: WorkLogFilters = {}, allowedGroupIds?: string[]) {
-  const page = Math.max(1, filters.page || 1), pageSize = Math.min(100, Math.max(1, filters.pageSize || 30));
   const q = filters.q?.trim() ?? "";
   const workDate = { ...(filters.dateFrom ? { gte: dateValue(filters.dateFrom) } : {}), ...(filters.dateTo ? { lte: dateValue(filters.dateTo) } : {}) };
   const where = {
@@ -96,13 +95,14 @@ export async function listWorkLogs(projectId: string, filters: WorkLogFilters = 
     ] } : {}),
   };
   const prisma = getPrisma();
-  const [rows, total] = await Promise.all([
-    prisma.workLog.findMany({ where, include: { group: true, assignee: true }, orderBy: [{ workDate: "desc" }, { displayId: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
-    prisma.workLog.count({ where }),
-  ]);
+  const total = await prisma.workLog.count({ where });
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, filters.page ?? 1));
+  const rows = await prisma.workLog.findMany({ where, include: { group: true, assignee: true }, orderBy: [{ workDate: "desc" }, { displayId: "desc" }], skip: (page - 1) * pageSize, take: pageSize });
   return {
     rows: rows.map((row) => ({ id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, wbsNumber: row.wbsNumber, status: row.status, workContent: row.workContent, updatedAt: row.updatedAt.toISOString() })),
-    total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    total, page, pageSize, totalPages,
   };
 }
 

@@ -10,7 +10,7 @@ import { hasPmPmoAccess } from "@/lib/domain/job-access";
 const TOOL_ICONS: Record<string, typeof LayoutDashboard> = { portfolio: LayoutDashboard, "management-tasks": Activity, "pmo-daily": ListChecks, "work-logs": ClipboardList, calendar: CalendarDays, meetrooms: Building2, items: ShieldAlert, requirements: ClipboardList, announcements: Bell, "weekly-reports": FileText, "weekly-progress": TrendingUp, "staff-changes": Users, messages: Mail, manuals: BookOpen };
 const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks/dashboard", "pmo-daily": "/pmo-daily", "work-logs": "/work-logs", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
 const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", "management-tasks": "Monitoring", "pmo-daily": "Daily Control", "work-logs": "Daily Work Log", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages", manuals: "User Guide" };
-const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", "pmo-daily": "PMO Daily", "work-logs": "업무일지", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "매뉴얼" };
+const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", "pmo-daily": "PMO Daily", "work-logs": "업무일지", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "메뉴얼" };
 
 export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[]; canManageWorkLogs?: boolean }) {
   const pathname = usePathname();
@@ -67,7 +67,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks/dashboard": [{href:"/management-tasks/dashboard",label:"대시보드"},{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"}],
       "/pmo-daily": [{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/calendar",label:"일정관리"}],
-      "/work-logs": [{href:"/work-logs",label:"업무일지 목록"},{href:"/work-logs/new",label:"업무일지 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"업무일지 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 매뉴얼"}],
+      "/work-logs": [{href:"/work-logs",label:"업무일지 목록"},{href:"/work-logs/new",label:"업무일지 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"업무일지 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},...(isManager?[{href:"/portfolio",label:"공정률 현황"}]:[]),{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
       "/staff-changes": [{href:"/staff-changes",label:"투입·철수 관리"},{href:"/api/v1/work-export?type=staff",label:"Excel용 CSV"}],
@@ -76,7 +76,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/messages": [{href:"/messages",label:"초청함"}],
       "/requirements": [{href:"/requirements",label:"요구사항정의서"},{href:"/requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/requirements/changes",label:"요구사항변경관리"}]:[])],
       "/announcements": [{href:"/announcements",label:"공지사항 조회"},...(isManager?[{href:"/announcements/new",label:"공지사항 등록"}]:[])],
-      "/manuals": [{href:"/manuals",label:"전체 매뉴얼"},{href:"/manuals/pmo-daily",label:"PMO Daily"},{href:"/manuals/work-logs",label:"업무일지"},{href:"/manuals/weekly-report",label:"위클리리포트"},{href:"/manuals/announcements",label:"공지사항"},{href:"/manuals/calendar",label:"캘린더"},{href:"/manuals/meeting-rooms",label:"회의실"}],
+      "/manuals": [{href:"/manuals",label:"전체 메뉴얼"},{href:"/manuals/pmo-daily",label:"PMO Daily"},{href:"/manuals/work-logs",label:"업무일지"},{href:"/manuals/weekly-report",label:"위클리리포트"},{href:"/manuals/announcements",label:"공지사항"},{href:"/manuals/calendar",label:"캘린더"},{href:"/manuals/meeting-rooms",label:"회의실"}],
     };
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }

@@ -61,7 +61,7 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
           {filters.divisionCodeId && <input type="hidden" name="divisionCodeId" value={filters.divisionCodeId} />}
           {filters.priority && <input type="hidden" name="priority" value={filters.priority} />}
           {filters.importance && <input type="hidden" name="importance" value={filters.importance} />}
-          <label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="20">20개</option><option value="40">40개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label>
+          <label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="20">20개</option><option value="40">40개</option><option value="60">60개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label>
           <button className="button secondary" type="submit">적용</button>
         </form>
         <div className="page-links">

@@ -16,7 +16,7 @@ SET "label" = CASE "menuKey"
   WHEN 'weekly-progress' THEN '주간실적'
   WHEN 'staff-changes' THEN '인력변동'
   WHEN 'messages' THEN '초청'
-  WHEN 'manuals' THEN '매뉴얼'
+  WHEN 'manuals' THEN '메뉴얼'
   ELSE "menuKey"
 END;
 

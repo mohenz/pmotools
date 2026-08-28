@@ -10,7 +10,8 @@ export default async function WorkLogManagementPage({ searchParams }: { searchPa
   const { projectId, userId } = await getLocalContext();
   const params = await searchParams;
   const value = (key: string) => typeof params[key] === "string" ? params[key] as string : "";
-  const filters = { q: value("q"), dateFrom: value("dateFrom"), dateTo: value("dateTo"), groupId: value("groupId"), assigneeId: value("assigneeId"), status: value("status"), page: Number(value("page")) || 1 };
+  const pageSize = value("pageSize") === "all" ? "all" as const : [20, 40, 60, 80, 100].includes(Number(value("pageSize"))) ? Number(value("pageSize")) : 20;
+  const filters = { q: value("q"), dateFrom: value("dateFrom"), dateTo: value("dateTo"), groupId: value("groupId"), assigneeId: value("assigneeId"), status: value("status"), page: Number(value("page")) || 1, pageSize };
   try {
     const data = await listManagedWorkLogs(projectId, userId, filters);
     return <WorkLogManagementScreen {...data} filters={filters} />;
