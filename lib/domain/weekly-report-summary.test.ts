@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSummaryPrompt, computeSourceHash, hasSummarizableContent, parseSummarySections, type WeeklySummaryModule } from "@/lib/domain/weekly-report-summary";
+import { buildSummaryPrompt, computeSourceHash, hasSummarizableContent, normalizeSummaryFormatting, parseSummarySections, type WeeklySummaryModule } from "@/lib/domain/weekly-report-summary";
 
 const filled: WeeklySummaryModule = { areaLabel: "개발", achievements: "API 구현 완료", nextPlan: "테스트 작성", issues: "일정 지연 우려", decisions: "" };
 const empty: WeeklySummaryModule = { areaLabel: "디자인", achievements: "", nextPlan: "", issues: "", decisions: "" };
@@ -53,5 +53,17 @@ describe("parseSummarySections", () => {
 
   it("알려진 섹션 제목이 없으면 전체를 하나의 섹션으로 반환한다", () => {
     expect(parseSummarySections("형식을 벗어난 요약 텍스트")).toEqual([{ title: "요약", content: "형식을 벗어난 요약 텍스트" }]);
+  });
+});
+
+describe("normalizeSummaryFormatting", () => {
+  it("쉼표와 공백으로 이어진 불릿을 줄 단위로 분리한다", () => {
+    expect(normalizeSummaryFormatting("이번 주 핵심 성과 • API 완료, • 화면 완료; • 테스트 완료")).toBe(
+      "이번 주 핵심 성과\n• API 완료\n• 화면 완료\n• 테스트 완료",
+    );
+  });
+
+  it("불릿 내용 안의 일반 쉼표는 유지한다", () => {
+    expect(normalizeSummaryFormatting("• API, 화면 개발 완료\n• 테스트 완료")).toBe("• API, 화면 개발 완료\n• 테스트 완료");
   });
 });

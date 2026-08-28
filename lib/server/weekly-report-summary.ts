@@ -5,7 +5,7 @@ import { DomainError } from "@/lib/server/errors";
 import { assertSuperAdmin } from "@/lib/server/permissions";
 import {
   SUMMARY_MODEL, SUMMARY_SYSTEM_PROMPT,
-  buildSummaryPrompt, computeSourceHash, hasSummarizableContent,
+  buildSummaryPrompt, computeSourceHash, hasSummarizableContent, normalizeSummaryFormatting,
   type WeeklySummaryModule,
 } from "@/lib/domain/weekly-report-summary";
 
@@ -61,9 +61,10 @@ export async function generateWeeklySummary(projectId: string, userId: string, w
     contents: prompt,
     config: { systemInstruction: SUMMARY_SYSTEM_PROMPT, maxOutputTokens: 16384 },
   });
-  const summaryText = response.text?.trim();
-  if (!summaryText) throw new DomainError("INVALID_STATE", "요약을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  const generatedText = response.text?.trim();
+  if (!generatedText) throw new DomainError("INVALID_STATE", "요약을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   if (response.candidates?.[0]?.finishReason === "MAX_TOKENS") throw new DomainError("INVALID_STATE", "요약이 응답 길이 제한으로 중간에 잘렸습니다. 다시 시도해 주세요.");
+  const summaryText = normalizeSummaryFormatting(generatedText);
 
   const prisma = getPrisma();
   const existing = await prisma.weeklySummary.findUnique({ where: { weekId } });

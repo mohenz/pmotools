@@ -16,9 +16,20 @@ export const SUMMARY_SYSTEM_PROMPT = `당신은 프로젝트 PM을 보조하는 
       "PG사에 문의하고 있습니다." (X) → "PG사에 문의 중" (O)
       "타임아웃 값을 조정하기로 결정했습니다." (X) → "타임아웃 값 조정 결정" (O)
 - 각 섹션 3~6개 불릿, 불릿마다 개조식 한 단락으로 원문의 구체적인 내용을 충분히 담으세요. 전체 글자 수는 제한하지 말고, 원문에 담긴 내용의 밀도에 맞춰 빠짐없이 반영하세요.
-- 마크다운 기호(**, #, - 등)를 쓰지 말고 일반 텍스트로 작성하세요. 섹션 제목 뒤에는 줄바꿈만 넣고, 불릿은 "• "로 시작하세요.`;
+- 마크다운 기호(**, #, - 등)를 쓰지 말고 일반 텍스트로 작성하세요. 섹션 제목 뒤에는 줄바꿈만 넣고, 불릿은 "• "로 시작하세요.
+- 각 불릿은 반드시 독립된 한 줄에 작성하세요. 여러 불릿을 쉼표(,), 세미콜론(;) 또는 공백으로 이어 쓰지 말고, 불릿 하나가 끝날 때마다 실제 줄바꿈을 넣으세요.`;
 
 export type SummarySection = { title: string; content: string };
+
+export function normalizeSummaryFormatting(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]*[,，;；][ \t]*(?=•)/g, "\n")
+    .replace(/([^\n])[ \t]+(?=•[ \t])/g, "$1\n")
+    .replace(/\n[ \t]+(?=•[ \t])/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 export function parseSummarySections(text: string): SummarySection[] {
   const escaped = SUMMARY_SECTION_TITLES.map((title) => title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
