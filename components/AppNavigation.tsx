@@ -81,6 +81,8 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }
 
+  if (currentTool?.key !== "items") return null;
+
   const tabs = [
     { href: "/items/dashboard", label: "대시보드", active: pathname === "/items/dashboard" },
     { href: "/items/new", label: "이슈 등록", active: pathname === "/items/new" },
