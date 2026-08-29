@@ -1,6 +1,7 @@
 export const DEFAULT_MENU_ITEMS = [
   { key: "portfolio", label: "통합 현황" },
   { key: "management-tasks", label: "관리업무" },
+  { key: "wbs", label: "WBS" },
   { key: "pmo-daily", label: "PMO Daily" },
   { key: "work-logs", label: "업무일지" },
   { key: "calendar", label: "캘린더" },

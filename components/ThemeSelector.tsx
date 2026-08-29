@@ -22,20 +22,24 @@ function applyTheme(preference: ThemePreference) {
   document.documentElement.style.colorScheme = resolved;
 }
 
+// 저장된 선택이 없을 때의 기본값. "시스템"으로 두면 OS의 다크모드 자동전환 스케줄을 따라가며
+// 사용자가 고른 적 없는데도 화면이 갑자기 바뀌는 것처럼 보이는 문제가 있어, 명시적으로 고정한다.
+const DEFAULT_THEME: ThemePreference = "light";
+
 export function ThemeSelector() {
-  const [preference, setPreference] = useState<ThemePreference>("system");
+  const [preference, setPreference] = useState<ThemePreference>(DEFAULT_THEME);
   const [resolved, setResolved] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     const saved = localStorage.getItem("pmo-control-theme");
-    const initial = saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+    const initial = saved === "light" || saved === "dark" || saved === "system" ? saved : DEFAULT_THEME;
     setPreference(initial);
     applyTheme(initial);
     setResolved(resolveTheme(initial));
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const followSystem = () => {
-      if ((localStorage.getItem("pmo-control-theme") ?? "system") === "system") {
+      if ((localStorage.getItem("pmo-control-theme") ?? DEFAULT_THEME) === "system") {
         applyTheme("system");
         setResolved(resolveTheme("system"));
       }

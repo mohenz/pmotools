@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     listDashboardAnnouncements(session.user.projectId, session.user.id),
     hasWorkLogManagementAccess(session.user.projectId, session.user.id),
   ]) : [[], [], false];
-  const themeScript = `(function(){try{var p=localStorage.getItem('pmo-control-theme')||'system';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.style.colorScheme=d}catch(e){}})()`;
+  const themeScript = `(function(){try{var p=localStorage.getItem('pmo-control-theme')||'light';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.style.colorScheme=d}catch(e){}})()`;
   if (!session?.user) {
     return (
       <html lang="ko" suppressHydrationWarning>

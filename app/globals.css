@@ -291,7 +291,7 @@ td.mono, td[data-numeric] { text-align: right; }
 .work-log-content-cell { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
 .work-log-detail-table th { width: 150px; }
 .work-log-detail-table td.mono { text-align: left; }
-.work-log-detail-actions { display: flex; justify-content: center; gap: 8px; }
+.work-log-detail-actions, .wbs-detail-actions { display: flex; justify-content: center; gap: 8px; }
 .work-log-fixed-identity { display: flex; flex-wrap: wrap; gap: 12px 36px; }
 .work-log-fixed-identity > div { display: grid; gap: 2px; }.work-log-fixed-identity span { color: var(--muted-foreground); font-size: 11px; }.work-log-fixed-identity strong { font-size: 14px; }
 .user-work-group-select { width: 180px; min-width: 180px; }
@@ -377,6 +377,11 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .detail-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .detail-summary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 18px; margin: 0; }
 .detail-summary dl > div:first-child { grid-column: 1 / -1; }
+.detail-summary dl.wbs-field-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px 14px; }
+.detail-summary dl.wbs-field-grid > div:first-child { grid-column: auto; }
+.wbs-detail-actions { flex-wrap: wrap; }
+.wbs-detail-main { gap: 12px; }
+.wbs-detail-main .panel-head { margin-bottom: 10px; }
 .detail-summary dt { margin-bottom: 5px; color: var(--muted-foreground); font-size: 12px; font-weight: 600; }
 .detail-summary dd { margin: 0; }
 .management-task-summary-table { table-layout: fixed; white-space: normal; }
@@ -466,6 +471,17 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .inline-create label { display: grid; gap: 5px; color: var(--foreground); font-size: 12px; font-weight: 500; }
 .inline-create .button { align-self: end; }
 .inline-create .form-error { grid-column: 1 / -1; }
+
+/* 사용자 등록 폼(.inline-create)과 같은 "라벨 위 + 입력칸 한 줄 정렬" 형태 — 필드 수가 화면마다 달라 고정 폭 대신 flex-wrap으로 감싼다. */
+.wbs-inline-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; margin-bottom: 12px; }
+.wbs-inline-form label { display: grid; flex: 1 1 130px; gap: 5px; min-width: 110px; color: var(--foreground); font-size: 12px; font-weight: 500; }
+.wbs-inline-form label.wide { flex-basis: 100%; }
+.wbs-inline-form .button { flex: 0 0 auto; align-self: end; }
+.wbs-inline-form .toggle { flex: 0 0 auto; align-self: center; }
+.wbs-track-controls { display: flex; align-items: center; gap: 6px; }
+.wbs-track-controls input[type="checkbox"] { width: 15px; min-height: 15px; flex: 0 0 auto; }
+.wbs-track-controls input[type="number"] { width: 100%; min-width: 0; }
+.wbs-inline-form.nowrap label { flex: 0 0 auto; min-width: 150px; }
 .work-form { display: grid; gap: 12px; }
 .work-form > label, .work-form .form-grid > label { display: grid; gap: 6px; color: var(--foreground); font-size: 14px; font-weight: 500; }
 .work-form .button { justify-self: start; }
