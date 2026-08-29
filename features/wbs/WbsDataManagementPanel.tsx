@@ -64,18 +64,23 @@ export function WbsDataManagementPanel() {
         {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건, 기존 데이터 삭제됨)`}</button>}
       </div>
       {uploadMessage && <p className={uploadMessage.includes("반영") ? "form-success" : "form-error"} role="status">{uploadMessage}</p>}
-      {report && <div className="table-wrap">
-        <table>
-          <thead><tr><th>행</th><th>Task</th><th>이름</th><th>오류</th><th>경고</th></tr></thead>
-          <tbody>
-            {report.rows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}>
-              <td>{row.row}</td><td className="mono">{row.code}</td><td>{row.name}</td>
-              <td>{row.errors.join(" / ") || "정상"}</td><td>{row.warnings.join(" / ") || "-"}</td>
-            </tr>)}
-            {!report.rows.length && <tr><td colSpan={5} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
-          </tbody>
-        </table>
-      </div>}
+      {report && (() => {
+        const issueRows = report.rows.filter((row) => row.errors.length || row.warnings.length);
+        return <div className="table-wrap">
+          <p className="table-wrap-note">전체 {report.rows.length}행 중 오류·경고가 있는 {issueRows.length}행만 표시합니다.</p>
+          <table>
+            <thead><tr><th>행</th><th>Task</th><th>이름</th><th>오류</th><th>경고</th></tr></thead>
+            <tbody>
+              {issueRows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}>
+                <td>{row.row}</td><td className="mono">{row.code}</td><td>{row.name}</td>
+                <td>{row.errors.join(" / ") || "-"}</td><td>{row.warnings.join(" / ") || "-"}</td>
+              </tr>)}
+              {!report.rows.length && <tr><td colSpan={5} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
+              {report.rows.length > 0 && !issueRows.length && <tr><td colSpan={5} className="empty">오류·경고 없이 전체 {report.rows.length}행 정상입니다.</td></tr>}
+            </tbody>
+          </table>
+        </div>;
+      })()}
     </section>
 
     <section className="danger-zone">

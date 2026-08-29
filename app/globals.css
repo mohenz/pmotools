@@ -262,6 +262,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .category-row:hover > span { color: var(--primary); font-weight: 600; }
 
 .table-wrap { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.table-wrap-note { margin: 0 0 8px; color: var(--muted-foreground); font-size: 12px; }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 th { padding: 8px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 12px; font-weight: 600; letter-spacing: .02em; text-align: left; }
 td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
