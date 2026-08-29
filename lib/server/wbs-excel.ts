@@ -5,7 +5,7 @@ import { codeFromPath, levelOf, pathFromCode, sortKeyFromCode } from "@/lib/doma
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { wbsTag } from "@/lib/server/cache-tags";
-import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns } from "@/lib/server/wbs";
+import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns, listWbsWorkGroups } from "@/lib/server/wbs";
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 const HEADER_LIST: readonly string[] = WBS_EXCEL_HEADERS;
@@ -56,7 +56,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
   const sheet = workbook.worksheets.find((candidate) => String(candidate.getRow(1).getCell(1).value ?? "").trim() === WBS_EXCEL_HEADERS[0]) ?? workbook.worksheets[0];
   const prisma = getPrisma();
   const [groups, members] = await Promise.all([
-    prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", isActive: true } }),
+    listWbsWorkGroups(projectId),
     prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: true } }),
   ]);
   const groupsByLabel = new Map(groups.map((group) => [group.label, group]));

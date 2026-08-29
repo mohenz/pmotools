@@ -250,8 +250,6 @@ model Groups {
   managementTasks ManagementTask[]
   pmoDelayedTasks PmoDelayedTask[]
   workLogs        WorkLog[]
-  wbsItems        WbsItem[]
-  wbsAssignments  WbsAssignment[]
 
   @@unique([projectId, groupType, code])
   @@index([leaderId])
@@ -356,6 +354,8 @@ model CommonCode {
   itemsByEscalation      Item[]          @relation("ItemEscalation")
   requirementsByDivision Requirement[]   @relation("RequirementDivision")
   requirementsByCategory Requirement[]   @relation("RequirementCategory")
+  wbsItems               WbsItem[]
+  wbsAssignments         WbsAssignment[]
 
   @@unique([groupId, code])
   @@map("common_codes")
@@ -1295,7 +1295,7 @@ model WbsItem {
   parent      WbsItem?        @relation("WbsTree", fields: [parentId], references: [id])
   children    WbsItem[]       @relation("WbsTree")
   owner       User?           @relation("WbsItemOwner", fields: [ownerUserId], references: [id])
-  group       Groups?         @relation(fields: [groupId], references: [id])
+  group       CommonCode?     @relation(fields: [groupId], references: [id])
   creator     User            @relation("WbsItemCreator", fields: [createdBy], references: [id])
   events      WbsItemEvent[]
   assignments WbsAssignment[]
@@ -1335,7 +1335,8 @@ model WbsItemEvent {
 }
 
 // 엑셀 Y~AH(역할별 진척등록권한) + AI~AR(역할별 진도율)을 역할(행)로 정규화한 것.
-// 역할 목록은 하드코딩하지 않고 프로젝트의 Groups(WORK_MODULE)를 그대로 쓴다 — 역할이 늘어도 스키마 변경이 필요 없다.
+// 역할(Track) 목록은 다른 모듈(이슈·업무일지 등)과 공유하는 Groups(WORK_MODULE)가 아니라, WBS 전용 공통코드
+// 그룹("WBS_WORK_GROUP")의 CommonCode를 쓴다 — 다른 모듈의 업무그룹 구성과 무관하게 WBS 고유 10개 역할을 유지한다.
 model WbsAssignment {
   id              String   @id @default(uuid())
   wbsItemId       String
@@ -1344,9 +1345,9 @@ model WbsAssignment {
   updatedBy       String
   updatedAt       DateTime @updatedAt
 
-  wbsItem WbsItem @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
-  group   Groups  @relation(fields: [groupId], references: [id])
-  updater User    @relation("WbsAssignmentUpdater", fields: [updatedBy], references: [id])
+  wbsItem WbsItem    @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  group   CommonCode @relation(fields: [groupId], references: [id])
+  updater User       @relation("WbsAssignmentUpdater", fields: [updatedBy], references: [id])
 
   @@unique([wbsItemId, groupId])
   @@map("wbs_assignments")

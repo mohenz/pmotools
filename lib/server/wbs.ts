@@ -5,10 +5,10 @@ import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
 import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, workingDays } from "@/lib/domain/wbs";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
-import { assertWorkModuleGroup } from "@/lib/server/items";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import { wbsTag } from "@/lib/server/cache-tags";
+import type { CommonCode } from "@/lib/server/common-codes";
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 export { DomainError };
@@ -61,6 +61,23 @@ export type WbsDeliverableRow = { note: string; isOfficial: boolean; fileUrl: st
 // 엑셀 Y1~AH1(진척등록권한) / AI1~AR1(진도율) 원본 10개 역할 헤더 — 순서·이름 그대로.
 export const WBS_EXCEL_ROLE_NAMES = ["PMO/IM", "PM", "업무공통", "BO 기획", "FO 기획", "디자인", "퍼블리싱", "개발", "시스템(TECH)", "테스터"] as const;
 export type WbsRoleColumn = { role: string; hasPermission: boolean; progressPercent: number };
+
+// WBS의 R&R(지원)(모듈)·역할별 진척등록권한 Track은 다른 모듈(이슈·업무일지 등)이 공유하는 업무그룹(Groups/WORK_MODULE)이
+// 아니라, 이 공통코드 그룹("WBS_WORK_GROUP") 하나만 쓴다 — 설정 → 공통코드 화면에서 WBS 전용으로 관리한다.
+export const WBS_WORK_GROUP_CODE = "WBS_WORK_GROUP";
+
+export async function listWbsWorkGroups(projectId: string): Promise<CommonCode[]> {
+  const codes = await getPrisma().commonCode.findMany({ where: { projectId, group: { code: WBS_WORK_GROUP_CODE } }, include: { group: true }, orderBy: { sortOrder: "asc" } });
+  return codes
+    .filter((code) => code.isActive && code.group.isActive)
+    .map((code) => ({ id: code.id, groupId: code.groupId, groupCode: code.groupCode, groupLabel: code.group.label, code: code.code, label: code.label, sortOrder: code.sortOrder, isActive: code.isActive, minScore: code.minScore }));
+}
+
+async function assertWbsWorkGroupCode(projectId: string, codeId: string) {
+  const code = await getPrisma().commonCode.findUnique({ where: { id: codeId }, include: { group: true } });
+  if (!code || code.projectId !== projectId || code.group.code !== WBS_WORK_GROUP_CODE || !code.isActive) throw new DomainError("INVALID_CODE", "선택한 Track을 사용할 수 없습니다.");
+  return code;
+}
 
 // 엑셀 원본 A~AU 47개 컬럼과 순서·이름 — 목록 화면과 엑셀 다운로드/업로드가 이 하나만 공유한다.
 export const WBS_EXCEL_HEADERS = [
@@ -222,7 +239,7 @@ export async function getWbsItemDetail(projectId: string, id: string) {
     item.parentId ? prisma.wbsItem.findUnique({ where: { id: item.parentId } }) : Promise.resolve(null),
     prisma.wbsItem.findMany({ where: { projectId, parentId: id, archivedAt: null }, orderBy: { path: "asc" } }),
     rootPath === item.path ? Promise.resolve(item) : prisma.wbsItem.findFirst({ where: { projectId, path: rootPath } }),
-    prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", isActive: true }, orderBy: { sortOrder: "asc" } }),
+    listWbsWorkGroups(projectId),
     loadHolidaySet(projectId),
   ]);
   const assignmentByGroup = new Map(item.assignments.map((a) => [a.groupId, a]));
@@ -258,7 +275,7 @@ async function assertOwner(projectId: string, userId: string | null | undefined)
 export async function createWbsItem(projectId: string, userId: string, input: unknown) {
   const data = createWbsItemSchema.parse(input), requestId = crypto.randomUUID();
   await Promise.all([
-    data.groupId ? assertWorkModuleGroup(projectId, data.groupId) : Promise.resolve(),
+    data.groupId ? assertWbsWorkGroupCode(projectId, data.groupId) : Promise.resolve(),
     assertOwner(projectId, data.ownerUserId),
   ]);
   const prisma = getPrisma();
@@ -290,7 +307,7 @@ export async function createWbsItem(projectId: string, userId: string, input: un
 export async function updateWbsItem(projectId: string, userId: string, id: string, input: unknown) {
   const data = updateWbsItemSchema.parse(input), requestId = crypto.randomUUID();
   await Promise.all([
-    data.groupId ? assertWorkModuleGroup(projectId, data.groupId) : Promise.resolve(),
+    data.groupId ? assertWbsWorkGroupCode(projectId, data.groupId) : Promise.resolve(),
     assertOwner(projectId, data.ownerUserId),
   ]);
   const prisma = getPrisma();
@@ -379,7 +396,7 @@ export async function resetWbsData(projectId: string, userId: string) {
 export async function updateWbsAssignments(projectId: string, userId: string, id: string, input: unknown) {
   const data = updateWbsAssignmentsSchema.parse(input), requestId = crypto.randomUUID();
   const groupIds = [...new Set(data.assignments.map((a) => a.groupId))];
-  await Promise.all(groupIds.map((groupId) => assertWorkModuleGroup(projectId, groupId)));
+  await Promise.all(groupIds.map((groupId) => assertWbsWorkGroupCode(projectId, groupId)));
   const prisma = getPrisma();
   const actorName = await actorNameOf(userId);
   const { version } = await prisma.$transaction(async (tx) => {
