@@ -276,6 +276,18 @@ tbody tr.high-risk-row:hover { background: color-mix(in oklch, var(--destructive
 .mono { font-family: var(--font-mono); font-size: 13px; }
 td.mono, td[data-numeric] { text-align: right; }
 .title-cell { max-width: 320px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
+/* WBS 목록 — wbs_level~Task Description(1~7번째 컬럼) 열고정, 나머지 40개 컬럼만 가로 스크롤 */
+.wbs-table-wrap th:nth-child(-n+7), .wbs-table-wrap td:nth-child(-n+7) { position: sticky; overflow: hidden; text-overflow: ellipsis; background: var(--card); }
+.wbs-table-wrap th:nth-child(-n+7) { z-index: 2; }
+.wbs-table-wrap td:nth-child(-n+7) { z-index: 1; }
+.wbs-table-wrap tbody tr:hover td:nth-child(-n+7) { background: var(--accent); }
+.wbs-table-wrap th:nth-child(1), .wbs-table-wrap td:nth-child(1) { left: 0; width: 44px; min-width: 44px; }
+.wbs-table-wrap th:nth-child(2), .wbs-table-wrap td:nth-child(2) { left: 44px; width: 84px; min-width: 84px; }
+.wbs-table-wrap th:nth-child(3), .wbs-table-wrap td:nth-child(3) { left: 128px; width: 92px; min-width: 92px; }
+.wbs-table-wrap th:nth-child(4), .wbs-table-wrap td:nth-child(4) { left: 220px; width: 84px; min-width: 84px; }
+.wbs-table-wrap th:nth-child(5), .wbs-table-wrap td:nth-child(5) { left: 304px; width: 64px; min-width: 64px; }
+.wbs-table-wrap th:nth-child(6), .wbs-table-wrap td:nth-child(6) { left: 368px; width: 64px; min-width: 64px; }
+.wbs-table-wrap th:nth-child(7), .wbs-table-wrap td:nth-child(7) { left: 432px; width: 220px; min-width: 220px; max-width: 220px; box-shadow: 2px 0 4px -2px rgb(0 0 0 / 30%); }
 .table-link:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
 .management-task-id { width: 1%; }
 .management-task-score { font-weight: 700; }

@@ -96,7 +96,7 @@ function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, st
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, parentId: row.parentId, path: row.path, level: row.level, code: codeFromPath(row.path), stage,
     name: row.name, description: row.description, configStatus: row.configStatus,
-    ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? null,
+    ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? (row.ownerNameRaw || null),
     groupId: row.groupId, groupLabel: row.group?.label ?? null, groupCode: row.group?.code ?? null,
     startDate: dateStr(start), dueDate: dateStr(due),
     status: row.status, weight: row.weight ? Number(row.weight) : null,

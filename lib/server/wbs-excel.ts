@@ -40,7 +40,7 @@ export type WbsImportReport = { rows: WbsImportRowResult[]; validCount: number; 
 
 type ParsedWbsRow = {
   path: string; level: number; name: string; configStatus: string;
-  ownerUserId: string | null; groupId: string | null;
+  ownerUserId: string | null; ownerNameRaw: string; groupId: string | null;
   startDate: string | null; dueDate: string | null; weight: number | null;
   deliverable: { note: string; isOfficial: boolean; fileUrl: string; templateUrl: string; reviewerUserId: string | null; reviewedAt: string | null } | null;
   assignments: { groupId: string; progressPercent: number }[];
@@ -77,7 +77,28 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
   const rows: WbsImportRowResult[] = [];
   const parsed: ParsedWbsRow[] = [];
   const seenPaths = new Set<string>();
-  const cellAt = (row: ExcelJS.Row, label: string) => String(row.getCell(col(label)).value ?? "").trim();
+  // ExcelJS는 하이퍼링크 셀을 {text,hyperlink}, 리치텍스트를 {richText:[...]}, 수식을 {formula,result}로 반환한다.
+  // String(value)로 바로 문자열화하면 이런 객체가 "[object Object]"로 저장되므로 실제 텍스트를 꺼내 쓴다.
+  const cellText = (value: ExcelJS.CellValue): string => {
+    if (value == null) return "";
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "object") {
+      if ("richText" in value && Array.isArray(value.richText)) return value.richText.map((r) => r.text).join("");
+      if ("text" in value) { const text = String(value.text ?? "").trim(); return text || ("hyperlink" in value ? String(value.hyperlink ?? "") : ""); }
+      if ("result" in value) return cellText(value.result as ExcelJS.CellValue);
+      if ("hyperlink" in value) return String(value.hyperlink ?? "");
+      return "";
+    }
+    return String(value);
+  };
+  // 원본 엑셀은 우리 스키마(WBS_EXCEL_HEADERS)에 없는 빈 스페이서 열이 중간에 섞여 있을 수 있어(예: DueDate와
+  // Deliverables 사이) 컬럼 순번 고정 매핑(col())은 위험하다 — 파일 자체의 1행 헤더 텍스트로 열 위치를 찾는다.
+  // 리치텍스트로 줄바꿈이 섞여 들어오는 헤더도 있어 공백을 전부 제거하고 비교한다.
+  const norm = (s: string) => s.replace(/\s+/g, "");
+  const headerIndexByText = new Map<string, number>();
+  sheet.getRow(1).eachCell((cell, idx) => { const text = norm(cellText(cell.value)); if (text) headerIndexByText.set(text, idx); });
+  const col = (label: string) => headerIndexByText.get(norm(label)) ?? (HEADER_LIST.indexOf(label) + 1);
+  const cellAt = (row: ExcelJS.Row, label: string) => cellText(row.getCell(col(label)).value).trim();
 
   const formatUtcDate = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
   // 엑셀에서 직접 편집한 파일은 셀 값이 "YYYY-MM-DD" 텍스트가 아니라 실제 Date, 엑셀 일련번호(숫자),
@@ -165,7 +186,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     rows.push({ row: rowNumber, code, name: name || "(이름 없음)", errors, warnings });
     if (!errors.length && path) parsed.push({
       path, level: levelOf(path), name, configStatus: cellAt(row, "Confing Status"),
-      ownerUserId, groupId, startDate: startDate || null, dueDate: dueDate || null, weight,
+      ownerUserId, ownerNameRaw: ownerName, groupId, startDate: startDate || null, dueDate: dueDate || null, weight,
       deliverable: hasDeliverable ? { note, isOfficial, fileUrl, templateUrl, reviewerUserId, reviewedAt: reviewedAt || null } : null,
       assignments,
     });
@@ -202,7 +223,7 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
     itemRows.push({
       id, displayId: `WBS-${year}-${String(index + 1).padStart(6, "0")}`, projectId, parentId,
       path: row.path, level: row.level, name: row.name, description: "",
-      ownerUserId: row.ownerUserId, groupId: row.groupId,
+      ownerUserId: row.ownerUserId, ownerNameRaw: row.ownerUserId ? "" : row.ownerNameRaw, groupId: row.groupId,
       startDate: row.startDate ? new Date(row.startDate) : null, dueDate: row.dueDate ? new Date(row.dueDate) : null,
       status: "not_started", configStatus: row.configStatus, weight: row.weight ?? null, createdBy: userId,
     });
