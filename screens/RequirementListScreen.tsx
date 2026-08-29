@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClickableTableRow } from "@/components/ClickableTableRow";
 import { acceptanceLabels, acceptanceLabel } from "@/lib/domain/requirements";
 import { probabilities, probabilityLabel } from "@/lib/domain/items";
 import type { RequirementRow } from "@/lib/server/requirements";
@@ -39,7 +40,7 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
       <section className="panel compact">
         {result.requirements.length ? <div className="table-wrap"><table>
           <thead><tr><th>요구사항 ID</th><th>요구사항명</th><th>업무분류</th><th>담당자</th><th>요구사항구분</th><th>요청부서</th><th>우선순위</th><th>중요도</th><th>수용여부</th><th>확정후추가</th><th>변경관리</th><th>최종갱신</th></tr></thead>
-          <tbody>{result.requirements.map((row) => <tr key={row.id}>
+          <tbody>{result.requirements.map((row) => <ClickableTableRow href={`/requirements/${row.id}`} ariaLabel={`${row.requirementId || row.title} 요구사항 상세보기`} key={row.id}>
             <td className="mono requirement-id"><Link className="table-link" href={`/requirements/${row.id}`}>{row.requirementId || "-"}</Link></td>
             <td className="title-cell"><Link className="table-link" href={`/requirements/${row.id}`}>{row.title}</Link></td>
             <td>{[row.businessMajorCategory, row.businessMiddleCategory, row.businessMinorCategory].filter(Boolean).join(" › ") || "-"}</td>
@@ -52,7 +53,7 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
             <td>{row.addedAfterConfirmation === null ? "-" : row.addedAfterConfirmation ? "예" : "아니요"}</td>
             <td>{row.changeCount > 0 ? <span className="badge risk">{row.changeCount}건</span> : "-"}</td>
             <td>{formatDate(row.updatedAt)}</td>
-          </tr>)}</tbody>
+          </ClickableTableRow>)}</tbody>
         </table></div> : <div className="empty">등록된 요구사항이 없습니다.</div>}
       </section>
       {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동">

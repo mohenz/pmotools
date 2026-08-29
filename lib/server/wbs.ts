@@ -125,7 +125,11 @@ export async function listWbsItems(projectId: string): Promise<WbsItemRow[]> {
   return rows.map((row) => toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null));
 }
 
-export type WbsListFilters = { page?: number; pageSize?: number | "all"; q?: string; assignee?: string };
+export type WbsListFilters = {
+  page?: number; pageSize?: number | "all"; q?: string; assignee?: string;
+  startDate?: string; dueDate?: string; groupLabel?: string; leaf?: "" | "y" | "n";
+  plannedMin?: number; actualMin?: number; progressMin?: number;
+};
 
 // 엑셀 원본 47개 컬럼(A~AU)을 그대로 담아 반환한다 — 목록 화면의 전체 컬럼 보기, 향후 엑셀 다운로드가 그대로 쓸 형태.
 // 업무일지 목록(listWorkLogs)과 동일한 page/pageSize 페이징 규약을 쓴다. Stage·isLeaf·sequenceNo·정렬SEQ는 트리 전체 기준값이라
@@ -153,10 +157,22 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   });
   const q = filters.q?.trim().toLowerCase() ?? "";
   const assignee = filters.assignee?.trim().toLowerCase() ?? "";
+  const startDate = filters.startDate?.trim() ?? "";
+  const dueDate = filters.dueDate?.trim() ?? "";
+  const groupLabel = filters.groupLabel?.trim().toLowerCase() ?? "";
+  const leaf = filters.leaf ?? "";
+  const { plannedMin, actualMin, progressMin } = filters;
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
     const matchesAssignee = !assignee || (row.ownerName ?? "").toLowerCase().includes(assignee);
-    return matchesQ && matchesAssignee;
+    const matchesStartDate = !startDate || row.startDate === startDate;
+    const matchesDueDate = !dueDate || row.dueDate === dueDate;
+    const matchesGroupLabel = !groupLabel || (row.groupLabel ?? "").toLowerCase().includes(groupLabel);
+    const matchesLeaf = !leaf || (leaf === "y" ? row.isLeaf : !row.isLeaf);
+    const matchesPlanned = plannedMin == null || (row.plannedProgress ?? 0) * 100 >= plannedMin;
+    const matchesActual = actualMin == null || row.actualProgress * 100 >= actualMin;
+    const matchesProgress = progressMin == null || (row.progressIndex ?? 0) * 100 >= progressMin;
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesGroupLabel && matchesLeaf && matchesPlanned && matchesActual && matchesProgress;
   });
   const total = filteredRows.length;
   const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
@@ -167,7 +183,7 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
 export type WbsExcelListResult = Awaited<ReturnType<typeof listWbsItemsExcelColumns>>;
 
 export type WbsStageStat = { stage: string; planned: number; actual: number; delayed: boolean };
-export type WbsStats = { overall: ReturnType<typeof rollupProgress>; stages: WbsStageStat[] };
+export type WbsStats = { overall: ReturnType<typeof rollupProgress>; delayRate: number; delayedCount: number; delayTrackedCount: number; stages: WbsStageStat[] };
 
 // 통계 화면 — leaf 항목(다른 항목의 상위로 참조되지 않는 행 = 엑셀 "상세진도(진도관리대상)")만 가중치(weight ?? workingDays) 기준으로 롤업한다.
 async function loadWbsStats(projectId: string): Promise<WbsStats> {
@@ -176,14 +192,19 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
   const leaves = items.filter((item) => !parentIds.has(item.id));
   const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
   const overall = rollupProgress(toRollupInputs(leaves));
-  const stageNames = [...new Set(leaves.map((item) => item.stage).filter((stage): stage is string => !!stage))];
-  const stages = stageNames
-    .map((stage) => {
-      const rollup = rollupProgress(toRollupInputs(leaves.filter((item) => item.stage === stage)));
-      return { stage, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
-    })
-    .sort((a, b) => a.stage.localeCompare(b.stage, "ko"));
-  return { overall, stages };
+  // 지연율 — 시작·종료일이 있어 계획 진행률을 산출할 수 있는 leaf 항목 중 실적이 목표에 못 미치는 비율.
+  const delayTracked = leaves.filter((item) => item.plannedProgress !== null);
+  const delayedCount = delayTracked.filter((item) => item.actualProgress < (item.plannedProgress ?? 0)).length;
+  const delayRate = delayTracked.length === 0 ? 0 : delayedCount / delayTracked.length;
+  // leaves는 listWbsItems가 path 오름차순(=Task 번호 순)으로 반환한 순서를 그대로 유지하므로,
+  // 이름순 재정렬 없이 처음 등장한 순서로 Stage를 중복 제거하면 Task 번호 순서가 보존된다.
+  const stageNames: string[] = [];
+  for (const item of leaves) if (item.stage && !stageNames.includes(item.stage)) stageNames.push(item.stage);
+  const stages = stageNames.map((stage) => {
+    const rollup = rollupProgress(toRollupInputs(leaves.filter((item) => item.stage === stage)));
+    return { stage, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+  });
+  return { overall, delayRate, delayedCount, delayTrackedCount: delayTracked.length, stages };
 }
 
 // 변동 빈도가 낮은 통계 화면이라 포트폴리오 KPI와 동일하게 30초 캐시하고, WBS 변경(mutation) 시 wbsTag로 무효화한다.

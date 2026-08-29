@@ -27,6 +27,8 @@
   --info: oklch(0.488 0.243 264.376);
   --info-bg: #edf3f9;
   --info-foreground: oklch(0.97 0.014 254.604);
+  --chart-planned: #2a78d6;
+  --chart-actual: #eb6834;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: var(--primary);
@@ -514,6 +516,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .progress-card b,.mini-progress span { position: absolute; inset: 0; color: #fff; mix-blend-mode: difference; font: 700 10px/18px var(--font-mono); text-align: center; }
 .progress-card em { position: absolute; top: 8px; right: 8px; color: var(--destructive); font-size: 10px; font-style: normal; font-weight: 700; }
 .mini-progress { width: 120px; }
+.wbs-stage-chart { position: relative; height: 320px; }
+.wbs-stage-chart + .table-wrap { margin-top: 14px; }
 .view-toggle { display: inline-flex; gap: 4px; margin-bottom: 12px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); }
 .view-toggle button { padding: 6px 14px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted-foreground); cursor: pointer; font-size: 13px; font-weight: 650; }
 .view-toggle button.selected { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 8%); }
@@ -833,6 +837,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
   --info: oklch(0.623 0.214 259.815);
   --info-bg: #17263a;
   --info-foreground: oklch(0.97 0.014 254.604);
+  --chart-planned: #3987e5;
+  --chart-actual: #d95926;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: var(--primary);
