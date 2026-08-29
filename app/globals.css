@@ -954,6 +954,8 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
   .theme-options { grid-template-columns: 1fr; }
   .weekly-generate-fields,.weekly-report-search,.weekly-report-summary,.weekly-report-edit-form { grid-template-columns: 1fr; }
   .weekly-generate-fields .button,.weekly-report-search .button { width: 100%; justify-content: center; }
+  .inline-create,.inline-create.user-create { grid-template-columns: 1fr; }
+  .inline-create .button { width: 100%; justify-content: center; }
   .weekly-report-summary > div { border-right: 0; border-bottom: 1px solid var(--border); }
   .weekly-report-summary > div:last-child { border-bottom: 0; }
   .weekly-report-edit-form label:last-of-type { grid-column: auto; }
