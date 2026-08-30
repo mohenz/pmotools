@@ -125,6 +125,9 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
   sheet.getRow(1).eachCell((cell, idx) => { const text = norm(cellText(cell.value)); if (text) headerIndexByText.set(text, idx); });
   const col = (label: string) => headerIndexByText.get(norm(label)) ?? (HEADER_LIST.indexOf(label) + 1);
   const cellAt = (row: ExcelJS.Row, label: string) => cellText(row.getCell(col(label)).value).trim();
+  // 사용자ID는 기존 47개 컬럼 서식에 없던 신규 컬럼이라, 헤더 텍스트로 못 찾으면(구버전 파일) 위치 추정 폴백을
+  // 쓰지 않는다 — 폴백을 쓰면 구버전 파일의 R&R(지원)(모듈) 값이 사용자ID로 잘못 읽힌다.
+  const cellAtIfHeaderPresent = (row: ExcelJS.Row, label: string) => (headerIndexByText.has(norm(label)) ? cellAt(row, label) : "");
 
   const formatUtcDate = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
   // 엑셀에서 직접 편집한 파일은 셀 값이 "YYYY-MM-DD" 텍스트가 아니라 실제 Date, 엑셀 일련번호(숫자),
@@ -181,7 +184,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     if (weightRaw && !Number.isFinite(weight)) errors.push("가중치는 숫자여야 합니다.");
 
     const ownerName = cellAt(row, "R&R(실행)");
-    const ownerLoginId = cellAt(row, "사용자ID");
+    const ownerLoginId = cellAtIfHeaderPresent(row, "사용자ID");
     const ownerUserId = resolveOwner(ownerLoginId, ownerName, stage, warnings);
     const trackLabel = cellAt(row, "R&R(지원)(모듈)");
     let groupId: string | null = null;
