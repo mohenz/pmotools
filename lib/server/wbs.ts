@@ -183,8 +183,9 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
     const matchesAssignee = !assignee || (row.ownerName ?? "").toLowerCase().includes(assignee);
-    const matchesStartDate = !startDate || row.startDate === startDate;
-    const matchesDueDate = !dueDate || row.dueDate === dueDate;
+    // 시작일·종료일 필터 = 조회 구간 경계 — Task 자신의 StartDate·DueDate가 모두 그 구간 안에 있어야 매치한다(일부만 겹치는 항목은 제외).
+    const matchesStartDate = !startDate || (row.startDate !== null && row.startDate >= startDate);
+    const matchesDueDate = !dueDate || (row.dueDate !== null && row.dueDate <= dueDate);
     const matchesGroupLabel = !groupLabel || (row.groupLabel ?? "").toLowerCase().includes(groupLabel);
     const matchesLeaf = !leaf || (leaf === "y" ? row.isLeaf : !row.isLeaf);
     const matchesPlanned = plannedMin == null || (row.plannedProgress ?? 0) * 100 >= plannedMin;
