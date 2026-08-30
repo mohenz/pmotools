@@ -1,12 +1,20 @@
 import type { WbsWeeklyStats } from "@/lib/server/wbs";
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+const dot = (value: string) => value.replaceAll("-", ".");
 
 export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
-  const { asOf, overall, groups } = stats;
+  const { startDate, endDate, overall, groups } = stats;
   return <>
-    <header className="topbar"><div><h1>WBS 주간 통계</h1><p>업무그룹별 진행 사항 · 기준일 {asOf.replaceAll("-", ".")}</p></div></header>
+    <header className="topbar"><div><h1>WBS 주간 통계</h1><p>업무그룹별 진행 사항 · 기준 기간 {dot(startDate)} ~ {dot(endDate)}</p></div></header>
     <div className="content">
+      <section className="panel compact">
+        <form className="filters inline-filter" method="get">
+          <label>시작일<input type="date" name="startDate" defaultValue={startDate} /></label>
+          <label>종료일<input type="date" name="endDate" defaultValue={endDate} /></label>
+          <button className="button secondary" type="submit">조회</button>
+        </form>
+      </section>
       <section className="panel">
         <div className="panel-head"><h2>진행 사항</h2><span>{groups.length}개 업무그룹</span></div>
         <div className="table-wrap"><table>
@@ -33,7 +41,7 @@ export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
           </tr></tfoot>
         </table></div>
       </section>
-      <div className="note">계획(건) = DueDate가 기준일 이하인 항목(스케줄상 기준일까지 끝났어야 할 건). 완료(건) = 그중 실적(담당자별 진도율)이 100%인 항목. 달성률 = 완료/계획, 진척률 = 완료/총대상. 완료 시점을 별도로 기록하지 않아 과거 시점 스냅샷(전주 대비 등)은 제공하지 않습니다.</div>
+      <div className="note">계획(건) = DueDate가 시작일~종료일 사이인 항목. 완료(건) = 그중 실적(담당자별 진도율)이 100%인 항목(항상 현재 실적 기준). 달성률 = 완료/계획, 진척률 = 완료/총대상. 완료 시점을 별도로 기록하지 않아 과거 시점의 완료 여부를 그대로 재현하지는 않습니다 — 시작일·종료일을 바꾸면 계획(건) 대상 기간만 조정됩니다.</div>
     </div>
   </>;
 }

@@ -311,22 +311,33 @@ export function getWbsWorkGroupStats(projectId: string) {
 }
 
 export type WbsWeeklyGroupStat = { groupLabel: string; totalCount: number; plannedCount: number; completedCount: number; delayedCount: number; achievementRate: number; progressRate: number };
-export type WbsWeeklyStats = { asOf: string; overall: WbsWeeklyGroupStat; groups: WbsWeeklyGroupStat[] };
+export type WbsWeeklyStats = { startDate: string; endDate: string; overall: WbsWeeklyGroupStat; groups: WbsWeeklyGroupStat[] };
+
+// 이번 주(월요일~오늘)를 조회 기간 기본값으로 계산한다.
+export function defaultWbsWeeklyRange(): { startDate: string; endDate: string } {
+  const now = new Date();
+  const endDate = now.toISOString().slice(0, 10);
+  const dayOfWeek = now.getDay(); // 0=일 ... 6=토
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysSinceMonday);
+  return { startDate: monday.toISOString().slice(0, 10), endDate };
+}
 
 // 주간 통계 — PMO 주간보고 "진행 사항" 표(총대상/계획/완료/지연/달성률/진척률) 형식을 업무그룹별로 재현한다.
-// 완료 시점을 별도로 기록하지 않아 "지난주 시점 완료 건수"를 정확히 재현할 수 없으므로, 오늘 기준 1주 스냅샷만 제공한다
-// (2026-08-30 사용자 결정). 계획(건) = DueDate가 오늘 이하(스케줄상 오늘까지 끝났어야 함)인 leaf 항목, 완료(건) = 그중
-// 실적(actualProgress)이 100%인 항목 — 엑셀 일괄 업로드 항목은 status가 항상 not_started로 고정 저장되어 상태값이
-// 아니라 실제로 갱신되는 실적(Track 진도율)을 완료 판정 기준으로 쓴다. 달성률 = 완료/계획, 진척률 = 완료/총대상.
-async function loadWbsWeeklyStats(projectId: string): Promise<WbsWeeklyStats> {
+// 완료 시점을 별도로 기록하지 않아 "과거 시점 기준 완료 건수"를 정확히 재현할 수 없으므로, 계획(건)의 조회 기간(시작일~종료일)만
+// 사용자가 조정할 수 있고 완료 여부는 항상 현재 실적(actualProgress) 기준으로 판정한다 (2026-08-30 사용자 결정).
+// 계획(건) = DueDate가 조회 기간(시작일~종료일) 이내인 leaf 항목, 완료(건) = 그중 실적(actualProgress)이 100%인 항목 —
+// 엑셀 일괄 업로드 항목은 status가 항상 not_started로 고정 저장되어 상태값이 아니라 실제로 갱신되는 실적(Track 진도율)을
+// 완료 판정 기준으로 쓴다. 달성률 = 완료/계획, 진척률 = 완료/총대상.
+async function loadWbsWeeklyStats(projectId: string, startDate: string, endDate: string): Promise<WbsWeeklyStats> {
   const [items, { groupLabelByOwner, groupSortKeyByLabel }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  const today = new Date().toISOString().slice(0, 10);
 
   function buildStat(rows: typeof leaves): Omit<WbsWeeklyGroupStat, "groupLabel"> {
     const totalCount = rows.length;
-    const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate <= today);
+    const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate >= startDate && item.dueDate <= endDate);
     const plannedCount = plannedRows.length;
     const completedCount = plannedRows.filter((item) => item.actualProgress >= 1).length;
     const delayedCount = plannedCount - completedCount;
@@ -354,11 +365,11 @@ async function loadWbsWeeklyStats(projectId: string): Promise<WbsWeeklyStats> {
       if (codeB) return 1;
       return a.groupLabel.localeCompare(b.groupLabel, "ko");
     });
-  return { asOf: today, overall: { groupLabel: "전체", ...buildStat(leaves) }, groups };
+  return { startDate, endDate, overall: { groupLabel: "전체", ...buildStat(leaves) }, groups };
 }
 
-export function getWbsWeeklyStats(projectId: string) {
-  return unstable_cache(loadWbsWeeklyStats, ["wbs-weekly-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
+export function getWbsWeeklyStats(projectId: string, startDate: string, endDate: string) {
+  return unstable_cache(loadWbsWeeklyStats, ["wbs-weekly-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId, startDate, endDate);
 }
 
 // 업무그룹별 통계 화면의 업무그룹명·지연율 클릭 진입점 — 해당 업무그룹(담당자 기준) leaf 항목을 그대로 나열한다.
