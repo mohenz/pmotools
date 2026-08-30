@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { WbsImportReport } from "@/lib/server/wbs-excel";
 
-export function WbsDataManagementPanel() {
+export function WbsDataManagementPanel({ children }: { children?: React.ReactNode } = {}) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<WbsImportReport | null>(null);
@@ -82,6 +82,8 @@ export function WbsDataManagementPanel() {
         </div>;
       })()}
     </section>
+
+    {children}
 
     <section className="danger-zone">
       <div><strong>데이터 초기화</strong><p>프로젝트의 모든 WBS 항목이 보관 처리됩니다(목록·조회에서 제외, 복구 가능).</p>{resetMessage && <p className={resetMessage.includes("보관 처리") ? "form-success" : "form-error"} role="status">{resetMessage}</p>}</div>
