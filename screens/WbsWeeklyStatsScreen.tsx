@@ -42,7 +42,6 @@ export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
           </tr></tfoot>
         </table></div>
       </section>
-      <div className="note">계획(건) = DueDate가 시작일~종료일 사이인 항목. 완료(건) = 그중 실적(담당자별 진도율)이 100%인 항목(항상 현재 실적 기준). 달성률 = 완료/계획, 진척률 = 완료/총대상. 완료 시점을 별도로 기록하지 않아 과거 시점의 완료 여부를 그대로 재현하지는 않습니다 — 시작일·종료일을 바꾸면 계획(건) 대상 기간만 조정됩니다.</div>
     </div>
   </>;
 }
