@@ -23,7 +23,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
       const rollup = rollupProgress(rows.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
       return { owner, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
     })
-    .sort((a, b) => b.itemCount - a.itemCount || a.owner.localeCompare(b.owner, "ko"));
+    .sort((a, b) => a.owner.localeCompare(b.owner, "ko"));
   const chartData = owners.map((row) => ({ stage: row.owner, planned: row.planned, actual: row.actual, delayed: row.delayed }));
 
   return <>
