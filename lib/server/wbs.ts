@@ -242,6 +242,49 @@ export function getWbsStats(projectId: string) {
   return unstable_cache(loadWbsStats, ["wbs-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
 }
 
+export type WbsWorkGroupStat = { groupLabel: string; memberCount: number; itemCount: number; planned: number; actual: number; delayed: boolean };
+export type WbsWorkGroupStats = { overall: ReturnType<typeof rollupProgress>; groups: WbsWorkGroupStat[] };
+
+// 업무그룹별 통계 — 사용자관리(설정 → 사용자)에서 사용자별로 지정한 업무그룹(Groups/WORK_MODULE)을
+// WBS 담당자(ownerUserId, 사용자ID로 매칭)를 키로 이어붙여, 담당자가 속한 업무그룹 단위로 leaf 항목을 롤업한다.
+// WBS 항목 자체의 R&R(지원)(모듈)(WBS 전용 공통코드)과는 별개의 축이다.
+async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupStats> {
+  const prisma = getPrisma();
+  const [items, members] = await Promise.all([
+    listWbsItems(projectId),
+    prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: { include: { groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE" } }, include: { group: true } } } } } }),
+  ]);
+  const groupLabelByOwner = new Map<string, string>();
+  for (const member of members) {
+    const labels = member.user.groupMemberships.map((m) => m.group.label);
+    groupLabelByOwner.set(member.userId, labels.length ? labels.join("·") : "미지정");
+  }
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  const leaves = items.filter((item) => !parentIds.has(item.id));
+  const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
+  const overall = rollupProgress(toRollupInputs(leaves));
+
+  const leavesByGroup = new Map<string, typeof leaves>();
+  for (const item of leaves) {
+    const label = item.ownerUserId ? (groupLabelByOwner.get(item.ownerUserId) ?? "미지정") : "담당자 없음";
+    const bucket = leavesByGroup.get(label) ?? [];
+    bucket.push(item);
+    leavesByGroup.set(label, bucket);
+  }
+  const groups = [...leavesByGroup.entries()]
+    .map(([groupLabel, rows]) => {
+      const rollup = rollupProgress(toRollupInputs(rows));
+      const memberCount = new Set(rows.map((row) => row.ownerUserId).filter((id): id is string => !!id)).size;
+      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+    })
+    .sort((a, b) => b.itemCount - a.itemCount || a.groupLabel.localeCompare(b.groupLabel, "ko"));
+  return { overall, groups };
+}
+
+export function getWbsWorkGroupStats(projectId: string) {
+  return unstable_cache(loadWbsWorkGroupStats, ["wbs-work-group-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
+}
+
 export async function getWbsItemDetail(projectId: string, id: string) {
   const prisma = getPrisma();
   const item = await prisma.wbsItem.findUnique({ where: { id }, include: wbsItemInclude });
