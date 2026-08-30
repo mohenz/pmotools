@@ -276,6 +276,8 @@ tbody tr:hover { background: var(--accent); }
 .clickable-table-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; background: var(--accent); }
 tbody tr.high-risk-row { background: var(--destructive-bg); }
 tbody tr.high-risk-row:hover { background: color-mix(in oklch, var(--destructive-bg), var(--foreground) 6%); }
+tfoot .totals-row td { border-top: 2px solid var(--border); border-bottom: 0; background: var(--muted); font-weight: 700; }
+tfoot .totals-row:hover td { background: var(--muted); }
 .mono { font-family: var(--font-mono); font-size: 13px; }
 td.mono, td[data-numeric] { text-align: right; }
 .title-cell { max-width: 320px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }

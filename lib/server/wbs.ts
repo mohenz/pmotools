@@ -212,8 +212,8 @@ export async function getWbsOwnerStatus(projectId: string, loginId: string) {
 }
 export type WbsOwnerStatus = Awaited<ReturnType<typeof getWbsOwnerStatus>>;
 
-export type WbsStageStat = { stage: string; planned: number; actual: number; delayed: boolean };
-export type WbsStats = { overall: ReturnType<typeof rollupProgress>; delayRate: number; delayedCount: number; delayTrackedCount: number; stages: WbsStageStat[] };
+export type WbsStageStat = { stage: string; itemCount: number; planned: number; actual: number; delayed: boolean };
+export type WbsStats = { overall: ReturnType<typeof rollupProgress>; itemCount: number; delayRate: number; delayedCount: number; delayTrackedCount: number; stages: WbsStageStat[] };
 
 // 통계 화면 — leaf 항목(다른 항목의 상위로 참조되지 않는 행 = 엑셀 "상세진도(진도관리대상)")만 가중치(weight ?? workingDays) 기준으로 롤업한다.
 async function loadWbsStats(projectId: string): Promise<WbsStats> {
@@ -231,10 +231,11 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
   const stageNames: string[] = [];
   for (const item of leaves) if (item.stage && !stageNames.includes(item.stage)) stageNames.push(item.stage);
   const stages = stageNames.map((stage) => {
-    const rollup = rollupProgress(toRollupInputs(leaves.filter((item) => item.stage === stage)));
-    return { stage, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+    const rows = leaves.filter((item) => item.stage === stage);
+    const rollup = rollupProgress(toRollupInputs(rows));
+    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
   });
-  return { overall, delayRate, delayedCount, delayTrackedCount: delayTracked.length, stages };
+  return { overall, itemCount: leaves.length, delayRate, delayedCount, delayTrackedCount: delayTracked.length, stages };
 }
 
 // 변동 빈도가 낮은 통계 화면이라 포트폴리오 KPI와 동일하게 30초 캐시하고, WBS 변경(mutation) 시 wbsTag로 무효화한다.
@@ -242,31 +243,47 @@ export function getWbsStats(projectId: string) {
   return unstable_cache(loadWbsStats, ["wbs-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
 }
 
-export type WbsWorkGroupStat = { groupLabel: string; memberCount: number; itemCount: number; planned: number; actual: number; delayed: boolean };
-export type WbsWorkGroupStats = { overall: ReturnType<typeof rollupProgress>; groups: WbsWorkGroupStat[] };
-
-// 업무그룹별 통계 — 사용자관리(설정 → 사용자)에서 사용자별로 지정한 업무그룹(Groups/WORK_MODULE)을
-// WBS 담당자(ownerUserId, 사용자ID로 매칭)를 키로 이어붙여, 담당자가 속한 업무그룹 단위로 leaf 항목을 롤업한다.
-// WBS 항목 자체의 R&R(지원)(모듈)(WBS 전용 공통코드)과는 별개의 축이다.
-async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupStats> {
-  const prisma = getPrisma();
-  const [items, members] = await Promise.all([
-    listWbsItems(projectId),
-    prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: { include: { groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE" } }, include: { group: true } } } } } }),
-  ]);
+// 사용자관리(설정 → 사용자)에서 사용자별로 지정한 업무그룹(Groups/WORK_MODULE)을 WBS 담당자(ownerUserId)를
+// 키로 이어붙인다. WBS 항목 자체의 R&R(지원)(모듈)(WBS 전용 공통코드)과는 별개의 축이라 업무그룹별 통계·지연
+// Task 조회 양쪽에서 함께 쓴다.
+async function loadOwnerGroupLabels(projectId: string) {
+  const members = await getPrisma().projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: { include: { groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE" } }, include: { group: true } } } } } });
   const groupLabelByOwner = new Map<string, string>();
+  const groupSortKeyByLabel = new Map<string, string>();
   for (const member of members) {
-    const labels = member.user.groupMemberships.map((m) => m.group.label);
-    groupLabelByOwner.set(member.userId, labels.length ? labels.join("·") : "미지정");
+    const memberships = member.user.groupMemberships;
+    const label = memberships.length ? memberships.map((m) => m.group.label).join("·") : "미지정";
+    groupLabelByOwner.set(member.userId, label);
+    if (memberships.length && !groupSortKeyByLabel.has(label)) {
+      groupSortKeyByLabel.set(label, [...memberships].map((m) => m.group.code).sort().join("·"));
+    }
   }
+  return { groupLabelByOwner, groupSortKeyByLabel };
+}
+function ownerGroupLabelOf(item: { ownerUserId: string | null }, groupLabelByOwner: Map<string, string>) {
+  return item.ownerUserId ? (groupLabelByOwner.get(item.ownerUserId) ?? "미지정") : "담당자 없음";
+}
+
+export type WbsWorkGroupStat = { groupLabel: string; memberCount: number; itemCount: number; planned: number; actual: number; delayed: boolean; delayRate: number; delayedCount: number; delayTrackedCount: number };
+export type WbsWorkGroupStats = { overall: ReturnType<typeof rollupProgress>; delayRate: number; delayedCount: number; delayTrackedCount: number; groups: WbsWorkGroupStat[] };
+
+// 업무그룹별 통계 — leaf 항목을 담당자의 업무그룹 단위로 묶어 계획·실적·지연율을 롤업한다.
+async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupStats> {
+  const [items, { groupLabelByOwner, groupSortKeyByLabel }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
   const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
+  const delayStats = (rows: typeof leaves) => {
+    const tracked = rows.filter((item) => item.plannedProgress !== null);
+    const delayedCount = tracked.filter((item) => item.actualProgress < (item.plannedProgress ?? 0)).length;
+    return { delayedCount, delayTrackedCount: tracked.length, delayRate: tracked.length === 0 ? 0 : delayedCount / tracked.length };
+  };
   const overall = rollupProgress(toRollupInputs(leaves));
+  const overallDelay = delayStats(leaves);
 
   const leavesByGroup = new Map<string, typeof leaves>();
   for (const item of leaves) {
-    const label = item.ownerUserId ? (groupLabelByOwner.get(item.ownerUserId) ?? "미지정") : "담당자 없음";
+    const label = ownerGroupLabelOf(item, groupLabelByOwner);
     const bucket = leavesByGroup.get(label) ?? [];
     bucket.push(item);
     leavesByGroup.set(label, bucket);
@@ -275,15 +292,36 @@ async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupSta
     .map(([groupLabel, rows]) => {
       const rollup = rollupProgress(toRollupInputs(rows));
       const memberCount = new Set(rows.map((row) => row.ownerUserId).filter((id): id is string => !!id)).size;
-      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned, ...delayStats(rows) };
     })
-    .sort((a, b) => b.itemCount - a.itemCount || a.groupLabel.localeCompare(b.groupLabel, "ko"));
-  return { overall, groups };
+    // 업무그룹 코드(Groups.code) 기준 오름차순. 코드가 없는 "미지정"·"담당자 없음"은 맨 뒤로 보낸다.
+    .sort((a, b) => {
+      const codeA = groupSortKeyByLabel.get(a.groupLabel);
+      const codeB = groupSortKeyByLabel.get(b.groupLabel);
+      if (codeA && codeB) return codeA.localeCompare(codeB);
+      if (codeA) return -1;
+      if (codeB) return 1;
+      return a.groupLabel.localeCompare(b.groupLabel, "ko");
+    });
+  return { overall, delayRate: overallDelay.delayRate, delayedCount: overallDelay.delayedCount, delayTrackedCount: overallDelay.delayTrackedCount, groups };
 }
 
 export function getWbsWorkGroupStats(projectId: string) {
   return unstable_cache(loadWbsWorkGroupStats, ["wbs-work-group-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
 }
+
+// 업무그룹별 통계 화면의 업무그룹명·지연율 클릭 진입점 — 해당 업무그룹(담당자 기준) leaf 항목을 그대로 나열한다.
+// delayedOnly면 실적이 목표에 못 미치는 항목만 추린다. group을 비우면 프로젝트 전체(모든 그룹) 대상이다.
+export async function getWbsGroupTasks(projectId: string, group: string, delayedOnly: boolean) {
+  const [items, { groupLabelByOwner }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  let leaves = items.filter((item) => !parentIds.has(item.id));
+  if (group) leaves = leaves.filter((item) => ownerGroupLabelOf(item, groupLabelByOwner) === group);
+  if (delayedOnly) leaves = leaves.filter((item) => item.plannedProgress !== null && item.actualProgress < item.plannedProgress);
+  const overall = rollupProgress(leaves.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress })));
+  return { group, delayedOnly, overall, items: leaves };
+}
+export type WbsGroupTasks = Awaited<ReturnType<typeof getWbsGroupTasks>>;
 
 export type WbsOwnerConflict = { itemId: string; code: string; name: string; ownerNameRaw: string; candidates: { userId: string; loginId: string; name: string }[] };
 
