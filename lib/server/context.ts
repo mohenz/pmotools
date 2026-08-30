@@ -7,7 +7,7 @@ import { hasPmPmoAccess } from "@/lib/domain/job-access";
 export async function getLocalContext() {
   const session = await auth();
   if (!session?.user) throw new Error("인증되지 않은 요청입니다.");
-  return { userId: session.user.id, projectId: session.user.projectId, role: session.user.role, jobTitle: session.user.jobTitle };
+  return { userId: session.user.id, loginId: session.user.loginId, projectId: session.user.projectId, role: session.user.role, jobTitle: session.user.jobTitle };
 }
 
 export async function requireAdminContext() {
