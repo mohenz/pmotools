@@ -264,13 +264,10 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .portfolio-domain-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .domain-summary { display: block; transition: transform .12s, border-color .12s; }
 .domain-summary:hover { transform: translateY(-1px); border-color: var(--primary); }
-.domain-summary-metrics { display: flex; gap: 10px; }
-.domain-summary-metrics > div { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--muted); text-align: center; }
-.domain-summary-metrics span { display: block; color: var(--muted-foreground); font-size: 11px; }
-.domain-summary-metrics strong { display: block; margin-top: 3px; font: 700 18px var(--font-mono); }
-.domain-summary-metrics strong.critical { color: var(--destructive); }
+.domain-chart { position: relative; height: 140px; margin-top: 4px; }
 .domain-summary-foot { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; color: var(--muted-foreground); font-size: 12px; }
 .domain-summary-foot strong { color: var(--foreground); font: 700 15px var(--font-mono); }
+.domain-summary-foot strong.critical { color: var(--destructive); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .panel-head h2 { margin: 0; font: 600 var(--text-md) var(--font-sans); }
 .panel-head span { color: var(--muted-foreground); font-size: 12px; }
@@ -455,6 +452,11 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .history-item > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .history-item time, .history-item small { color: var(--muted-foreground); font-size: 11px; }
 .history-item p { margin: 7px 0 2px; color: var(--foreground); font-size: 13px; white-space: pre-wrap; }
+a.history-item { display: block; }
+a.history-item:hover { background: var(--accent); }
+.action-grid .panel { display: flex; flex-direction: column; gap: 10px; }
+.action-grid .panel .text-button { align-self: flex-start; }
+.dashboard-subpanel-scroll { max-height: 260px; overflow-y: auto; }
 .danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 18px; border: 1px solid color-mix(in oklch, var(--destructive), transparent 75%); border-radius: var(--radius); background: var(--destructive-bg); }
 .danger-zone strong { color: var(--destructive); font-size: 13px; }
 .danger-zone p { margin: 3px 0 0; color: var(--muted-foreground); font-size: 12px; }
