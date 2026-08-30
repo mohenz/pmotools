@@ -64,7 +64,6 @@ export default function LoginPage() {
       <div className="auth-card">
         <div className="auth-brand">
           <img src="/pmotools-logo-login.png" alt="PMOTOOLS" />
-          <h1>PMOTOOLS</h1>
         </div>
         <div className="auth-divider" />
         <Suspense fallback={null}>
