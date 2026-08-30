@@ -310,6 +310,57 @@ export function getWbsWorkGroupStats(projectId: string) {
   return unstable_cache(loadWbsWorkGroupStats, ["wbs-work-group-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
 }
 
+export type WbsWeeklyGroupStat = { groupLabel: string; totalCount: number; plannedCount: number; completedCount: number; delayedCount: number; achievementRate: number; progressRate: number };
+export type WbsWeeklyStats = { asOf: string; overall: WbsWeeklyGroupStat; groups: WbsWeeklyGroupStat[] };
+
+// 주간 통계 — PMO 주간보고 "진행 사항" 표(총대상/계획/완료/지연/달성률/진척률) 형식을 업무그룹별로 재현한다.
+// 완료 시점을 별도로 기록하지 않아 "지난주 시점 완료 건수"를 정확히 재현할 수 없으므로, 오늘 기준 1주 스냅샷만 제공한다
+// (2026-08-30 사용자 결정). 계획(건) = DueDate가 오늘 이하(스케줄상 오늘까지 끝났어야 함)인 leaf 항목, 완료(건) = 그중
+// 실적(actualProgress)이 100%인 항목 — 엑셀 일괄 업로드 항목은 status가 항상 not_started로 고정 저장되어 상태값이
+// 아니라 실제로 갱신되는 실적(Track 진도율)을 완료 판정 기준으로 쓴다. 달성률 = 완료/계획, 진척률 = 완료/총대상.
+async function loadWbsWeeklyStats(projectId: string): Promise<WbsWeeklyStats> {
+  const [items, { groupLabelByOwner, groupSortKeyByLabel }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  const leaves = items.filter((item) => !parentIds.has(item.id));
+  const today = new Date().toISOString().slice(0, 10);
+
+  function buildStat(rows: typeof leaves): Omit<WbsWeeklyGroupStat, "groupLabel"> {
+    const totalCount = rows.length;
+    const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate <= today);
+    const plannedCount = plannedRows.length;
+    const completedCount = plannedRows.filter((item) => item.actualProgress >= 1).length;
+    const delayedCount = plannedCount - completedCount;
+    return {
+      totalCount, plannedCount, completedCount, delayedCount,
+      achievementRate: plannedCount === 0 ? 0 : completedCount / plannedCount,
+      progressRate: totalCount === 0 ? 0 : completedCount / totalCount,
+    };
+  }
+
+  const leavesByGroup = new Map<string, typeof leaves>();
+  for (const item of leaves) {
+    const label = ownerGroupLabelOf(item, groupLabelByOwner);
+    const bucket = leavesByGroup.get(label) ?? [];
+    bucket.push(item);
+    leavesByGroup.set(label, bucket);
+  }
+  const groups = [...leavesByGroup.entries()]
+    .map(([groupLabel, rows]) => ({ groupLabel, ...buildStat(rows) }))
+    .sort((a, b) => {
+      const codeA = groupSortKeyByLabel.get(a.groupLabel);
+      const codeB = groupSortKeyByLabel.get(b.groupLabel);
+      if (codeA && codeB) return codeA.localeCompare(codeB);
+      if (codeA) return -1;
+      if (codeB) return 1;
+      return a.groupLabel.localeCompare(b.groupLabel, "ko");
+    });
+  return { asOf: today, overall: { groupLabel: "전체", ...buildStat(leaves) }, groups };
+}
+
+export function getWbsWeeklyStats(projectId: string) {
+  return unstable_cache(loadWbsWeeklyStats, ["wbs-weekly-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
+}
+
 // 업무그룹별 통계 화면의 업무그룹명·지연율 클릭 진입점 — 해당 업무그룹(담당자 기준) leaf 항목을 그대로 나열한다.
 // delayedOnly면 실적이 목표에 못 미치는 항목만 추린다. group을 비우면 프로젝트 전체(모든 그룹) 대상이다.
 export async function getWbsGroupTasks(projectId: string, group: string, delayedOnly: boolean) {
