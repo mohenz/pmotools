@@ -131,7 +131,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 8px 16px; }
 .brand:hover { background: var(--sidebar-accent); }
 .brand:focus-visible { outline: 2px solid oklch(1 0 0 / 65%); outline-offset: -3px; }
-.brand-mark { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px; background-color: #fff; background-image: url(/pmotools-logo.png); background-repeat: no-repeat; background-size: 89px 89px; background-position: -29px -20px; }
+.brand-mark { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px; background-image: url(/pmotools-icon.png); background-repeat: no-repeat; background-size: cover; }
 .brand-text { display: block; min-width: 0; }
 .brand span { display: block; color: oklch(1 0 0 / 45%); font: 9px var(--font-mono); letter-spacing: .14em; }
 .brand strong { display: block; margin-top: 5px; color: white; font: 700 16px var(--font-mono); letter-spacing: -.02em; }
