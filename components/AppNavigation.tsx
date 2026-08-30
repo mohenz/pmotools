@@ -66,7 +66,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     const moduleTabs: Record<string, {href:string;label:string}[]> = {
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks/dashboard": [{href:"/management-tasks/dashboard",label:"대시보드"},{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"}],
-      "/wbs": [{href:"/wbs",label:"전체 목록"},{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"},{href:"/wbs/group-stats",label:"업무그룹별 통계"},{href:"/wbs/manage",label:"데이터 관리"},{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      "/wbs": [{href:"/wbs",label:"전체 목록"},{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"},{href:"/wbs/group-stats",label:"업무그룹별 통계"},{href:"/wbs/owner-conflicts",label:"동명이인 정리"},{href:"/wbs/manage",label:"데이터 관리"},{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       "/pmo-daily": [{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/calendar",label:"일정관리"}],
       "/work-logs": [{href:"/work-logs",label:"업무일지 목록"},{href:"/work-logs/new",label:"업무일지 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"업무일지 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],

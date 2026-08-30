@@ -46,9 +46,9 @@ type ParsedWbsRow = {
   assignments: { groupId: string; progressPercent: number }[];
 };
 
-// Stage(레벨1 조상 이름)가 이 값이고 담당자를 특정할 수 없을 때 기본으로 지정할 사용자ID.
-// 2026-08-30 사용자 요청: "stage가 기획이면 담당자는 사용자 id q93w36(이승연)으로 매핑" — 파일에 사용자ID나
-// R&R(실행)이 명시돼 있으면 그 값이 우선하고, 둘 다 비어 있을 때만 이 기본값을 적용한다.
+// Stage(레벨1 조상 이름)가 이 값이고 담당자를 확정하지 못했을 때(값이 없거나, 못 찾거나, 이름이 겹쳐서 등)
+// 기본으로 지정할 사용자ID. 2026-08-30 사용자 요청: "stage가 기획이면 담당자는 사용자 id q93w36(이승연)으로
+// 매핑" — 사용자ID·R&R(실행) 중 하나라도 실제로 확정되면 그 값이 우선하고, 둘 다 확정 실패했을 때만 적용한다.
 const STAGE_DEFAULT_OWNER_LOGIN_ID: Record<string, string> = { "기획": "q93w36" };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -79,7 +79,8 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     if (ids.length > 1) { warnings.push(`${fieldLabel}(${name})가 여러 명이라 미지정 처리됩니다.`); return null; }
     return ids[0];
   }
-  // 담당자(R&R 실행) 전용 — 사용자ID가 있으면 이름보다 우선하고, 둘 다 없으면 Stage 기본값을 적용한다.
+  // 담당자(R&R 실행) 전용 — 사용자ID가 있으면 이름보다 우선한다. 사용자ID·이름 어느 쪽으로도 확정하지 못하면
+  // (값이 비어 있거나, 못 찾거나, 이름이 겹쳐 여러 명이거나 등 사유 불문) Stage 기본값을 최종 대체로 적용한다.
   function resolveOwner(loginId: string, name: string, stage: string | null, warnings: string[]): string | null {
     if (loginId) {
       const id = membersByLoginId.get(loginId);
@@ -89,9 +90,9 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     const byName = resolveMember(name, "담당자", warnings);
     if (byName) return byName;
     const defaultLoginId = stage ? STAGE_DEFAULT_OWNER_LOGIN_ID[stage] : undefined;
-    if (defaultLoginId && !loginId && !name) {
+    if (defaultLoginId) {
       const id = membersByLoginId.get(defaultLoginId);
-      if (id) return id;
+      if (id) { warnings.push(`Stage(${stage}) 기본 담당자(${defaultLoginId})로 대체 지정되었습니다.`); return id; }
       warnings.push(`Stage(${stage}) 기본 담당자(${defaultLoginId})를 프로젝트에서 찾을 수 없어 미지정 처리됩니다.`);
     }
     return null;

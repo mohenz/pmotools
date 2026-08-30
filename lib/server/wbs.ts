@@ -285,6 +285,44 @@ export function getWbsWorkGroupStats(projectId: string) {
   return unstable_cache(loadWbsWorkGroupStats, ["wbs-work-group-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
 }
 
+export type WbsOwnerConflict = { itemId: string; code: string; name: string; ownerNameRaw: string; candidates: { userId: string; loginId: string; name: string }[] };
+
+// 동명이인 해소 — 담당자 이름이 여러 사용자와 겹쳐 미지정으로 들어간 항목(ownerUserId null, ownerNameRaw 보존)만
+// 골라, 현재 프로젝트 멤버 중 그 이름과 일치하는 후보(2명 이상)를 붙여 관리자가 선택할 수 있게 한다.
+export async function listAmbiguousWbsOwners(projectId: string): Promise<WbsOwnerConflict[]> {
+  const prisma = getPrisma();
+  const [items, members] = await Promise.all([
+    prisma.wbsItem.findMany({ where: { projectId, archivedAt: null, ownerUserId: null, ownerNameRaw: { not: "" } }, orderBy: { path: "asc" } }),
+    prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: true } }),
+  ]);
+  const membersByName = new Map<string, { userId: string; loginId: string; name: string }[]>();
+  for (const member of members) {
+    const list = membersByName.get(member.user.name) ?? [];
+    list.push({ userId: member.user.id, loginId: member.user.userId, name: member.user.name });
+    membersByName.set(member.user.name, list);
+  }
+  return items
+    .map((item) => ({ itemId: item.id, code: codeFromPath(item.path), name: item.name, ownerNameRaw: item.ownerNameRaw, candidates: membersByName.get(item.ownerNameRaw) ?? [] }))
+    .filter((row) => row.candidates.length > 1);
+}
+
+const resolveOwnerAmbiguitySchema = z.object({ ownerUserId: z.string().uuid() });
+
+export async function resolveWbsOwnerAmbiguity(projectId: string, userId: string, wbsItemId: string, input: unknown) {
+  const data = resolveOwnerAmbiguitySchema.parse(input), requestId = crypto.randomUUID();
+  await assertOwner(projectId, data.ownerUserId);
+  const prisma = getPrisma();
+  const actorName = await actorNameOf(userId);
+  const before = await prisma.wbsItem.findUnique({ where: { id: wbsItemId } });
+  if (!before || before.projectId !== projectId) throw new DomainError("NOT_FOUND", "WBS 항목을 찾을 수 없습니다.");
+  if (before.ownerUserId) throw new DomainError("INVALID_CODE", "이미 담당자가 지정된 항목입니다.");
+  await prisma.wbsItem.update({ where: { id: wbsItemId }, data: { ownerUserId: data.ownerUserId, ownerNameRaw: "", version: { increment: 1 } } });
+  await prisma.wbsItemEvent.create({ data: { wbsItemId, eventType: "edited", actorId: userId, actorName, body: "동명이인 담당자 선택으로 확정" } });
+  await writeAuditLog(projectId, userId, "WBS_ITEM_UPDATE", "wbs_items", wbsItemId, before, { ownerUserId: data.ownerUserId });
+  revalidateTag(wbsTag(projectId));
+  return { id: wbsItemId, requestId };
+}
+
 export async function getWbsItemDetail(projectId: string, id: string) {
   const prisma = getPrisma();
   const item = await prisma.wbsItem.findUnique({ where: { id }, include: wbsItemInclude });
