@@ -19,5 +19,8 @@ export default async function MeetingRoomsPage({ searchParams }: { searchParams:
     context ? listRecurringMeetings(projectId, context.id, false) : Promise.resolve([]),
     context ? listProjectMembers(projectId) : Promise.resolve([]),
   ]);
-  return <MeetingRoomScreen initialDate={date} initialRooms={rooms} initialReservations={reservations} initialRecurring={JSON.parse(JSON.stringify(recurring))} members={members} currentUserId={context?.id ?? null} isAdmin={context?.role === "ADMIN" || context?.role === "SUPER_ADMIN"} readOnly={!context} embedded={query.embedded === "1"} />;
+  const embedded = query.embedded === "1";
+  // 로그인 화면의 "회의실 예약현황 조회" 공개 미리보기(embedded=1)는 실제 로그인 상태(관리자가 미리보기를
+  // 열어도)와 무관하게 항상 읽기 전용으로 보여준다.
+  return <MeetingRoomScreen initialDate={date} initialRooms={rooms} initialReservations={reservations} initialRecurring={JSON.parse(JSON.stringify(recurring))} members={members} currentUserId={context?.id ?? null} isAdmin={context?.role === "ADMIN" || context?.role === "SUPER_ADMIN"} readOnly={!context || embedded} embedded={embedded} />;
 }

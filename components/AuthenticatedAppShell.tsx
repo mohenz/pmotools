@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { AppNavigation } from "@/components/AppNavigation";
@@ -25,17 +25,21 @@ export function AuthenticatedAppShell({
   canManageWorkLogs: boolean;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { status } = useSession();
   const isAuthPage = AUTH_PATHS.has(pathname);
+  // 로그인 화면이 제공하는 "캘린더/회의실 조회" 공개 미리보기(iframe src=".../calendar?embedded=1")는
+  // 로그인 상태와 무관하게(관리자가 미리보기를 열어도) 앱 상단 메뉴 없이 콘텐츠만 보여줘야 한다.
+  const isEmbedded = searchParams.get("embedded") === "1";
 
   useEffect(() => {
-    if (status !== "unauthenticated" || isAuthPage) return;
+    if (status !== "unauthenticated" || isAuthPage || isEmbedded) return;
     const callbackUrl = pathname && pathname !== "/" ? `?callbackUrl=${encodeURIComponent(pathname)}` : "";
     router.replace(`/login${callbackUrl}`);
-  }, [isAuthPage, pathname, router, status]);
+  }, [isAuthPage, isEmbedded, pathname, router, status]);
 
-  if (isAuthPage) {
+  if (isAuthPage || isEmbedded) {
     return <main className="main" id="main-content" tabIndex={-1}>{children}</main>;
   }
 
