@@ -208,6 +208,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .auth-footer-links a { color: var(--muted-foreground); font-size: 13px; }
 .auth-footer-links a:hover { color: var(--foreground); }
 .auth-hint { margin: -8px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.auth-form .auth-remember { display: flex; flex-direction: row; align-items: center; gap: 6px; margin-top: -6px; }
 .topbar h1 { margin: 0; font: 700 24px/34px var(--font-sans); }
 .topbar p { margin: 2px 0 0; color: var(--muted-foreground); font-size: 13px; }
 .content { display: grid; width: 100%; min-width: 0; max-width: none; gap: 16px; padding: clamp(16px, 2vw, 28px) clamp(16px, 2vw, 28px) 32px; font-size: 14px; }
