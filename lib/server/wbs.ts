@@ -313,15 +313,16 @@ export function getWbsWorkGroupStats(projectId: string) {
 export type WbsWeeklyGroupStat = { groupLabel: string; totalCount: number; plannedCount: number; completedCount: number; delayedCount: number; achievementRate: number; progressRate: number };
 export type WbsWeeklyStats = { startDate: string; endDate: string; overall: WbsWeeklyGroupStat; groups: WbsWeeklyGroupStat[] };
 
-// 이번 주(월요일~오늘)를 조회 기간 기본값으로 계산한다.
+// 이번 주 근무일(월요일~금요일)을 조회 기간 기본값으로 계산한다.
 export function defaultWbsWeeklyRange(): { startDate: string; endDate: string } {
   const now = new Date();
-  const endDate = now.toISOString().slice(0, 10);
   const dayOfWeek = now.getDay(); // 0=일 ... 6=토
   const daysSinceMonday = (dayOfWeek + 6) % 7;
   const monday = new Date(now);
   monday.setDate(now.getDate() - daysSinceMonday);
-  return { startDate: monday.toISOString().slice(0, 10), endDate };
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  return { startDate: monday.toISOString().slice(0, 10), endDate: friday.toISOString().slice(0, 10) };
 }
 
 // 주간 통계 — PMO 주간보고 "진행 사항" 표(총대상/계획/완료/지연/달성률/진척률) 형식을 업무그룹별로 재현한다.
