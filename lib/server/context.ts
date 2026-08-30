@@ -30,6 +30,6 @@ export async function requireSuperAdminContext() {
 
 export async function requirePmPmoContext() {
   const context = await getLocalContext();
-  if (!hasPmPmoAccess(context.jobTitle)) redirect("/announcements");
+  if (!hasPmPmoAccess(context.jobTitle, context.role)) redirect("/announcements");
   return context;
 }

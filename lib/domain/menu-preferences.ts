@@ -18,8 +18,10 @@ export const DEFAULT_MENU_ITEMS = [
 
 export type MenuPreferenceRow = { key: string; label: string; visibleAdmin: boolean; visibleOperator: boolean; visibleMember: boolean; sortOrder: number };
 
+// 슈퍼관리자는 프로젝트 관리자가 설정한 메뉴 노출 설정(visibleAdmin 등)과 무관하게 항상 모든 메뉴에 접근할 수 있어야 한다.
 export function isMenuVisibleForRole(pref: MenuPreferenceRow, role: "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") {
-  if (role === "SUPER_ADMIN" || role === "ADMIN") return pref.visibleAdmin;
+  if (role === "SUPER_ADMIN") return true;
+  if (role === "ADMIN") return pref.visibleAdmin;
   if (role === "OPERATOR") return pref.visibleOperator;
   return pref.visibleMember;
 }

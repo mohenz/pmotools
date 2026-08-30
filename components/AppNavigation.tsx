@@ -16,7 +16,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = session?.user?.role ?? "MEMBER";
-  const hasRestrictedToolAccess = hasPmPmoAccess(session?.user?.jobTitle);
+  const hasRestrictedToolAccess = hasPmPmoAccess(session?.user?.jobTitle, role);
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isAdmin = isSuperAdmin || role === "ADMIN";
   const isManager = isAdmin || role === "OPERATOR";

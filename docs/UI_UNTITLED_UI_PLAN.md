@@ -66,12 +66,12 @@
 
 ## 실행 체크리스트
 
-- [ ] Phase 1-1: `.button[data-loading]` CSS 추가
-- [ ] Phase 1-2: 타이포그래피 스케일 변수 + 문서화
-- [ ] Phase 1-3: Shadow 스케일 변수 + 다크모드 대응 + `.alert-dialog` 적용
-- [ ] Phase 2-4: 버튼 sm/lg + tertiary
-- [ ] Phase 2-5: 뱃지 sm/lg
-- [ ] Phase 3-6: 폼 에러 텍스트 레이아웃 시프트 방지
-- [ ] Phase 3-7: (필요 화면 생길 때) text-tertiary 색상 단계
-- [ ] `docs/UI_CONVENTIONS.md`에 최종 반영된 항목 반영
-- [ ] 적용 후 `tsc --noEmit` + Vitest/Jest/Playwright + 브라우저 라이트·다크 모드 확인
+- [x] Phase 1-1: `.button[data-loading]` CSS 추가 (2026-08-30, `app/globals.css`)
+- [x] Phase 1-2: 타이포그래피 스케일 변수 + 문서화 (`.topbar h1`→`--display-xs`, `.panel-head h2`→`--text-md`로 정렬)
+- [x] Phase 1-3: Shadow 스케일 변수 + 다크모드 대응 + `.panel`/`.kpi`(xs)·`.attendee-suggestions`(md)·`.alert-dialog`(lg) 적용
+- [x] Phase 2-4: 버튼 sm/lg + tertiary
+- [x] Phase 2-5: 뱃지 sm/lg
+- [x] Phase 3-6: 폼 에러 텍스트 레이아웃 시프트 방지 (`.form-error { min-height: 16px }`)
+- [ ] Phase 3-7: (필요 화면 생길 때) text-tertiary 색상 단계 — 아직 필요 화면 없음, 보류 유지
+- [x] `docs/UI_CONVENTIONS.md`에 최종 반영된 항목 반영
+- [ ] 적용 후 `tsc --noEmit` + Vitest/Jest/Playwright + 브라우저 라이트·다크 모드 확인 — 이번 변경은 순수 스타일(CSS)만이라 governance 규칙상 3단계 검증 면제 대상. 브레이스 균형만 스크립트로 확인함(정상). 실제 화면에서 라이트/다크 모드 육안 확인은 아직 미실시.

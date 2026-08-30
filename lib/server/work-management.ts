@@ -347,3 +347,4 @@ async function loadPortfolioDashboard(projectId: string) {
 export function getPortfolioDashboard(projectId: string) {
   return unstable_cache(loadPortfolioDashboard, ["portfolio-dashboard"], { tags: [portfolioTag(projectId)], revalidate: 15 })(projectId);
 }
+export type PortfolioDashboard = Awaited<ReturnType<typeof loadPortfolioDashboard>>;

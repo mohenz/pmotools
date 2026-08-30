@@ -6,7 +6,7 @@ import { mutationErrorResponse } from "@/lib/server/http";
 
 export async function POST(request: Request) {
   const context = await getLocalContext();
-  if (!hasPmPmoAccess(context.jobTitle)) return NextResponse.json({ error: { code: "FORBIDDEN", message: "PM/PMO만 사용할 수 있습니다." } }, { status: 403 });
+  if (!hasPmPmoAccess(context.jobTitle, context.role)) return NextResponse.json({ error: { code: "FORBIDDEN", message: "PM/PMO만 사용할 수 있습니다." } }, { status: 403 });
   try { return NextResponse.json({ data: await createPmoDelayedTask(context.projectId, context.userId, await request.json()) }, { status: 201 }); }
   catch (error) { return mutationErrorResponse(error); }
 }

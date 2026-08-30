@@ -11,6 +11,9 @@ export default function PortfolioLoading() {
         <section className="kpi-grid">
           {Array.from({ length: 4 }, (_, i) => <div className="kpi skeleton skeleton-kpi" key={i} />)}
         </section>
+        <section className="portfolio-domain-grid">
+          {Array.from({ length: 3 }, (_, i) => <div className="panel skeleton skeleton-kpi" key={i} />)}
+        </section>
         <section className="panel">
           <div className="panel-head">
             <h2 className="skeleton skeleton-line" style={{ width: 140 }} />

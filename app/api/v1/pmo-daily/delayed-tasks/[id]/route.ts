@@ -6,7 +6,7 @@ import { mutationErrorResponse } from "@/lib/server/http";
 
 async function contextOrResponse() {
   const context = await getLocalContext();
-  return hasPmPmoAccess(context.jobTitle) ? context : null;
+  return hasPmPmoAccess(context.jobTitle, context.role) ? context : null;
 }
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const context = await contextOrResponse(); if (!context) return NextResponse.json({ error: { code: "FORBIDDEN", message: "PM/PMO만 사용할 수 있습니다." } }, { status: 403 });
