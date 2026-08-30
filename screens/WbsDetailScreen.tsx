@@ -36,6 +36,7 @@ export function WbsDetailScreen({ detail, excelRow }: { detail: NonNullable<WbsI
           <div className="panel-head"><h2>담당 · 일정</h2></div>
           <dl className="wbs-field-grid">
             <div><dt>R&R(실행)</dt><dd>{item.ownerName ?? "-"}</dd></div>
+            <div><dt>사용자ID</dt><dd>{item.ownerLoginId ?? "-"}</dd></div>
             <div><dt>R&R(지원)(모듈)</dt><dd>{item.groupLabel ?? "-"}</dd></div>
             <div><dt>StartDate</dt><dd>{item.startDate ?? "-"}</dd></div>
             <div><dt>DueDate</dt><dd>{item.dueDate ?? "-"}</dd></div>

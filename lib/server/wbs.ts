@@ -46,7 +46,7 @@ export const updateWbsDeliverableSchema = z.object({
 export type WbsItemRow = {
   id: string; displayId: string; projectId: string; parentId: string | null; path: string; level: number; code: string; stage: string | null;
   name: string; description: string; configStatus: string;
-  ownerUserId: string | null; ownerName: string | null;
+  ownerUserId: string | null; ownerName: string | null; ownerLoginId: string | null;
   groupId: string | null; groupLabel: string | null; groupCode: string | null;
   startDate: string | null; dueDate: string | null;
   status: "not_started" | "in_progress" | "completed" | "on_hold";
@@ -79,10 +79,11 @@ async function assertWbsWorkGroupCode(projectId: string, codeId: string) {
   return code;
 }
 
-// 엑셀 원본 A~AU 47개 컬럼과 순서·이름 — 목록 화면과 엑셀 다운로드/업로드가 이 하나만 공유한다.
+// 엑셀 원본 A~AU 47개 컬럼 + 사용자ID(신규, R&R(실행) 바로 뒤) — 목록 화면과 엑셀 다운로드/업로드가 이 하나만 공유한다.
+// 사용자ID는 로그인 ID를 직접 지정해 담당자를 이름 매칭보다 확실하게 지정하기 위한 컬럼이다(비어 있으면 R&R(실행) 이름으로 매칭).
 export const WBS_EXCEL_HEADERS = [
   "wbs_level", "sort", "Project No.", "Confing Status", "Stage", "Task", "Task Description", "TRACK",
-  "상세진도(진도관리대상-4레벨)", "R&R(실행)", "R&R(지원)(모듈)", "StartDate", "DueDate", "Deliverables(이슈 및 사유)",
+  "상세진도(진도관리대상-4레벨)", "R&R(실행)", "사용자ID", "R&R(지원)(모듈)", "StartDate", "DueDate", "Deliverables(이슈 및 사유)",
   "공식여부(입력불필요)", "파일위치(입력불필요)", "트랜젝션코드(정렬SEQ)", "산출물템플릿(입력불필요)", "검수자(입력불필요)", "검수실행일(입력불필요)",
   "계산 가중치(입력불필요)", "가중치(입력불필요)", "Sort(Working Day)", "세부진도(입력불필요)",
   ...WBS_EXCEL_ROLE_NAMES.map((role) => `${role}(진척등록권한)`),
@@ -113,7 +114,7 @@ function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, st
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, parentId: row.parentId, path: row.path, level: row.level, code: codeFromPath(row.path), stage,
     name: row.name, description: row.description, configStatus: row.configStatus,
-    ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? (row.ownerNameRaw || null),
+    ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? (row.ownerNameRaw || null), ownerLoginId: row.owner?.userId ?? (row.ownerLoginId || null),
     groupId: row.groupId, groupLabel: row.group?.label ?? null, groupCode: row.group?.code ?? null,
     startDate: dateStr(start), dueDate: dateStr(due),
     status: row.status, weight: row.weight ? Number(row.weight) : null,
@@ -198,6 +199,18 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   return { rows: filteredRows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize, totalPages };
 }
 export type WbsExcelListResult = Awaited<ReturnType<typeof listWbsItemsExcelColumns>>;
+
+// 작업자별 WBS 현황조회 — 목록 화면의 담당자명 링크(사용자ID를 키로 사용, 사용자ID 자체는 화면에 노출하지 않는다)로 진입한다.
+export async function getWbsOwnerStatus(projectId: string, loginId: string) {
+  const member = await getPrisma().projectMember.findFirst({ where: { projectId, isActive: true, user: { userId: loginId, status: "ACTIVE" } }, include: { user: true } });
+  if (!member) return null;
+  const { rows } = await listWbsItemsExcelColumns(projectId, { pageSize: "all" });
+  const items = rows.filter((row) => row.ownerUserId === member.userId);
+  const leaves = items.filter((row) => row.isLeaf);
+  const overall = rollupProgress(leaves.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
+  return { owner: { userId: member.userId, loginId, name: member.user.name }, overall, items };
+}
+export type WbsOwnerStatus = Awaited<ReturnType<typeof getWbsOwnerStatus>>;
 
 export type WbsStageStat = { stage: string; planned: number; actual: number; delayed: boolean };
 export type WbsStats = { overall: ReturnType<typeof rollupProgress>; delayRate: number; delayedCount: number; delayTrackedCount: number; stages: WbsStageStat[] };

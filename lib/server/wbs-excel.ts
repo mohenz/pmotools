@@ -20,7 +20,7 @@ export async function exportWbsToExcel(projectId: string): Promise<Buffer> {
   for (const item of rows) {
     sheet.addRow([
       item.level, sortKeyFromCode(item.code), item.projectCode, item.configStatus, item.stage ?? "", item.code, item.name, "",
-      item.isLeaf ? 1 : "", item.ownerName ?? "", item.groupLabel ?? "", item.startDate ?? "", item.dueDate ?? "",
+      item.isLeaf ? 1 : "", item.ownerName ?? "", item.ownerLoginId ?? "", item.groupLabel ?? "", item.startDate ?? "", item.dueDate ?? "",
       item.deliverable?.note ?? "", item.deliverable?.isOfficial ? "Y" : "", item.deliverable?.fileUrl ?? "", item.sequenceNo,
       item.deliverable?.templateUrl ?? "", item.deliverable?.reviewerName ?? "", item.deliverable?.reviewedAt ?? "",
       item.workingDays ?? "", item.weight ?? item.workingDays ?? "", item.workingDays ?? "", Math.round(item.actualProgress * 100),
@@ -40,11 +40,16 @@ export type WbsImportReport = { rows: WbsImportRowResult[]; validCount: number; 
 
 type ParsedWbsRow = {
   path: string; level: number; name: string; configStatus: string;
-  ownerUserId: string | null; ownerNameRaw: string; groupId: string | null;
+  ownerUserId: string | null; ownerNameRaw: string; ownerLoginId: string; groupId: string | null;
   startDate: string | null; dueDate: string | null; weight: number | null;
   deliverable: { note: string; isOfficial: boolean; fileUrl: string; templateUrl: string; reviewerUserId: string | null; reviewedAt: string | null } | null;
   assignments: { groupId: string; progressPercent: number }[];
 };
+
+// Stage(레벨1 조상 이름)가 이 값이고 담당자를 특정할 수 없을 때 기본으로 지정할 사용자ID.
+// 2026-08-30 사용자 요청: "stage가 기획이면 담당자는 사용자 id q93w36(이승연)으로 매핑" — 파일에 사용자ID나
+// R&R(실행)이 명시돼 있으면 그 값이 우선하고, 둘 다 비어 있을 때만 이 기본값을 적용한다.
+const STAGE_DEFAULT_OWNER_LOGIN_ID: Record<string, string> = { "기획": "q93w36" };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CODE_RE = /^\d+(\.\d+)*$/;
@@ -61,6 +66,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
   ]);
   const groupsByLabel = new Map(groups.map((group) => [group.label, group]));
   const membersByName = new Map<string, string[]>();
+  const membersByLoginId = new Map(members.map((member) => [member.user.userId, member.user.id]));
   for (const member of members) {
     const ids = membersByName.get(member.user.name) ?? [];
     ids.push(member.user.id);
@@ -73,10 +79,30 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     if (ids.length > 1) { warnings.push(`${fieldLabel}(${name})가 여러 명이라 미지정 처리됩니다.`); return null; }
     return ids[0];
   }
+  // 담당자(R&R 실행) 전용 — 사용자ID가 있으면 이름보다 우선하고, 둘 다 없으면 Stage 기본값을 적용한다.
+  function resolveOwner(loginId: string, name: string, stage: string | null, warnings: string[]): string | null {
+    if (loginId) {
+      const id = membersByLoginId.get(loginId);
+      if (id) return id;
+      warnings.push(`사용자ID(${loginId})를 찾을 수 없어 이름으로 다시 확인합니다.`);
+    }
+    const byName = resolveMember(name, "담당자", warnings);
+    if (byName) return byName;
+    const defaultLoginId = stage ? STAGE_DEFAULT_OWNER_LOGIN_ID[stage] : undefined;
+    if (defaultLoginId && !loginId && !name) {
+      const id = membersByLoginId.get(defaultLoginId);
+      if (id) return id;
+      warnings.push(`Stage(${stage}) 기본 담당자(${defaultLoginId})를 프로젝트에서 찾을 수 없어 미지정 처리됩니다.`);
+    }
+    return null;
+  }
 
   const rows: WbsImportRowResult[] = [];
   const parsed: ParsedWbsRow[] = [];
   const seenPaths = new Set<string>();
+  // Stage(엑셀 E열) = 최상위(레벨1) 조상의 이름 — 상위 행이 하위 행보다 먼저 나온다는 기존 검증 규칙 덕분에
+  // 행을 순서대로 훑으면서 "path의 첫 세그먼트 → 그 레벨1 행의 이름"만 기록해두면 매 행의 Stage를 즉석에서 구할 수 있다.
+  const stageNameByRootPath = new Map<string, string>();
   // ExcelJS는 하이퍼링크 셀을 {text,hyperlink}, 리치텍스트를 {richText:[...]}, 수식을 {formula,result}로 반환한다.
   // String(value)로 바로 문자열화하면 이런 객체가 "[object Object]"로 저장되므로 실제 텍스트를 꺼내 쓴다.
   const cellText = (value: ExcelJS.CellValue): string => {
@@ -131,6 +157,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     if (!name) errors.push("Task Description은 필수입니다.");
 
     const path = codeValid ? pathFromCode(code) : "";
+    let stage: string | null = null;
     if (path) {
       if (seenPaths.has(path)) errors.push(`Task 코드가 중복됩니다(${code}).`);
       const level = levelOf(path);
@@ -139,6 +166,9 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
         if (!seenPaths.has(parentPath)) errors.push(`상위 Task(${codeFromPath(parentPath)})에 해당하는 행이 이 행보다 앞에 있어야 합니다.`);
       }
       seenPaths.add(path);
+      const rootPath = path.split(".")[0];
+      if (level === 1) { stage = name; stageNameByRootPath.set(rootPath, name); }
+      else stage = stageNameByRootPath.get(rootPath) ?? null;
     }
 
     const startDate = cellDateAt(row, "StartDate");
@@ -151,7 +181,8 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     if (weightRaw && !Number.isFinite(weight)) errors.push("가중치는 숫자여야 합니다.");
 
     const ownerName = cellAt(row, "R&R(실행)");
-    const ownerUserId = resolveMember(ownerName, "담당자", warnings);
+    const ownerLoginId = cellAt(row, "사용자ID");
+    const ownerUserId = resolveOwner(ownerLoginId, ownerName, stage, warnings);
     const trackLabel = cellAt(row, "R&R(지원)(모듈)");
     let groupId: string | null = null;
     if (trackLabel) {
@@ -186,7 +217,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     rows.push({ row: rowNumber, code, name: name || "(이름 없음)", errors, warnings });
     if (!errors.length && path) parsed.push({
       path, level: levelOf(path), name, configStatus: cellAt(row, "Confing Status"),
-      ownerUserId, ownerNameRaw: ownerName, groupId, startDate: startDate || null, dueDate: dueDate || null, weight,
+      ownerUserId, ownerNameRaw: ownerName, ownerLoginId, groupId, startDate: startDate || null, dueDate: dueDate || null, weight,
       deliverable: hasDeliverable ? { note, isOfficial, fileUrl, templateUrl, reviewerUserId, reviewedAt: reviewedAt || null } : null,
       assignments,
     });
@@ -223,7 +254,7 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
     itemRows.push({
       id, displayId: `WBS-${year}-${String(index + 1).padStart(6, "0")}`, projectId, parentId,
       path: row.path, level: row.level, name: row.name, description: "",
-      ownerUserId: row.ownerUserId, ownerNameRaw: row.ownerUserId ? "" : row.ownerNameRaw, groupId: row.groupId,
+      ownerUserId: row.ownerUserId, ownerNameRaw: row.ownerUserId ? "" : row.ownerNameRaw, ownerLoginId: row.ownerUserId ? "" : row.ownerLoginId, groupId: row.groupId,
       startDate: row.startDate ? new Date(row.startDate) : null, dueDate: row.dueDate ? new Date(row.dueDate) : null,
       status: "not_started", configStatus: row.configStatus, weight: row.weight ?? null, createdBy: userId,
     });

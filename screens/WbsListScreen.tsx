@@ -39,7 +39,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
         </form>
       </section>
       <section className="panel compact">
-        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.map((h) => <th key={h}>{h}</th>)}</tr></thead>
+        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{h}</th>)}</tr></thead>
           <tbody>{result.rows.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
             <td>{item.level}</td>
             <td className="mono">{sortKeyFromCode(item.code)}</td>
@@ -50,7 +50,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
             <td className="title-cell"><Link className="table-link" href={`/wbs/${item.id}`}>{item.name}</Link></td>
             <td></td>
             <td>{item.isLeaf ? 1 : ""}</td>
-            <td>{item.ownerName ?? ""}</td>
+            <td>{item.ownerUserId && item.ownerLoginId ? <Link className="table-link" href={`/wbs/by-owner/${item.ownerLoginId}`}>{item.ownerName}</Link> : (item.ownerName ?? "")}</td>
             <td>{item.groupLabel ?? ""}</td>
             <td>{dot(item.startDate)}</td>
             <td>{dot(item.dueDate)}</td>
