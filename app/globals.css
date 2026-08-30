@@ -133,8 +133,9 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .brand:focus-visible { outline: 2px solid oklch(1 0 0 / 65%); outline-offset: -3px; }
 .brand-mark { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px; background-image: url(/pmotools-icon.png); background-repeat: no-repeat; background-size: cover; }
 .brand-text { display: block; min-width: 0; }
-.brand span { display: block; color: oklch(1 0 0 / 45%); font: 9px var(--font-mono); letter-spacing: .14em; }
-.brand strong { display: block; margin-top: 5px; color: white; font: 700 16px var(--font-mono); letter-spacing: -.02em; }
+.brand-text > span { display: block; color: oklch(1 0 0 / 45%); font: 9px var(--font-mono); letter-spacing: .14em; }
+.brand strong { display: block; margin-top: 5px; color: white; font: 700 16px var(--font-mono); letter-spacing: -.02em; white-space: nowrap; }
+.brand-accent { background: linear-gradient(90deg, #1170e0, #17d0cd); background-clip: text; -webkit-background-clip: text; color: transparent; }
 .sidebar-tools { padding: 12px 8px; }
 .top-tools { min-width: 0; height: 54px; padding: 5px 12px; overflow: hidden; }
 .top-tools .sidebar-label { display: none; }
@@ -869,7 +870,7 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
   .pmo-task-row { grid-template-columns: 1fr; align-items: stretch; }
   .sidebar { display: none; }
   .brand { padding-inline: 12px; }
-  .brand-text span { display: none; }
+  .brand-text > span { display: none; }
   .module-sidebar { flex-basis: 180px; }
   .module-sidebar .workspace-nav { padding: 16px 10px; }
   .global-header .user-profile-link { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

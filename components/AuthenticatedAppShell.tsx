@@ -58,7 +58,7 @@ export function AuthenticatedAppShell({
               <div className="brand-mark" aria-hidden="true" />
               <span className="brand-text">
                 <span>PROJECT MANAGEMENT</span>
-                <strong>PMOTOOLS</strong>
+                <strong>PMO<span className="brand-accent">TOOLS</span></strong>
               </span>
             </Link>
             <div className="sidebar-foot"><UserMenu /></div>
