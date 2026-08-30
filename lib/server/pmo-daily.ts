@@ -5,6 +5,7 @@ import { delayDays, delayedTaskCount, delayedTaskRate, overallProgress, schedule
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { assertWorkModuleGroup } from "@/lib/server/items";
+import { getWbsDailyTaskCounts } from "@/lib/server/wbs";
 import { DomainError } from "@/lib/server/errors";
 
 const percent = z.number().int().min(0).max(100);
@@ -78,7 +79,9 @@ export async function getPmoDailyDashboard(projectId: string, reportDate: string
     prisma.managementTask.findMany({ where: { projectId, archivedAt: null }, include: { group: true, assignees: { include: { user: true } } }, orderBy: { updatedAt: "desc" }, take: 8 }),
   ]);
   const tasks = snapshot?.delayedTasks ?? [];
-  const plannedTaskCount = snapshot?.plannedTaskCount ?? 0, actualTaskCount = snapshot?.actualTaskCount ?? 0, totalTaskCount = snapshot?.totalTaskCount ?? 0, completedTaskCount = snapshot?.completedTaskCount ?? 0;
+  // 아직 저장되지 않은 일자(신규 작성)는 WBS의 오늘 기준 실제 진행 현황을 기본값으로 보여준다 — 저장된 스냅샷이 있으면 그 값을 그대로 존중한다.
+  const wbsCounts = snapshot ? null : await getWbsDailyTaskCounts(projectId, reportDate);
+  const plannedTaskCount = snapshot?.plannedTaskCount ?? wbsCounts!.plannedTaskCount, actualTaskCount = snapshot?.actualTaskCount ?? wbsCounts!.actualTaskCount, totalTaskCount = snapshot?.totalTaskCount ?? wbsCounts!.totalTaskCount, completedTaskCount = snapshot?.completedTaskCount ?? wbsCounts!.completedTaskCount;
   const delayedCount = delayedTaskCount(plannedTaskCount, actualTaskCount);
   return {
     reportDate,

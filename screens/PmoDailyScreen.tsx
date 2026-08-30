@@ -51,8 +51,8 @@ export function PmoDailyScreen({ data, groups, members, mode }: { data: PmoDaily
       <form className="pmo-date-filter panel compact" action="/pmo-daily/new"><label>기준일<input type="date" name="date" defaultValue={data.reportDate} /></label><button className="button secondary">해당 일자 작성·조회</button>{data.exists && mode === "new" && <span className="badge">이미 저장된 일자입니다. 저장하면 기존 기록이 수정됩니다.</span>}</form>
       <section className="panel" id="progress"><div className="panel-head"><h2>1. 공정현황</h2><span>직접 입력 · 지연지표 자동 계산</span></div>
         <form className="pmo-progress-form" onSubmit={saveSnapshot}>
-          <MetricInput label="계획 TASK 수" name="plannedTaskCount" value={data.snapshot.plannedTaskCount} suffix="건" />
-          <MetricInput label="실적 TASK 수" name="actualTaskCount" value={data.snapshot.actualTaskCount} suffix="건" />
+          <MetricInput label="계획 TASK" name="plannedTaskCount" value={data.snapshot.plannedTaskCount} suffix="건" />
+          <MetricInput label="실적 TASK" name="actualTaskCount" value={data.snapshot.actualTaskCount} suffix="건" />
           <Metric label="공정률" value={`${data.metrics.scheduleProgress}%`} tone="primary" />
           <Metric label="지연 TASK" value={`${data.metrics.delayedTaskCount}건`} />
           <Metric label="지연율" value={`${data.metrics.delayedRate}%`} />
