@@ -38,8 +38,10 @@ export function WbsDetailScreen({ detail, excelRow }: { detail: NonNullable<WbsI
             <div><dt>R&R(실행)</dt><dd>{item.ownerName ?? "-"}</dd></div>
             <div><dt>사용자ID</dt><dd>{item.ownerLoginId ?? "-"}</dd></div>
             <div><dt>R&R(지원)(모듈)</dt><dd>{item.groupLabel ?? "-"}</dd></div>
-            <div><dt>StartDate</dt><dd>{item.startDate ?? "-"}</dd></div>
-            <div><dt>DueDate</dt><dd>{item.dueDate ?? "-"}</dd></div>
+            <div><dt>계획시작일</dt><dd>{item.startDate ?? "-"}</dd></div>
+            <div><dt>계획종료일</dt><dd>{item.dueDate ?? "-"}</dd></div>
+            <div><dt>실적시작일</dt><dd>{item.actualStartDate ?? "-"}</dd></div>
+            <div><dt>실적종료일</dt><dd>{item.actualDueDate ?? "-"}</dd></div>
             <div><dt>계산 가중치(입력불필요)</dt><dd>{item.workingDays ?? "-"}</dd></div>
             <div><dt>가중치(입력불필요)</dt><dd>{item.weight ?? item.workingDays ?? "-"}{item.weight == null && item.workingDays != null && <small> (영업일수 기준 자동 산정)</small>}</dd></div>
             <div><dt>Sort(Working Day)</dt><dd>{item.workingDays ?? "-"}</dd></div>

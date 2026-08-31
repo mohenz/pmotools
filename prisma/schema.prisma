@@ -1281,8 +1281,10 @@ model WbsItem {
   ownerNameRaw String        @default("") // 엑셀 R&R(실행) 원본 텍스트 — 시스템 사용자와 매칭 안 돼도 표시·검색은 되도록 항상 보존
   ownerLoginId String        @default("") // 엑셀 사용자ID 원본 텍스트 — 로그인 ID로 담당자를 확정 지정할 때 쓰며, 매칭 안 돼도 항상 보존
   groupId      String?
-  startDate    DateTime?     @db.Date
-  dueDate      DateTime?     @db.Date
+  startDate    DateTime?     @db.Date // 계획시작일 — 엑셀 StartDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  dueDate      DateTime?     @db.Date // 계획종료일 — 엑셀 DueDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  actualStartDate DateTime?  @db.Date // 실적시작일 — 엑셀 47개 컬럼 서식에는 없는 웹 화면 전용 커스텀 컬럼(사용자ID와 동일 패턴).
+  actualDueDate   DateTime?  @db.Date // 실적종료일 — 위와 동일.
   status       WbsItemStatus @default(not_started)
   configStatus String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
   weight       Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.

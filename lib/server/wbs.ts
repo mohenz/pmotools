@@ -22,6 +22,8 @@ const baseWbsItemSchema = z.object({
   groupId: z.string().uuid().nullable().optional(),
   startDate: optionalDate,
   dueDate: optionalDate,
+  actualStartDate: optionalDate,
+  actualDueDate: optionalDate,
   status: z.enum(["not_started", "in_progress", "completed", "on_hold"]).default("not_started"),
   configStatus: z.string().trim().max(200).default(""),
   weight: z.number().min(0).max(999_999.99).nullable().optional(),
@@ -49,6 +51,7 @@ export type WbsItemRow = {
   ownerUserId: string | null; ownerName: string | null; ownerLoginId: string | null;
   groupId: string | null; groupLabel: string | null; groupCode: string | null;
   startDate: string | null; dueDate: string | null;
+  actualStartDate: string | null; actualDueDate: string | null;
   status: "not_started" | "in_progress" | "completed" | "on_hold";
   weight: number | null;
   workingDays: number | null; plannedProgress: number | null; actualProgress: number; progressIndex: number | null;
@@ -117,6 +120,7 @@ function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, st
     ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? (row.ownerNameRaw || null), ownerLoginId: row.owner?.userId ?? (row.ownerLoginId || null),
     groupId: row.groupId, groupLabel: row.group?.label ?? null, groupCode: row.group?.code ?? null,
     startDate: dateStr(start), dueDate: dateStr(due),
+    actualStartDate: dateStr(row.actualStartDate), actualDueDate: dateStr(row.actualDueDate),
     status: row.status, weight: row.weight ? Number(row.weight) : null,
     workingDays: start && due ? workingDays(start, due, holidays) : null,
     plannedProgress: planned, actualProgress: actual, progressIndex: planned !== null ? progressIndex(actual, planned) : null,
@@ -507,6 +511,7 @@ export async function createWbsItem(projectId: string, userId: string, input: un
         displayId, projectId, parentId: data.parentId ?? null, path, level, name: data.name, description: data.description,
         ownerUserId: data.ownerUserId || null, groupId: data.groupId || null,
         startDate: data.startDate ? new Date(data.startDate) : null, dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null, actualDueDate: data.actualDueDate ? new Date(data.actualDueDate) : null,
         status: data.status, configStatus: data.configStatus, weight: data.weight ?? null, createdBy: userId,
       },
     });
@@ -555,6 +560,7 @@ export async function updateWbsItem(projectId: string, userId: string, id: strin
         parentId: nextParentId, path, level, name: data.name, description: data.description,
         ownerUserId: data.ownerUserId || null, groupId: data.groupId || null,
         startDate: data.startDate ? new Date(data.startDate) : null, dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null, actualDueDate: data.actualDueDate ? new Date(data.actualDueDate) : null,
         status: data.status, configStatus: data.configStatus, weight: data.weight ?? null, version,
       },
     });

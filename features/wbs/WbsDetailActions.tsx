@@ -41,7 +41,8 @@ export function WbsDetailActions({ item, items, groups, members, assignments, de
     const saved = await mutate(`/api/v1/wbs-items/${item.id}`, "PATCH", {
       parentId: form.get("parentId") || null, name: form.get("name"), description: form.get("description"),
       ownerUserId: form.get("ownerUserId") || null, groupId: form.get("groupId") || null,
-      startDate: form.get("startDate") || null, dueDate: form.get("dueDate") || null, status: form.get("status"),
+      startDate: form.get("startDate") || null, dueDate: form.get("dueDate") || null,
+      actualStartDate: form.get("actualStartDate") || null, actualDueDate: form.get("actualDueDate") || null, status: form.get("status"),
       configStatus: form.get("configStatus"), weight: form.get("weight") ? Number(form.get("weight")) : null,
     }, "details");
     if (saved) { router.push(`/wbs/${item.id}`); router.refresh(); }
@@ -103,8 +104,10 @@ export function WbsDetailActions({ item, items, groups, members, assignments, de
         <label>상태<select name="status" defaultValue={item.status}>{WBS_ITEM_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
         <label>Track<select name="groupId" defaultValue={item.groupId ?? ""}><option value="">미지정</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select></label>
         <label>담당자<select name="ownerUserId" defaultValue={item.ownerUserId ?? ""}><option value="">미지정</option>{members.map((member) => <option value={member.id} key={member.id}>{member.name} ({member.userId})</option>)}</select></label>
-        <label>시작일<input type="date" name="startDate" defaultValue={item.startDate ?? ""} /></label>
-        <label>종료일<input type="date" name="dueDate" defaultValue={item.dueDate ?? ""} /></label>
+        <label>계획시작일<input type="date" name="startDate" defaultValue={item.startDate ?? ""} /></label>
+        <label>계획종료일<input type="date" name="dueDate" defaultValue={item.dueDate ?? ""} /></label>
+        <label>실적시작일<input type="date" name="actualStartDate" defaultValue={item.actualStartDate ?? ""} /></label>
+        <label>실적종료일<input type="date" name="actualDueDate" defaultValue={item.actualDueDate ?? ""} /></label>
         <label>설정상태<input name="configStatus" maxLength={200} defaultValue={item.configStatus} /></label>
         <label>가중치<input type="number" name="weight" min={0} max={999999.99} step="0.01" defaultValue={item.weight ?? ""} placeholder="비워두면 영업일수로 자동 산정" /></label>
         <label>항목명<input name="name" required maxLength={200} defaultValue={item.name} /></label>

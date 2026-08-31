@@ -26,8 +26,8 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
           {filters.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
           <input name="q" defaultValue={filters.q} placeholder="Task 코드·이름 검색" aria-label="Task 검색" />
           <input name="assignee" defaultValue={filters.assignee} placeholder="담당자 검색" aria-label="담당자 검색" />
-          <label>시작일<input type="date" name="startDate" defaultValue={filters.startDate} /></label>
-          <label>종료일<input type="date" name="dueDate" defaultValue={filters.dueDate} /></label>
+          <label>계획시작일<input type="date" name="startDate" defaultValue={filters.startDate} /></label>
+          <label>계획종료일<input type="date" name="dueDate" defaultValue={filters.dueDate} /></label>
           <input name="groupLabel" defaultValue={filters.groupLabel} placeholder="지원모듈 검색" aria-label="지원모듈 검색" />
           <select name="leaf" defaultValue={filters.leaf} aria-label="세부진도"><option value="">전체 세부진도</option><option value="y">대상</option><option value="n">비대상</option></select>
           <input type="number" name="plannedMin" min={0} max={100} defaultValue={filters.plannedMin ?? ""} placeholder="목표 %이상" aria-label="목표 최소값" />
