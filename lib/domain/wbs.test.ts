@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, workingDays } from "./wbs";
+import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
 
 describe("nextSegment", () => {
   it("starts a fresh sibling group at 0001", () => {
@@ -111,6 +111,26 @@ describe("progressIndex", () => {
   });
   it("divides actual by planned otherwise", () => {
     expect(progressIndex(0.6, 0.5)).toBeCloseTo(1.2);
+  });
+});
+
+describe("wbsDelayDays", () => {
+  it("counts calendar days past the planned due date", () => {
+    expect(wbsDelayDays(FRI, NEXT_MON)).toBe(3);
+  });
+  it("clamps early or on-time completion to 0", () => {
+    expect(wbsDelayDays(FRI, FRI)).toBe(0);
+    expect(wbsDelayDays(FRI, WED)).toBe(0);
+  });
+});
+
+describe("wbsDelayRate", () => {
+  it("expresses delay days as a percentage of planned working days", () => {
+    expect(wbsDelayRate(2, 10)).toBe(20);
+  });
+  it("is 0 when there is no delay or no planned duration", () => {
+    expect(wbsDelayRate(0, 10)).toBe(0);
+    expect(wbsDelayRate(2, 0)).toBe(0);
   });
 });
 

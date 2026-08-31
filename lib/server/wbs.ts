@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, workingDays } from "@/lib/domain/wbs";
+import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayDays, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
@@ -54,7 +54,8 @@ export type WbsItemRow = {
   actualStartDate: string | null; actualDueDate: string | null;
   status: "not_started" | "in_progress" | "completed" | "on_hold";
   weight: number | null;
-  workingDays: number | null; plannedProgress: number | null; actualProgress: number; progressIndex: number | null;
+  workingDays: number | null; actualWorkingDays: number | null; plannedProgress: number | null; actualProgress: number; progressIndex: number | null;
+  delayDays: number | null; delayRate: number | null;
   createdAt: string; updatedAt: string; version: number;
 };
 export type WbsItemEventRow = { id: string; eventType: string; actorName: string; body: string | null; beforeData: Record<string, unknown> | null; afterData: Record<string, unknown> | null; createdAt: string };
@@ -112,18 +113,22 @@ async function loadHolidaySet(projectId: string): Promise<Set<string>> {
 
 function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, stage: string | null): WbsItemRow {
   const start = row.startDate, due = row.dueDate;
+  const actualStart = row.actualStartDate, actualDue = row.actualDueDate;
   const actual = actualProgress(row.assignments.map((a) => a.progressPercent));
   const planned = start && due ? plannedProgress(today, start, due) : null;
+  const plannedWorkingDays = start && due ? workingDays(start, due, holidays) : null;
+  const delayDaysValue = due && actualDue ? wbsDelayDays(due, actualDue) : null;
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, parentId: row.parentId, path: row.path, level: row.level, code: codeFromPath(row.path), stage,
     name: row.name, description: row.description, configStatus: row.configStatus,
     ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? (row.ownerNameRaw || null), ownerLoginId: row.owner?.userId ?? (row.ownerLoginId || null),
     groupId: row.groupId, groupLabel: row.group?.label ?? null, groupCode: row.group?.code ?? null,
     startDate: dateStr(start), dueDate: dateStr(due),
-    actualStartDate: dateStr(row.actualStartDate), actualDueDate: dateStr(row.actualDueDate),
+    actualStartDate: dateStr(actualStart), actualDueDate: dateStr(actualDue),
     status: row.status, weight: row.weight ? Number(row.weight) : null,
-    workingDays: start && due ? workingDays(start, due, holidays) : null,
+    workingDays: plannedWorkingDays, actualWorkingDays: actualStart && actualDue ? workingDays(actualStart, actualDue, holidays) : null,
     plannedProgress: planned, actualProgress: actual, progressIndex: planned !== null ? progressIndex(actual, planned) : null,
+    delayDays: delayDaysValue, delayRate: delayDaysValue !== null && plannedWorkingDays !== null ? wbsDelayRate(delayDaysValue, plannedWorkingDays) : null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), version: row.version,
   } satisfies WbsItemRow;
 }

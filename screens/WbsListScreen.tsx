@@ -39,7 +39,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
         </form>
       </section>
       <section className="panel compact">
-        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{h}</th>)}</tr></thead>
+        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{h}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th></tr></thead>
           <tbody>{result.rows.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
             <td>{item.level}</td>
             <td className="mono">{sortKeyFromCode(item.code)}</td>
@@ -70,6 +70,14 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
             <td>{pct(item.plannedProgress)}</td>
             <td>{pct(item.actualProgress)}</td>
             <td>{pct(item.progressIndex)}</td>
+            <td>{dot(item.startDate)}</td>
+            <td>{dot(item.dueDate)}</td>
+            <td data-numeric>{item.workingDays ?? "-"}</td>
+            <td>{dot(item.actualStartDate)}</td>
+            <td>{dot(item.actualDueDate)}</td>
+            <td data-numeric>{item.actualWorkingDays ?? "-"}</td>
+            <td data-numeric>{item.delayRate === null ? "-" : `${item.delayRate}%`}</td>
+            <td data-numeric>{item.delayDays === null ? "-" : `${item.delayDays}일`}</td>
           </ClickableTableRow>)}</tbody></table></div> : <div className="empty">등록된 WBS 항목이 없습니다.</div>}
       </section>
       {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동"><form className="page-size-form" method="get">{filters.q && <input type="hidden" name="q" value={filters.q} />}{filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}{filters.startDate && <input type="hidden" name="startDate" value={filters.startDate} />}{filters.dueDate && <input type="hidden" name="dueDate" value={filters.dueDate} />}{filters.groupLabel && <input type="hidden" name="groupLabel" value={filters.groupLabel} />}{filters.leaf && <input type="hidden" name="leaf" value={filters.leaf} />}{filters.plannedMin != null && <input type="hidden" name="plannedMin" value={filters.plannedMin} />}{filters.actualMin != null && <input type="hidden" name="actualMin" value={filters.actualMin} />}{filters.progressMin != null && <input type="hidden" name="progressMin" value={filters.progressMin} />}<label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="10">10개</option><option value="20">20개</option><option value="40">40개</option><option value="60">60개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label><button className="button secondary" type="submit">적용</button></form><div className="page-links">{result.page > 1 && <Link href={`/wbs?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}{pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/wbs?${queryString(filters, { page })}`} key={page}>{page}</Link>)}{result.page < result.totalPages && <Link href={`/wbs?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}</div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}

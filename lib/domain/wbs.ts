@@ -97,6 +97,20 @@ export function progressIndex(actual: number, planned: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// WBS 목록 화면의 지연율/지연일자 — 계획종료일 대비 실적종료일만 사용한다(오늘/실적 진행률은 쓰지 않음).
+// ---------------------------------------------------------------------------
+
+/** 계획종료일 대비 실적종료일 지연일수(달력일) — 조기·정시 완료는 0. */
+export function wbsDelayDays(plannedDue: Date, actualDue: Date): number {
+  return Math.max(0, dayCount(plannedDue, actualDue));
+}
+
+/** 지연율(%) = 지연일수 ÷ 계획소요일(영업일) × 100. 계획소요일이 0이면 0. */
+export function wbsDelayRate(delayDays: number, plannedWorkingDays: number): number {
+  return plannedWorkingDays > 0 ? Math.round((delayDays / plannedWorkingDays) * 100) : 0;
+}
+
+// ---------------------------------------------------------------------------
 // 통계 화면 — leaf 항목(상세진도 진도관리대상)의 가중치(weight ?? workingDays) 기준 가중평균 롤업.
 // ---------------------------------------------------------------------------
 
