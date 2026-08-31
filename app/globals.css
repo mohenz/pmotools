@@ -310,9 +310,13 @@ tfoot .totals-row:hover td { background: var(--muted); }
 .mono { font-family: var(--font-mono); font-size: 13px; }
 td.mono, td[data-numeric] { text-align: right; }
 .title-cell { max-width: 320px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
-/* WBS 목록 — wbs_level~Task Description(1~7번째 컬럼) 열고정, 나머지 40개 컬럼만 가로 스크롤 */
+/* WBS 목록 — wbs_level~Task Description(1~7번째 컬럼) 열고정, 나머지 40개 컬럼만 가로 스크롤.
+   overflow-x:auto가 있으면 overflow-y도 브라우저가 auto로 승격시키는 스펙 규정 때문에(overflow-y:visible을 명시해도 무시됨),
+   페이지 스크롤 기준 sticky는 불가능 — 대신 이 래퍼 자체에 높이를 주고 내부 스크롤로 타이틀 행(thead)을 top:0으로 고정(틀고정)한다. */
+.wbs-table-wrap { max-height: 70vh; overflow-y: auto; }
+.wbs-table-wrap thead th { position: sticky; top: 0; z-index: 2; background: var(--card); }
 .wbs-table-wrap th:nth-child(-n+7), .wbs-table-wrap td:nth-child(-n+7) { position: sticky; overflow: hidden; text-overflow: ellipsis; background: var(--card); }
-.wbs-table-wrap th:nth-child(-n+7) { z-index: 2; }
+.wbs-table-wrap th:nth-child(-n+7) { z-index: 3; }
 .wbs-table-wrap td:nth-child(-n+7) { z-index: 1; }
 .wbs-table-wrap tbody tr:hover td:nth-child(-n+7) { background: var(--accent); }
 .wbs-table-wrap th:nth-child(1), .wbs-table-wrap td:nth-child(1) { left: 0; width: 44px; min-width: 44px; }
