@@ -10,7 +10,6 @@ import { hasPmPmoAccess } from "@/lib/domain/job-access";
 
 const TOOL_ICONS: Record<string, ElementType> = { portfolio: DashboardIcon, "management-tasks": PerformanceIcon, wbs: GanttIcon, "pmo-daily": TaskIcon, "work-logs": DocumentIcon, calendar: CalendarIcon, meetrooms: MeetingRoomIcon, items: IssueAlertIcon, requirements: RequestIcon, announcements: NotificationIcon, "weekly-reports": ReportIcon, "weekly-progress": ProgressIcon, "staff-changes": TeamIcon, messages: MessageIcon, manuals: FileIcon };
 const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks/dashboard", wbs: "/wbs", "pmo-daily": "/pmo-daily", "work-logs": "/work-logs", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
-const TOOL_SUB: Record<string, string> = { portfolio: "Portfolio", "management-tasks": "Monitoring", wbs: "WBS", "pmo-daily": "Daily Control", "work-logs": "Daily Work Log", calendar: "Calendar", meetrooms: "Meeting Rooms", items: "Issue & Risk", requirements: "Requirements", announcements: "Notice Board", "weekly-reports": "Weekly Report", "weekly-progress": "Progress", "staff-changes": "Staff", messages: "Messages", manuals: "User Guide" };
 const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", wbs: "WBS", "pmo-daily": "PMO Daily", "work-logs": "업무일지", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "메뉴얼" };
 
 export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[]; canManageWorkLogs?: boolean }) {
@@ -24,16 +23,16 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   const toolActive = (key: string, href: string) => key === "items" || key === "management-tasks" ? pathname.startsWith(`/${key}`) : pathname.startsWith(href);
   const menuLabels = new Map(menuPrefs.map((item) => [item.key, item.label]));
-  const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: menuLabels.get(key) ?? TOOL_LABEL[key], sub: TOOL_SUB[key], active: toolActive(key, TOOL_HREF[key]) }));
+  const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: menuLabels.get(key) ?? TOOL_LABEL[key], active: toolActive(key, TOOL_HREF[key]) }));
 
   if (area === "sidebar") {
-    const sidebarTools = menuPrefs.filter((m) => m.key !== "messages" && isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (!["items", "management-tasks", "pmo-daily"].includes(m.key) || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, sub: TOOL_SUB[m.key], active: toolActive(m.key, TOOL_HREF[m.key]) }));
+    const sidebarTools = menuPrefs.filter((m) => m.key !== "messages" && isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (!["items", "management-tasks", "pmo-daily"].includes(m.key) || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, active: toolActive(m.key, TOOL_HREF[m.key]) }));
     return <>
       <div className="sidebar-tools top-tools">
         <span className="sidebar-label">TOOLS</span>
         <nav className="tool-nav top-tool-nav" aria-label="프로젝트 관리 도구">
           {sidebarTools.map((tool) => <Link className={tool.active ? "active" : ""} aria-current={tool.active ? "page" : undefined} href={tool.href} key={tool.key}>
-            <span className="tool-mark"><tool.icon aria-hidden="true" /></span><span><strong>{tool.label}</strong><small>{tool.sub}</small></span>
+            <span className="tool-mark"><tool.icon aria-hidden="true" /></span><span><strong>{tool.label}</strong></span>
           </Link>)}
         </nav>
       </div>
