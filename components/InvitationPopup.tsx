@@ -1,7 +1,8 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { CalendarDays, MapPin, Users, X } from "lucide-react";
+import { MapPin, X } from "lucide-react";
+import { CalendarIcon, TeamIcon } from "@/components/icons/PmoIcons";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -88,7 +89,7 @@ export function InvitationPopup() {
         </header>
         <div className="calendar-invitation-list">
           {items.map((item) => item.kind === "calendar" ? <article key={item.notice.messageId}>
-            <div className="calendar-invitation-icon"><CalendarDays aria-hidden="true" /></div>
+            <div className="calendar-invitation-icon"><CalendarIcon aria-hidden="true" /></div>
             <div>
               <strong>{item.notice.invitation.title}{item.notice.invitation.isRecurring && " · 반복"}</strong>
               <p>{periodOf(item.notice.invitation.startAt, item.notice.invitation.endAt, item.notice.invitation.allDay)}</p>
@@ -97,7 +98,7 @@ export function InvitationPopup() {
             </div>
             {item.notice.calendarEventId && <button className="button secondary small" type="button" onClick={() => void openCalendar(item.notice)} disabled={pending}>일정 보기</button>}
           </article> : <article key={item.notice.messageId}>
-            <div className="calendar-invitation-icon"><Users aria-hidden="true" /></div>
+            <div className="calendar-invitation-icon"><TeamIcon aria-hidden="true" /></div>
             <div>
               <strong>{item.notice.invitation.roomName}</strong>
               <p>{periodOf(item.notice.invitation.startAt, item.notice.invitation.endAt, false)}</p>
