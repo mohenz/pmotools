@@ -5,7 +5,9 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { getMemberRole, isManagerRole } from "@/lib/server/permissions";
 import { canDeleteWorkLog, canViewWorkLog } from "@/lib/domain/work-logs";
+import { pathFromCode } from "@/lib/domain/wbs";
 
+const WBS_CODE_RE = /^\d+(\.\d+)*$/;
 const dateValue = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const statusSchema = z.enum(["IN_PROGRESS", "COMPLETED"]);
@@ -113,7 +115,11 @@ export async function getWorkLogDetail(projectId: string, id: string, viewerUser
   const role = await getMemberRole(projectId, viewerUserId);
   const canView = canViewWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) });
   if (!canView) return null;
-  return { id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, assigneeUserId: row.assignee.userId, wbsNumber: row.wbsNumber, status: row.status, workContent: row.workContent, referenceContent: row.referenceContent, notes: row.notes, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), editable: row.assigneeId === viewerUserId, deletable: canDeleteWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) }) };
+  // WBS번호는 자유 입력 텍스트라 실제 WBS 항목과 연결이 보장되지 않는다 — Task 코드 형식일 때만 path로 조회해 링크 대상을 찾는다.
+  const wbsItem = WBS_CODE_RE.test(row.wbsNumber)
+    ? await getPrisma().wbsItem.findFirst({ where: { projectId, path: pathFromCode(row.wbsNumber), archivedAt: null }, select: { id: true } })
+    : null;
+  return { id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, assigneeUserId: row.assignee.userId, wbsNumber: row.wbsNumber, wbsItemId: wbsItem?.id ?? null, status: row.status, workContent: row.workContent, referenceContent: row.referenceContent, notes: row.notes, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), editable: row.assigneeId === viewerUserId, deletable: canDeleteWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) }) };
 }
 
 export async function createWorkLog(projectId: string, userId: string, input: unknown) {

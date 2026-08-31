@@ -215,6 +215,18 @@ export async function getWbsOwnerStatus(projectId: string, loginId: string) {
   const overall = rollupProgress(leaves.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
   return { owner: { userId: member.userId, loginId, name: member.user.name }, overall, items };
 }
+
+export type WbsOwnerTaskOption = { code: string; name: string };
+
+// 업무일지 작성/수정 화면의 WBS번호 자동완성 후보 — 작성자가 담당(ownerUserId)인 leaf Task의 코드·이름만 가볍게 반환한다.
+// wbsNumber는 여전히 자유 입력 텍스트라 이 목록은 제안일 뿐이며, 목록에 없는 값도 직접 입력할 수 있다.
+export async function listWbsTaskOptionsForOwner(projectId: string, ownerUserId: string): Promise<WbsOwnerTaskOption[]> {
+  const items = await listWbsItems(projectId);
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  return items
+    .filter((item) => !parentIds.has(item.id) && item.ownerUserId === ownerUserId)
+    .map((item) => ({ code: item.code, name: item.name }));
+}
 export type WbsOwnerStatus = Awaited<ReturnType<typeof getWbsOwnerStatus>>;
 
 export type WbsStageStat = { stage: string; itemCount: number; planned: number; actual: number; delayed: boolean };
