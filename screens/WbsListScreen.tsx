@@ -13,6 +13,8 @@ function queryString(filters: Filters, overrides: Record<string, string | number
 
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
 const pct = (value: number | null) => (value === null ? "" : `${Math.round(value * 100)}%`);
+// 엑셀 원본 헤더 텍스트는 그대로 유지하되(다운로드/업로드 호환), 화면 표시용으로만 "(입력불필요)" 안내문구를 뺀다.
+const displayHeader = (header: string) => header.replace("(입력불필요)", "");
 
 export function WbsListScreen({ result, filters }: { result: WbsExcelListResult; filters: Filters }) {
   const pageLinkCount = Math.min(10, result.totalPages);
@@ -39,7 +41,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
         </form>
       </section>
       <section className="panel compact">
-        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{h}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th></tr></thead>
+        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{displayHeader(h)}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th></tr></thead>
           <tbody>{result.rows.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
             <td>{item.level}</td>
             <td className="mono">{sortKeyFromCode(item.code)}</td>
