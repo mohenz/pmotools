@@ -26,8 +26,8 @@ export function PortfolioScreen({ wbsStats, requirementStats, myWbsStatus }: {
     <div className="content">
       <section className="portfolio-domain-grid" aria-label="핵심 업무 현황">
         <Link href="/wbs/stats" className="panel domain-summary">
-          <div className="panel-head"><h2>WBS 진척</h2><span>{fmt(wbsStats.itemCount)}건</span></div>
-          <WbsProgressChart planned={wbsStats.overall.planned} actual={wbsStats.overall.actual} />
+          <div className="panel-head"><h2>WBS 진척</h2><span>{wbsStats.stages.length}개 Stage · {fmt(wbsStats.itemCount)}건</span></div>
+          <WbsProgressChart stages={wbsStats.stages} />
           <p className="domain-summary-foot">지연 <strong className={wbsStats.delayedCount > 0 ? "critical" : undefined}>{fmt(wbsStats.delayedCount)}건</strong> · 전체 지연율 <strong>{pct(wbsStats.delayRate)}%</strong></p>
         </Link>
 
@@ -36,22 +36,6 @@ export function PortfolioScreen({ wbsStats, requirementStats, myWbsStatus }: {
           <RequirementStatusChart accepted={requirementStats.accepted} partiallyAccepted={requirementStats.partiallyAccepted} rejected={requirementStats.rejected} />
           <p className="domain-summary-foot">수용률 <strong>{requirementStats.total ? Math.round((requirementStats.accepted / requirementStats.total) * 100) : 0}%</strong></p>
         </Link>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head"><h2>WBS 현황</h2><span>{wbsStats.stages.length}개 Stage · {fmt(wbsStats.itemCount)}건</span></div>
-        <div className="table-wrap dashboard-subpanel-scroll">
-          <table><thead><tr><th>Stage</th><th>건수</th><th>계획</th><th>실적</th><th>상태</th></tr></thead>
-            <tbody>{wbsStats.stages.map((stage) => <tr key={stage.stage}>
-              <td>{stage.stage}</td>
-              <td data-numeric>{fmt(stage.itemCount)}건</td>
-              <td data-numeric>{pct(stage.planned)}%</td>
-              <td data-numeric>{pct(stage.actual)}%</td>
-              <td>{stage.delayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-        <Link className="text-button" href="/wbs/stats">전체 통계 보기</Link>
       </section>
 
       <section className="panel">

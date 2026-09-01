@@ -80,46 +80,56 @@ function datasetLegend(unit: string) {
   return (chart: Chart): LegendItem[] => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number) ?? 0}${unit}`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i }));
 }
 
-export function WbsProgressChart({ planned, actual }: { planned: number; actual: number }) {
+export type WbsStageProgress = { stage: string; planned: number; actual: number; delayed: boolean };
+
+// Stage별로 한 줄씩 — 계획 대비 실적을 겹쳐 그린 불릿 막대 한 줄에 담아, Stage 전체 진행 상태를 한 화면에서 보여준다.
+export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card");
-    const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual");
-    const plannedPct = Math.round(planned * 100), actualPct = Math.round(actual * 100);
+    const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual"), destructiveColor = cssVar("--destructive");
+    const labels = stages.map((s) => s.stage);
+    const plannedPct = stages.map((s) => Math.round(s.planned * 100));
+    const actualPct = stages.map((s) => Math.round(s.actual * 100));
+    const actualColors = stages.map((s) => (s.delayed ? destructiveColor : actualColor));
     return new Chart(canvas, {
       type: "bar",
       data: {
-        labels: ["공정율"],
+        labels,
         datasets: [
           // grouped: false로 두 데이터셋을 같은 줄에 겹쳐 그린다 — 배열 앞쪽이 위로 그려지므로 실적을 먼저, 계획을 배경으로 나중에 넣는다.
-          { label: "실적", data: [actualPct], backgroundColor: actualColor, borderRadius: 4, maxBarThickness: 22, grouped: false },
-          { label: "계획", data: [plannedPct], backgroundColor: plannedColor, borderRadius: 4, maxBarThickness: 22, grouped: false },
+          { label: "실적", data: actualPct, backgroundColor: actualColors, borderRadius: 3, maxBarThickness: 16, grouped: false },
+          { label: "계획", data: plannedPct, backgroundColor: plannedColor, borderRadius: 3, maxBarThickness: 16, grouped: false },
         ],
       },
       options: {
         indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { min: 0, max: 100, grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
-          y: { grid: { display: false }, ticks: { display: false } },
+          x: { min: 0, max: 100, position: "top", grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
+          y: { grid: { display: false }, ticks: { color: foreground, font: { size: 11 } } },
         },
         plugins: {
           legend: {
             position: "bottom",
             labels: {
               color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11 },
-              // 그리기 순서(겹침 표시용)와 무관하게 범례는 항상 계획→실적 순으로 표시한다.
-              generateLabels: (chart) => ["계획", "실적"].map((label, i) => {
-                const ds = chart.data.datasets.find((d) => d.label === label)!;
-                return { text: `${label} ${ds.data[0] as number}%`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i };
-              }),
+              generateLabels: () => [
+                { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, index: 0 },
+                { text: "실적(정상)", fillStyle: actualColor, strokeStyle: actualColor, index: 1 },
+                { text: "실적(지연)", fillStyle: destructiveColor, strokeStyle: destructiveColor, index: 2 },
+              ],
             },
           },
-          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}%` } },
+          tooltip: {
+            backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8,
+            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}%`, afterLabel: (ctx) => (ctx.datasetIndex === 0 ? (stages[ctx.dataIndex].delayed ? "지연" : "정상") : "") },
+          },
         },
       },
     });
-  }, [planned, actual]);
-  return <div className="domain-chart"><canvas ref={canvasRef} role="img" aria-label={`WBS 계획 ${Math.round(planned * 100)}% 대비 실적 ${Math.round(actual * 100)}% 막대 그래프`} /></div>;
+  }, [stages]);
+  const height = Math.max(140, stages.length * 22 + 60);
+  return <div className="domain-chart" style={{ height }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
 export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }: { accepted: number; partiallyAccepted: number; rejected: number }) {
