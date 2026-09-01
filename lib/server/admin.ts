@@ -142,6 +142,24 @@ export async function updateUserProfile(projectId: string, adminUserId: string, 
   return { id: targetUserId, name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle };
 }
 
+const loginIdSchema = z.object({
+  userId: z.string().trim().min(3).max(50).regex(/^[A-Za-z0-9._-]+$/, "아이디는 영문/숫자/._- 만 사용할 수 있습니다."),
+});
+export async function updateUserLoginId(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
+  await assertAdmin(projectId, adminUserId);
+  const data = loginIdSchema.parse(input);
+  const prisma = getPrisma();
+  const current = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!current) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+  if (data.userId !== current.userId) {
+    const existing = await prisma.user.findUnique({ where: { userId: data.userId } });
+    if (existing) throw new DomainError("DUPLICATE_CODE", "이미 사용 중인 아이디입니다.");
+  }
+  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { userId: data.userId } });
+  await writeAuditLog(projectId, adminUserId, "USER_LOGIN_ID_UPDATE", "users", targetUserId, { userId: current.userId }, { userId: updated.userId });
+  return { id: targetUserId, userId: updated.userId };
+}
+
 export async function deleteUser(projectId: string, adminUserId: string, targetUserId: string) {
   await assertAdmin(projectId, adminUserId);
   if (targetUserId === adminUserId) throw new DomainError("FORBIDDEN", "본인 계정은 삭제할 수 없습니다.");

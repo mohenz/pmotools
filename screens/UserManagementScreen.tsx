@@ -33,6 +33,7 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
   const [drafts, setDrafts] = useState<Record<string, ProfileDraft>>({});
   const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
   const [resetDrafts, setResetDrafts] = useState<Record<string, string>>({});
+  const [loginIdDrafts, setLoginIdDrafts] = useState<Record<string, string>>({});
   const [workGroupDrafts, setWorkGroupDrafts] = useState<Record<string, string[]>>({});
 
   async function resolveRequest(requestId: string) {
@@ -78,6 +79,17 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
     if (!response.ok) { setMessage(payload?.error?.message ?? "비밀번호를 초기화하지 못했습니다."); return; }
     setResetDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
     setTempPassword({ userId: user.userId, value: payload.data.tempPassword });
+  }
+  async function changeLoginId(user: AdminUserRow) {
+    const next = (loginIdDrafts[user.id] ?? user.userId).trim();
+    if (!next || next === user.userId) return;
+    setPending(`loginid-${user.id}`); setMessage("");
+    const response = await fetch(`/api/v1/admin/users/${user.id}/login-id`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId: next }) });
+    const payload = await response.json().catch(() => null);
+    setPending("");
+    if (!response.ok) { setMessage(payload?.error?.message ?? "아이디를 변경하지 못했습니다."); return; }
+    setLoginIdDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
+    router.refresh();
   }
   async function saveProfile(user: AdminUserRow) {
     const draft = draftFor(user);
@@ -187,7 +199,12 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
               {users.map((user) => {
                 const draft = draftFor(user);
                 return <tr key={user.id}>
-                  <td className="mono">{user.userId}</td>
+                  <td>
+                    <span className="inline-action-group">
+                      <input aria-label={`${user.userId} 아이디`} className="mono" style={{ width: 110 }} value={loginIdDrafts[user.id] ?? user.userId} onChange={(event) => setLoginIdDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))} minLength={3} maxLength={50} />
+                      <button className="button secondary" type="button" disabled={pending === `loginid-${user.id}` || (loginIdDrafts[user.id] ?? user.userId).trim() === user.userId} onClick={() => changeLoginId(user)}>{pending === `loginid-${user.id}` ? "변경 중…" : "아이디 변경"}</button>
+                    </span>
+                  </td>
                   <td><input aria-label={`${user.userId} 이름`} value={draft.name} onChange={(event) => updateDraft(user, "name", event.target.value)} required maxLength={50} /></td>
                   <td><input aria-label={`${user.userId} 이메일`} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 회사명`} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
