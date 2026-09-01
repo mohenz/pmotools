@@ -193,7 +193,7 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
       <section className="panel">
         <div className="panel-head"><h2>사용자 목록</h2><span>{result.total}명</span></div>
         <div className="table-wrap">
-          <table className="dense-table">
+          <table className="dense-table user-management-table">
             <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>업무그룹</th><th>권한</th><th>상태</th><th /></tr></thead>
             <tbody>
               {users.map((user) => {
@@ -205,10 +205,10 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
                       <button className="button secondary" type="button" disabled={pending === `loginid-${user.id}` || (loginIdDrafts[user.id] ?? user.userId).trim() === user.userId} onClick={() => changeLoginId(user)}>{pending === `loginid-${user.id}` ? "변경 중…" : "아이디 변경"}</button>
                     </span>
                   </td>
-                  <td><input aria-label={`${user.userId} 이름`} value={draft.name} onChange={(event) => updateDraft(user, "name", event.target.value)} required maxLength={50} /></td>
-                  <td><input aria-label={`${user.userId} 이메일`} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
-                  <td><input aria-label={`${user.userId} 회사명`} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
-                  <td><input aria-label={`${user.userId} 직무`} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
+                  <td><input aria-label={`${user.userId} 이름`} style={{ width: 120 }} value={draft.name} onChange={(event) => updateDraft(user, "name", event.target.value)} required maxLength={50} /></td>
+                  <td><input aria-label={`${user.userId} 이메일`} style={{ width: 190 }} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
+                  <td><input aria-label={`${user.userId} 회사명`} style={{ width: 150 }} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
+                  <td><input aria-label={`${user.userId} 직무`} style={{ width: 120 }} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
                   <td><WorkGroupSelector user={user} groups={workGroups} selectedIds={selectedWorkGroups(user)} pending={pending === `groups-${user.id}`} onSave={(groupId) => saveWorkGroups(user, groupId)} /></td>
                   <td>
                     <select className="user-role-select" aria-label={`${user.userId} 권한`} value={user.role} disabled={pending === `role-${user.id}`} onChange={(event) => changeRole(user, event.target.value)}>
