@@ -217,11 +217,50 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
                   </td>
                   <td><span className={`badge ${user.status === "LOCKED" ? "issue" : "level-pm"}`}>{user.status === "LOCKED" ? "잠김" : "정상"}</span></td>
                   <td className="topbar-actions">
-                    <button className="button secondary" type="button" disabled={pending === `profile-${user.id}`} onClick={() => saveProfile(user)}>{pending === `profile-${user.id}` ? "저장 중…" : "정보 저장"}</button>
-                    <button className="button secondary" type="button" disabled={pending === `status-${user.id}`} onClick={() => toggleStatus(user)}>{user.status === "LOCKED" ? "잠금 해제" : "계정 잠금"}</button>
+                    <AlertDialog.Root>
+                      <AlertDialog.Trigger asChild><button className="button secondary" type="button" disabled={pending === `profile-${user.id}`}>{pending === `profile-${user.id}` ? "저장 중…" : "정보 저장"}</button></AlertDialog.Trigger>
+                      <AlertDialog.Portal>
+                        <AlertDialog.Overlay className="calendar-modal-backdrop" />
+                        <AlertDialog.Content className="alert-dialog">
+                          <AlertDialog.Title asChild><h2>{user.userId}의 정보를 저장하시겠습니까?</h2></AlertDialog.Title>
+                          <AlertDialog.Description asChild><p>이름·이메일·회사명·직무 변경사항이 저장됩니다.</p></AlertDialog.Description>
+                          <div className="alert-dialog-actions">
+                            <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                            <AlertDialog.Action asChild><button className="button primary" type="button" onClick={() => saveProfile(user)}>저장</button></AlertDialog.Action>
+                          </div>
+                        </AlertDialog.Content>
+                      </AlertDialog.Portal>
+                    </AlertDialog.Root>
+                    <AlertDialog.Root>
+                      <AlertDialog.Trigger asChild><button className="button secondary" type="button" disabled={pending === `status-${user.id}`}>{user.status === "LOCKED" ? "잠금 해제" : "계정 잠금"}</button></AlertDialog.Trigger>
+                      <AlertDialog.Portal>
+                        <AlertDialog.Overlay className="calendar-modal-backdrop" />
+                        <AlertDialog.Content className="alert-dialog">
+                          <AlertDialog.Title asChild><h2>{user.userId} 계정을 {user.status === "LOCKED" ? "잠금 해제" : "잠금"}하시겠습니까?</h2></AlertDialog.Title>
+                          <AlertDialog.Description asChild><p>{user.status === "LOCKED" ? "즉시 로그인과 프로젝트 접근이 다시 허용됩니다." : "즉시 로그인과 프로젝트 접근이 차단됩니다."}</p></AlertDialog.Description>
+                          <div className="alert-dialog-actions">
+                            <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                            <AlertDialog.Action asChild><button className="button primary" type="button" onClick={() => toggleStatus(user)}>{user.status === "LOCKED" ? "잠금 해제" : "계정 잠금"}</button></AlertDialog.Action>
+                          </div>
+                        </AlertDialog.Content>
+                      </AlertDialog.Portal>
+                    </AlertDialog.Root>
                     <span className="inline-action-group">
                       <input aria-label={`${user.userId} 지정 비밀번호(선택)`} className="mono" style={{ width: 140 }} placeholder="비밀번호 입력" value={resetDrafts[user.id] ?? ""} onChange={(event) => setResetDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))} minLength={8} maxLength={100} />
-                      <button className="button secondary" type="button" disabled={pending === `reset-${user.id}`} onClick={() => resetPassword(user)}>{resetDrafts[user.id]?.trim() ? "비밀번호 지정" : "비밀번호 초기화"}</button>
+                      <AlertDialog.Root>
+                        <AlertDialog.Trigger asChild><button className="button secondary" type="button" disabled={pending === `reset-${user.id}`}>{resetDrafts[user.id]?.trim() ? "비밀번호 지정" : "비밀번호 초기화"}</button></AlertDialog.Trigger>
+                        <AlertDialog.Portal>
+                          <AlertDialog.Overlay className="calendar-modal-backdrop" />
+                          <AlertDialog.Content className="alert-dialog">
+                            <AlertDialog.Title asChild><h2>{user.userId}의 비밀번호를 {resetDrafts[user.id]?.trim() ? "지정" : "초기화"}하시겠습니까?</h2></AlertDialog.Title>
+                            <AlertDialog.Description asChild><p>{resetDrafts[user.id]?.trim() ? "입력한 비밀번호로 즉시 변경됩니다." : "임시 비밀번호가 발급되며 기존 비밀번호는 사용할 수 없게 됩니다."}</p></AlertDialog.Description>
+                            <div className="alert-dialog-actions">
+                              <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                              <AlertDialog.Action asChild><button className="button primary" type="button" onClick={() => resetPassword(user)}>{resetDrafts[user.id]?.trim() ? "비밀번호 지정" : "비밀번호 초기화"}</button></AlertDialog.Action>
+                            </div>
+                          </AlertDialog.Content>
+                        </AlertDialog.Portal>
+                      </AlertDialog.Root>
                     </span>
                     <AlertDialog.Root>
                       <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={pending === `delete-${user.id}`}>{pending === `delete-${user.id}` ? "삭제 중…" : "계정 삭제"}</button></AlertDialog.Trigger>
