@@ -65,6 +65,7 @@ function useThemedChart(build: (canvas: HTMLCanvasElement) => Chart, deps: unkno
 }
 
 // 범례에 항목명만이 아니라 실제 건수(테스크수 등)를 함께 표기해, 차트로 바꾼 뒤에도 숫자가 항상 보이게 한다.
+// 도넛(단일 데이터셋, 슬라이스별 배열 색상)용 — chart.data.labels 기준으로 순회한다.
 function countLegend(unit: string) {
   return (chart: Chart): LegendItem[] => {
     const { labels = [], datasets } = chart.data;
@@ -72,6 +73,11 @@ function countLegend(unit: string) {
     const values = (datasets[0]?.data ?? []) as number[];
     return labels.map((label, i) => ({ text: `${label as string} ${values[i] ?? 0}${unit}`, fillStyle: colors[i] ?? "", strokeStyle: colors[i] ?? "", index: i }));
   };
+}
+
+// 1줄 막대(단일 카테고리, 데이터셋별 단색)용 — chart.data.datasets 기준으로 순회한다.
+function datasetLegend(unit: string) {
+  return (chart: Chart): LegendItem[] => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number) ?? 0}${unit}`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i }));
 }
 
 export function WbsProgressChart({ planned, actual }: { planned: number; actual: number }) {
@@ -84,8 +90,9 @@ export function WbsProgressChart({ planned, actual }: { planned: number; actual:
       data: {
         labels: ["공정율"],
         datasets: [
-          { label: "계획", data: [plannedPct], backgroundColor: plannedColor, borderRadius: 4, maxBarThickness: 22 },
-          { label: "실적", data: [actualPct], backgroundColor: actualColor, borderRadius: 4, maxBarThickness: 22 },
+          // grouped: false로 두 데이터셋을 같은 줄에 겹쳐 그린다 — 배열 앞쪽이 위로 그려지므로 실적을 먼저, 계획을 배경으로 나중에 넣는다.
+          { label: "실적", data: [actualPct], backgroundColor: actualColor, borderRadius: 4, maxBarThickness: 22, grouped: false },
+          { label: "계획", data: [plannedPct], backgroundColor: plannedColor, borderRadius: 4, maxBarThickness: 22, grouped: false },
         ],
       },
       options: {
@@ -100,7 +107,11 @@ export function WbsProgressChart({ planned, actual }: { planned: number; actual:
             position: "bottom",
             labels: {
               color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11 },
-              generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number)}%`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i })),
+              // 그리기 순서(겹침 표시용)와 무관하게 범례는 항상 계획→실적 순으로 표시한다.
+              generateLabels: (chart) => ["계획", "실적"].map((label, i) => {
+                const ds = chart.data.datasets.find((d) => d.label === label)!;
+                return { text: `${label} ${ds.data[0] as number}%`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i };
+              }),
             },
           },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}%` } },
@@ -113,23 +124,34 @@ export function WbsProgressChart({ planned, actual }: { planned: number; actual:
 
 export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }: { accepted: number; partiallyAccepted: number; rejected: number }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card"), mono = cssVar("--font-mono");
+    const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card");
     const success = cssVar("--success"), warning = cssVar("--warning"), destructive = cssVar("--destructive");
     const total = accepted + partiallyAccepted + rejected;
     return new Chart(canvas, {
-      type: "doughnut",
-      data: { labels: ["수용", "부분수용", "미수용"], datasets: [{ data: [accepted, partiallyAccepted, rejected], backgroundColor: [success, warning, destructive], borderColor: card, borderWidth: 2 }] },
+      type: "bar",
+      data: {
+        labels: ["요구사항"],
+        datasets: [
+          { label: "수용", data: [accepted], backgroundColor: success, borderRadius: 4, maxBarThickness: 22 },
+          { label: "부분수용", data: [partiallyAccepted], backgroundColor: warning, borderRadius: 4, maxBarThickness: 22 },
+          { label: "미수용", data: [rejected], backgroundColor: destructive, borderRadius: 4, maxBarThickness: 22 },
+        ],
+      },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: { duration: 200 }, cutout: "62%",
+        indexAxis: "y",
+        responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
+        scales: {
+          x: { stacked: true, min: 0, max: total || 1, grid: { color: border }, ticks: { color: muted, font: { size: 10 } } },
+          y: { stacked: true, grid: { display: false }, ticks: { display: false } },
+        },
         plugins: {
-          centerText: { text: `${total}`, subtext: "건", color: foreground, subColor: muted, font: mono },
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "circle", font: { size: 11 }, generateLabels: countLegend("건") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11 }, generateLabels: datasetLegend("건") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
     });
   }, [accepted, partiallyAccepted, rejected]);
-  return <div className="domain-chart"><canvas ref={canvasRef} role="img" aria-label={`요구사항 수용 ${accepted}건, 부분수용 ${partiallyAccepted}건, 미수용 ${rejected}건 도넛 그래프`} /></div>;
+  return <div className="domain-chart"><canvas ref={canvasRef} role="img" aria-label={`요구사항 수용 ${accepted}건, 부분수용 ${partiallyAccepted}건, 미수용 ${rejected}건 막대 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
