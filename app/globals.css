@@ -486,6 +486,7 @@ a.history-item:hover { background: var(--accent); }
 @media (max-width: 850px) { .requirement-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 850px) { .requirement-pagination { align-items: stretch; flex-direction: column; }.page-size-form,.page-links { flex-wrap: wrap; }.page-summary { text-align: center; } }
 .settings-content { max-width: 1360px; }
+.user-management-content { max-width: none; }
 .group-settings-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: start; gap: 13px; }
 .group-list-panel { padding: 11px; }
 .group-list-panel .panel-head { margin: 2px 4px 12px; }
