@@ -21,19 +21,29 @@ export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
         <div className="panel-head"><h2>Stage별 공정율</h2><span>{stages.length}개 Stage · 총 {fmt(itemCount)}건</span></div>
         {stages.length ? <>
           <WbsStageChart stages={stages} />
-          <div className="table-wrap"><table><thead><tr><th>Stage</th><th>Task 건수</th><th>계획</th><th>실적</th><th>상태</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>Stage</th><th>Task 건수</th><th>계획건수</th><th>실적건수</th><th>공정율</th><th>계획</th><th>실적</th><th>지연건수</th><th>지연율</th><th>상태</th></tr></thead>
             <tbody>{stages.map((stage) => <tr key={stage.stage}>
               <td>{stage.stage}</td>
               <td data-numeric>{fmt(stage.itemCount)}건</td>
+              <td data-numeric>{fmt(stage.plannedCount)}건</td>
+              <td data-numeric>{fmt(stage.actualCount)}건</td>
+              <td data-numeric>{stage.scheduleProgress}%</td>
               <td data-numeric>{pct(stage.planned)}%</td>
               <td data-numeric>{pct(stage.actual)}%</td>
+              <td data-numeric>{fmt(stage.delayedCount)}건</td>
+              <td data-numeric className={stage.delayRate > 0 ? "critical" : undefined}>{pct(stage.delayRate)}%</td>
               <td>{stage.delayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
             </tr>)}</tbody>
             <tfoot><tr className="totals-row">
               <td>합계</td>
               <td data-numeric>{fmt(itemCount)}건</td>
+              <td data-numeric>{fmt(stats.plannedCount)}건</td>
+              <td data-numeric>{fmt(stats.actualCount)}건</td>
+              <td data-numeric>{stats.scheduleProgress}%</td>
               <td data-numeric>{pct(overall.planned)}%</td>
               <td data-numeric>{pct(overall.actual)}%</td>
+              <td data-numeric>{fmt(delayedCount)}건</td>
+              <td data-numeric className={delayRate > 0 ? "critical" : undefined}>{pct(delayRate)}%</td>
               <td>{overallDelayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
             </tr></tfoot>
           </table></div>

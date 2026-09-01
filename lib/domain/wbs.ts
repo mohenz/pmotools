@@ -97,7 +97,8 @@ export function progressIndex(actual: number, planned: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// WBS 목록 화면의 지연율/지연일자 — 계획종료일 대비 실적종료일만 사용한다(오늘/실적 진행률은 쓰지 않음).
+// WBS 목록 화면의 지연율/지연일자 — 계획종료일 대비 실적종료일만 사용한다. 실적종료일이 비어 있어도
+// 계획종료일이 지났으면(아래 isWbsItemDelayed 조건 2) 오늘을 임시 실적종료일 삼아 진행 중인 지연을 계산한다.
 // ---------------------------------------------------------------------------
 
 /** 계획종료일 대비 실적종료일 지연일수(달력일) — 조기·정시 완료는 0. */
@@ -108,6 +109,22 @@ export function wbsDelayDays(plannedDue: Date, actualDue: Date): number {
 /** 지연율(%) = 지연일수 ÷ 계획소요일(영업일) × 100. 계획소요일이 0이면 0. */
 export function wbsDelayRate(delayDays: number, plannedWorkingDays: number): number {
   return plannedWorkingDays > 0 ? Math.round((delayDays / plannedWorkingDays) * 100) : 0;
+}
+
+// ---------------------------------------------------------------------------
+// 지연업무 기준(2026-09-01 사용자 확정, 2026-09-01 예외 보정) — 날짜만 비교하므로 "YYYY-MM-DD" 문자열 그대로 비교한다(시각 오차 방지).
+// 1) 계획시작일이 오늘 이전인데 실적시작일이 공백이거나, 2) 계획종료일이 오늘 이전인데 실적종료일이 공백이면 지연.
+// 단, 계획종료일이 아직 오늘 이전이 아니면서(=마감 전) 실적시작일·실적종료일이 둘 다 공백이면(=아직 착수 전 대기 상태)
+// 조건 1만으로는 지연으로 보지 않는다 — 마감 전까지는 착수가 늦어도 아직 지연이 확정된 게 아니라는 사용자 판단.
+// WBS 목록·통계·업무그룹별 통계·지연 Task 조회가 모두 이 판정 하나를 공유한다.
+// ---------------------------------------------------------------------------
+export type WbsDelayCheckInput = { plannedStart: string | null; actualStart: string | null; plannedDue: string | null; actualDue: string | null };
+
+export function isWbsItemDelayed(today: string, item: WbsDelayCheckInput): boolean {
+  const startDelayed = item.plannedStart !== null && item.plannedStart < today && item.actualStart === null;
+  const dueDelayed = item.plannedDue !== null && item.plannedDue < today && item.actualDue === null;
+  const notYetDue = item.plannedDue !== null && item.plannedDue >= today && item.actualStart === null && item.actualDue === null;
+  return (startDelayed || dueDelayed) && !notYetDue;
 }
 
 // ---------------------------------------------------------------------------

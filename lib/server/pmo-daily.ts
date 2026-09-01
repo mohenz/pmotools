@@ -1,11 +1,11 @@
 import "server-only";
 
 import { z } from "zod";
-import { delayDays, delayedTaskCount, delayedTaskRate, overallProgress, scheduleProgress, taskDelayRate } from "@/lib/domain/pmo-daily";
+import { delayedTaskCount, delayedTaskRate, overallProgress, scheduleProgress } from "@/lib/domain/pmo-daily";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { assertWorkModuleGroup } from "@/lib/server/items";
-import { getWbsDailyTaskCounts } from "@/lib/server/wbs";
+import { getWbsDailyTaskCounts, getWbsGroupTasks } from "@/lib/server/wbs";
 import { DomainError } from "@/lib/server/errors";
 
 const percent = z.number().int().min(0).max(100);
@@ -73,22 +73,25 @@ async function validateAssignees(projectId: string, ids: string[]) {
 export async function getPmoDailyDashboard(projectId: string, reportDate: string) {
   const prisma = getPrisma();
   const date = dateValue(reportDate);
-  const [snapshot, issues, managementTasks] = await Promise.all([
-    prisma.pmoDailySnapshot.findUnique({ where: { projectId_reportDate: { projectId, reportDate: date } }, include: { delayedTasks: { where: { archivedAt: null }, include: { group: true, assignees: { include: { user: true } } }, orderBy: { createdAt: "asc" } } } }),
+  const [snapshot, issues, managementTasks, wbsDelayed] = await Promise.all([
+    prisma.pmoDailySnapshot.findUnique({ where: { projectId_reportDate: { projectId, reportDate: date } } }),
     prisma.item.findMany({ where: { projectId, archivedAt: null, status: { in: ["registered", "in_progress", "on_hold"] } }, include: { group: true }, orderBy: { updatedAt: "desc" }, take: 8 }),
     prisma.managementTask.findMany({ where: { projectId, archivedAt: null }, include: { group: true, assignees: { include: { user: true } } }, orderBy: { updatedAt: "desc" }, take: 8 }),
+    getWbsGroupTasks(projectId, "", true),
   ]);
-  const tasks = snapshot?.delayedTasks ?? [];
   // 아직 저장되지 않은 일자(신규 작성)는 WBS의 오늘 기준 실제 진행 현황을 기본값으로 보여준다 — 저장된 스냅샷이 있으면 그 값을 그대로 존중한다.
   const wbsCounts = snapshot ? null : await getWbsDailyTaskCounts(projectId, reportDate);
   const plannedTaskCount = snapshot?.plannedTaskCount ?? wbsCounts!.plannedTaskCount, actualTaskCount = snapshot?.actualTaskCount ?? wbsCounts!.actualTaskCount, totalTaskCount = snapshot?.totalTaskCount ?? wbsCounts!.totalTaskCount, completedTaskCount = snapshot?.completedTaskCount ?? wbsCounts!.completedTaskCount;
   const delayedCount = delayedTaskCount(plannedTaskCount, actualTaskCount);
+  // 가장 많이 밀린 항목이 위로 오도록 지연일수 내림차순(진행 중이라 지연일수를 못 낸 항목은 뒤로) 정렬 후 상위 8건만 대시보드에 보여준다.
+  const wbsDelayedTop = [...wbsDelayed.items].sort((a, b) => (b.delayDays ?? -1) - (a.delayDays ?? -1)).slice(0, 8);
   return {
     reportDate,
     exists: Boolean(snapshot),
     snapshot: { plannedTaskCount, actualTaskCount, totalTaskCount, completedTaskCount, version: snapshot?.version ?? 0 },
     metrics: { scheduleProgress: scheduleProgress(plannedTaskCount, actualTaskCount), delayedTaskCount: delayedCount, delayedRate: delayedTaskRate(delayedCount, plannedTaskCount), overallProgress: overallProgress(completedTaskCount, totalTaskCount, 0) },
-    delayedTasks: tasks.map((task) => ({ id: task.id, displayId: task.displayId, groupId: task.groupId, groupLabel: task.group.label, description: task.description, plannedProgress: task.plannedProgress, actualProgress: task.actualProgress, delayRate: taskDelayRate(task.plannedProgress, task.actualProgress), plannedEndDate: task.plannedEndDate ? isoDate(task.plannedEndDate) : null, delayDays: delayDays(task.plannedEndDate ? isoDate(task.plannedEndDate) : null, reportDate, task.status === "CLOSED"), delayReason: task.delayReason, responsePlan: task.responsePlan, status: task.status, assignees: task.assignees.map(({ user }) => ({ id: user.id, userId: user.userId, name: user.name })), version: task.version })),
+    delayedTasks: wbsDelayedTop.map((item) => ({ id: item.id, code: item.code, name: item.name, stage: item.stage, ownerName: item.ownerName, groupLabel: item.groupLabel, dueDate: item.dueDate, actualDueDate: item.actualDueDate, delayDays: item.delayDays, delayRate: item.delayRate })),
+    delayedTaskTotal: wbsDelayed.items.length,
     issues: issues.map((item) => ({ id: item.id, displayId: item.displayId, title: item.title, groupLabel: item.group.label, ownerName: item.ownerText || "-", status: item.status, updatedAt: isoDate(item.updatedAt) })),
     managementTasks: managementTasks.map((task) => ({ id: task.id, displayId: task.displayId, name: task.name, groupLabel: task.group.label, assignees: task.assignees.map(({ user }) => user.name), status: task.status, totalScore: task.totalScore, band: task.band.toLowerCase() })),
   };

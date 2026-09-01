@@ -3,7 +3,8 @@ import "server-only";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayDays, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
+import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayDays, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
+import { scheduleProgress } from "@/lib/domain/pmo-daily";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
@@ -55,7 +56,7 @@ export type WbsItemRow = {
   status: "not_started" | "in_progress" | "completed" | "on_hold";
   weight: number | null;
   workingDays: number | null; actualWorkingDays: number | null; plannedProgress: number | null; actualProgress: number; progressIndex: number | null;
-  delayDays: number | null; delayRate: number | null;
+  delayDays: number | null; delayRate: number | null; isDelayed: boolean;
   createdAt: string; updatedAt: string; version: number;
 };
 export type WbsItemEventRow = { id: string; eventType: string; actorName: string; body: string | null; beforeData: Record<string, unknown> | null; afterData: Record<string, unknown> | null; createdAt: string };
@@ -111,24 +112,32 @@ async function loadHolidaySet(projectId: string): Promise<Set<string>> {
   return new Set(rows.map((row) => dateStr(row.date)!));
 }
 
-function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, stage: string | null): WbsItemRow {
+// isLeaf(진도관리대상) 항목만 지연 판정 대상이다 — Stage 헤더 같은 상위 구조 행은 자신도 계획·실적일자를 갖고 있을 수
+// 있지만 실제 진척 추적 단위가 아니라서, 통계(loadWbsStats 등)가 leaf만 롤업하는 것과 같은 기준으로 여기서도 걸러낸다.
+function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, stage: string | null, isLeaf: boolean): WbsItemRow {
   const start = row.startDate, due = row.dueDate;
   const actualStart = row.actualStartDate, actualDue = row.actualDueDate;
   const actual = actualProgress(row.assignments.map((a) => a.progressPercent));
   const planned = start && due ? plannedProgress(today, start, due) : null;
   const plannedWorkingDays = start && due ? workingDays(start, due, holidays) : null;
-  const delayDaysValue = due && actualDue ? wbsDelayDays(due, actualDue) : null;
+  const todayStr = dateStr(today)!;
+  const startStr = dateStr(start), dueStr = dateStr(due);
+  const actualStartStr = dateStr(actualStart), actualDueStr = dateStr(actualDue);
+  const isDelayed = isLeaf && isWbsItemDelayed(todayStr, { plannedStart: startStr, actualStart: actualStartStr, plannedDue: dueStr, actualDue: actualDueStr });
+  // 실적종료일이 비어 있어도 계획종료일이 지났으면 오늘을 임시 실적종료일 삼아 진행 중인 지연을 계산한다.
+  const effectiveActualDue = actualDue ?? (dueStr && dueStr < todayStr ? new Date(todayStr) : null);
+  const delayDaysValue = isLeaf && due && effectiveActualDue ? wbsDelayDays(due, effectiveActualDue) : null;
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, parentId: row.parentId, path: row.path, level: row.level, code: codeFromPath(row.path), stage,
     name: row.name, description: row.description, configStatus: row.configStatus,
     ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? (row.ownerNameRaw || null), ownerLoginId: row.owner?.userId ?? (row.ownerLoginId || null),
     groupId: row.groupId, groupLabel: row.group?.label ?? null, groupCode: row.group?.code ?? null,
-    startDate: dateStr(start), dueDate: dateStr(due),
-    actualStartDate: dateStr(actualStart), actualDueDate: dateStr(actualDue),
+    startDate: startStr, dueDate: dueStr,
+    actualStartDate: actualStartStr, actualDueDate: actualDueStr,
     status: row.status, weight: row.weight ? Number(row.weight) : null,
     workingDays: plannedWorkingDays, actualWorkingDays: actualStart && actualDue ? workingDays(actualStart, actualDue, holidays) : null,
     plannedProgress: planned, actualProgress: actual, progressIndex: planned !== null ? progressIndex(actual, planned) : null,
-    delayDays: delayDaysValue, delayRate: delayDaysValue !== null && plannedWorkingDays !== null ? wbsDelayRate(delayDaysValue, plannedWorkingDays) : null,
+    delayDays: delayDaysValue, delayRate: delayDaysValue !== null && plannedWorkingDays !== null ? wbsDelayRate(delayDaysValue, plannedWorkingDays) : null, isDelayed,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), version: row.version,
   } satisfies WbsItemRow;
 }
@@ -148,13 +157,14 @@ export async function listWbsItems(projectId: string): Promise<WbsItemRow[]> {
   ]);
   // Stage(엑셀 E열) = 최상위(레벨1) 조상의 이름 — 별도 저장 없이 path의 첫 세그먼트로 즉석 조회한다.
   const nameByPath = new Map(rows.map((row) => [row.path, row.name]));
+  const parentIds = new Set(rows.filter((row) => row.parentId).map((row) => row.parentId!));
   const today = new Date();
-  return rows.map((row) => toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null));
+  return rows.map((row) => toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null, !parentIds.has(row.id)));
 }
 
 export type WbsListFilters = {
   page?: number; pageSize?: number | "all"; q?: string; assignee?: string;
-  startDate?: string; dueDate?: string; groupLabel?: string; leaf?: "" | "y" | "n";
+  startDate?: string; dueDate?: string; groupLabel?: string; delayed?: "" | "y" | "n";
   plannedMin?: number; actualMin?: number; progressMin?: number;
 };
 
@@ -172,9 +182,10 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   const today = new Date();
   const allRows = rows.map((row, index) => {
     const roleByLabel = new Map(row.assignments.map((a) => [a.group.label, a]));
+    const isLeaf = !parentIds.has(row.id);
     return {
-      ...toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null),
-      projectCode: project?.code ?? "", sequenceNo: String(index + 1).padStart(4, "0"), isLeaf: !parentIds.has(row.id),
+      ...toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null, isLeaf),
+      projectCode: project?.code ?? "", sequenceNo: String(index + 1).padStart(4, "0"), isLeaf,
       deliverable: toDeliverableRow(row.deliverable),
       roles: WBS_EXCEL_ROLE_NAMES.map((role) => {
         const assignment = roleByLabel.get(role);
@@ -187,7 +198,7 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   const startDate = filters.startDate?.trim() ?? "";
   const dueDate = filters.dueDate?.trim() ?? "";
   const groupLabel = filters.groupLabel?.trim().toLowerCase() ?? "";
-  const leaf = filters.leaf ?? "";
+  const delayed = filters.delayed ?? "";
   const { plannedMin, actualMin, progressMin } = filters;
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
@@ -196,14 +207,14 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
     const matchesStartDate = !startDate || (row.startDate !== null && row.startDate >= startDate);
     const matchesDueDate = !dueDate || (row.dueDate !== null && row.dueDate <= dueDate);
     const matchesGroupLabel = !groupLabel || (row.groupLabel ?? "").toLowerCase().includes(groupLabel);
-    const matchesLeaf = !leaf || (leaf === "y" ? row.isLeaf : !row.isLeaf);
+    const matchesDelayed = !delayed || (delayed === "y" ? row.isDelayed : !row.isDelayed);
     const matchesPlanned = plannedMin == null || (row.plannedProgress ?? 0) * 100 >= plannedMin;
     const matchesActual = actualMin == null || row.actualProgress * 100 >= actualMin;
     const matchesProgress = progressMin == null || (row.progressIndex ?? 0) * 100 >= progressMin;
-    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesGroupLabel && matchesLeaf && matchesPlanned && matchesActual && matchesProgress;
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesGroupLabel && matchesDelayed && matchesPlanned && matchesActual && matchesProgress;
   });
   const total = filteredRows.length;
-  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 10));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(totalPages, Math.max(1, filters.page ?? 1));
   return { rows: filteredRows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize, totalPages };
@@ -234,8 +245,25 @@ export async function listWbsTaskOptionsForOwner(projectId: string, ownerUserId:
 }
 export type WbsOwnerStatus = Awaited<ReturnType<typeof getWbsOwnerStatus>>;
 
-export type WbsStageStat = { stage: string; itemCount: number; planned: number; actual: number; delayed: boolean };
-export type WbsStats = { overall: ReturnType<typeof rollupProgress>; itemCount: number; delayRate: number; delayedCount: number; delayTrackedCount: number; stages: WbsStageStat[] };
+export type WbsStageStat = { stage: string; itemCount: number; planned: number; actual: number; delayed: boolean; plannedCount: number; actualCount: number; scheduleProgress: number; delayedCount: number; delayTrackedCount: number; delayRate: number };
+export type WbsStats = { overall: ReturnType<typeof rollupProgress>; itemCount: number; delayRate: number; delayedCount: number; delayTrackedCount: number; plannedCount: number; actualCount: number; scheduleProgress: number; stages: WbsStageStat[] };
+
+// 지연업무 기준(isWbsItemDelayed) 건수 집계 — 통계 화면들(전체/Stage/업무그룹)과 지연 Task 조회가 공유한다.
+// tracked(판정 대상)는 계획시작일·계획종료일 중 하나라도 있어 기준을 적용할 수 있는 항목이다.
+function delayStatsOf(rows: WbsItemRow[]) {
+  const tracked = rows.filter((item) => item.startDate !== null || item.dueDate !== null);
+  const delayedCount = tracked.filter((item) => item.isDelayed).length;
+  return { delayedCount, delayTrackedCount: tracked.length, delayRate: tracked.length === 0 ? 0 : delayedCount / tracked.length };
+}
+
+// 계획건수/실적건수/공정율 — PMO Daily "1. 공정현황"(getWbsDailyTaskCounts)과 같은 기준: 계획건수 = 계획종료일이 오늘
+// 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목. 공정율 = scheduleProgress(pmo-daily)와 동일한 공식.
+function countStatsOf(rows: WbsItemRow[], todayStr: string) {
+  const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate <= todayStr);
+  const plannedCount = plannedRows.length;
+  const actualCount = plannedRows.filter((item) => item.actualProgress >= 1).length;
+  return { plannedCount, actualCount, scheduleProgress: scheduleProgress(plannedCount, actualCount) };
+}
 
 // 통계 화면 — leaf 항목(다른 항목의 상위로 참조되지 않는 행 = 엑셀 "상세진도(진도관리대상)")만 가중치(weight ?? workingDays) 기준으로 롤업한다.
 async function loadWbsStats(projectId: string): Promise<WbsStats> {
@@ -244,10 +272,9 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
   const leaves = items.filter((item) => !parentIds.has(item.id));
   const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
   const overall = rollupProgress(toRollupInputs(leaves));
-  // 지연율 — 시작·종료일이 있어 계획 진행률을 산출할 수 있는 leaf 항목 중 실적이 목표에 못 미치는 비율.
-  const delayTracked = leaves.filter((item) => item.plannedProgress !== null);
-  const delayedCount = delayTracked.filter((item) => item.actualProgress < (item.plannedProgress ?? 0)).length;
-  const delayRate = delayTracked.length === 0 ? 0 : delayedCount / delayTracked.length;
+  const overallDelay = delayStatsOf(leaves);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const overallCounts = countStatsOf(leaves, todayStr);
   // leaves는 listWbsItems가 path 오름차순(=Task 번호 순)으로 반환한 순서를 그대로 유지하므로,
   // 이름순 재정렬 없이 처음 등장한 순서로 Stage를 중복 제거하면 Task 번호 순서가 보존된다.
   const stageNames: string[] = [];
@@ -255,9 +282,11 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
   const stages = stageNames.map((stage) => {
     const rows = leaves.filter((item) => item.stage === stage);
     const rollup = rollupProgress(toRollupInputs(rows));
-    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+    const stageDelay = delayStatsOf(rows);
+    const stageCounts = countStatsOf(rows, todayStr);
+    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned, ...stageCounts, delayedCount: stageDelay.delayedCount, delayTrackedCount: stageDelay.delayTrackedCount, delayRate: stageDelay.delayRate };
   });
-  return { overall, itemCount: leaves.length, delayRate, delayedCount, delayTrackedCount: delayTracked.length, stages };
+  return { overall, itemCount: leaves.length, delayRate: overallDelay.delayRate, delayedCount: overallDelay.delayedCount, delayTrackedCount: overallDelay.delayTrackedCount, ...overallCounts, stages };
 }
 
 // 변동 빈도가 낮은 통계 화면이라 포트폴리오 KPI와 동일하게 30초 캐시하고, WBS 변경(mutation) 시 wbsTag로 무효화한다.
@@ -295,13 +324,8 @@ async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupSta
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
   const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
-  const delayStats = (rows: typeof leaves) => {
-    const tracked = rows.filter((item) => item.plannedProgress !== null);
-    const delayedCount = tracked.filter((item) => item.actualProgress < (item.plannedProgress ?? 0)).length;
-    return { delayedCount, delayTrackedCount: tracked.length, delayRate: tracked.length === 0 ? 0 : delayedCount / tracked.length };
-  };
   const overall = rollupProgress(toRollupInputs(leaves));
-  const overallDelay = delayStats(leaves);
+  const overallDelay = delayStatsOf(leaves);
 
   const leavesByGroup = new Map<string, typeof leaves>();
   for (const item of leaves) {
@@ -314,7 +338,7 @@ async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupSta
     .map(([groupLabel, rows]) => {
       const rollup = rollupProgress(toRollupInputs(rows));
       const memberCount = new Set(rows.map((row) => row.ownerUserId).filter((id): id is string => !!id)).size;
-      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned, ...delayStats(rows) };
+      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned, ...delayStatsOf(rows) };
     })
     // 업무그룹 코드(Groups.code) 기준 오름차순. 코드가 없는 "미지정"·"담당자 없음"은 맨 뒤로 보낸다.
     .sort((a, b) => {
@@ -420,7 +444,7 @@ export async function getWbsGroupTasks(projectId: string, group: string, delayed
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   let leaves = items.filter((item) => !parentIds.has(item.id));
   if (group) leaves = leaves.filter((item) => ownerGroupLabelOf(item, groupLabelByOwner) === group);
-  if (delayedOnly) leaves = leaves.filter((item) => item.plannedProgress !== null && item.actualProgress < item.plannedProgress);
+  if (delayedOnly) leaves = leaves.filter((item) => item.isDelayed);
   const overall = rollupProgress(leaves.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress })));
   return { group, delayedOnly, overall, items: leaves };
 }
@@ -479,7 +503,7 @@ export async function getWbsItemDetail(projectId: string, id: string) {
   ]);
   const assignmentByGroup = new Map(item.assignments.map((a) => [a.groupId, a]));
   return {
-    item: toRow(item, holidays, new Date(), stageItem?.name ?? null),
+    item: toRow(item, holidays, new Date(), stageItem?.name ?? null, children.length === 0),
     parent: parent ? { id: parent.id, code: codeFromPath(parent.path), name: parent.name } : null,
     children: children.map((child) => ({ id: child.id, code: codeFromPath(child.path), name: child.name, status: child.status })),
     assignments: groups.map((group) => {

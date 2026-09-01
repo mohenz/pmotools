@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
-export function ClickableTableRow({ href, ariaLabel, children }: { href: string; ariaLabel: string; children: ReactNode }) {
+export function ClickableTableRow({ href, ariaLabel, className, children }: { href: string; ariaLabel: string; className?: string; children: ReactNode }) {
   const router = useRouter();
 
   function open(event: MouseEvent<HTMLTableRowElement>) {
@@ -17,5 +17,5 @@ export function ClickableTableRow({ href, ariaLabel, children }: { href: string;
     router.push(href);
   }
 
-  return <tr className="clickable-table-row" role="link" tabIndex={0} aria-label={ariaLabel} onClick={open} onKeyDown={openWithKeyboard}>{children}</tr>;
+  return <tr className={className ? `clickable-table-row ${className}` : "clickable-table-row"} role="link" tabIndex={0} aria-label={ariaLabel} onClick={open} onKeyDown={openWithKeyboard}>{children}</tr>;
 }

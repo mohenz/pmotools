@@ -29,7 +29,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
   const totalCompletedCount = items.filter((item) => item.actualProgress >= 1).length;
 
   return <>
-    <header className="topbar"><div><h1>{groupTitle} {delayedOnly ? "지연 Task" : "Task"} 조회</h1><p>{delayedOnly ? "실적이 목표에 못 미치는 항목만 표시합니다." : "업무그룹 담당자 전체의 Task 목록입니다."} 총 {items.length}건</p></div><div className="topbar-actions"><Link className="button secondary" href="/wbs/group-stats">업무그룹별 통계로</Link></div></header>
+    <header className="topbar"><div><h1>{groupTitle} {delayedOnly ? "지연 Task" : "Task"} 조회</h1><p>{delayedOnly ? "계획일이 지났는데 실적일이 비어 있는 항목만 표시합니다." : "업무그룹 담당자 전체의 Task 목록입니다."} 총 {items.length}건</p></div><div className="topbar-actions"><Link className="button secondary" href="/wbs/group-stats">업무그룹별 통계로</Link></div></header>
     <div className="content">
       <section className="kpi-grid">
         <div className="kpi"><span>목표(today)</span><strong>{pct(overall.planned)}</strong><small>계획 공정율</small></div>
@@ -67,8 +67,8 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
       <section className="panel">
         <div className="panel-head"><h2>Task 목록</h2><span>{items.length}건</span></div>
         {items.length ? <div className="table-wrap"><table>
-          <thead><tr><th>Task</th><th>Task Description</th><th>담당자</th><th>Stage</th><th>StartDate</th><th>DueDate</th><th>목표</th><th>실적</th><th>진척율</th></tr></thead>
-          <tbody>{items.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
+          <thead><tr><th>Task</th><th>Task Description</th><th>담당자</th><th>Stage</th><th>StartDate</th><th>DueDate</th><th>목표</th><th>실적</th><th>진척율</th><th>지연여부</th></tr></thead>
+          <tbody>{items.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} className={item.isDelayed ? "high-risk-row" : undefined} key={item.id}>
             <td className="mono">{item.code}</td>
             <td className="title-cell"><Link className="table-link" href={`/wbs/${item.id}`}>{item.name}</Link></td>
             <td>{item.ownerName ?? ""}</td>
@@ -78,6 +78,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
             <td>{pct(item.plannedProgress)}</td>
             <td>{pct(item.actualProgress)}</td>
             <td>{pct(item.progressIndex)}</td>
+            <td>{item.isDelayed ? <span className="badge band-red">지연</span> : ""}</td>
           </ClickableTableRow>)}</tbody>
         </table></div> : <div className="empty">조건에 맞는 WBS 항목이 없습니다.</div>}
       </section>

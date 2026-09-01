@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { DragEvent, FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import type { ImportReport } from "@/lib/server/requirements-excel";
 
@@ -9,6 +9,26 @@ export function RequirementExcelClient() {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [pending, setPending] = useState("");
   const [message, setMessage] = useState("");
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function pickFile(picked: File | null) {
+    if (picked && !picked.name.toLowerCase().endsWith(".xlsx")) {
+      setMessage("xlsx 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    setMessage("");
+    setFile(picked);
+    setReport(null);
+  }
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragActive(false);
+    const dropped = event.dataTransfer.files;
+    if (!dropped.length) return;
+    if (fileInputRef.current) fileInputRef.current.files = dropped;
+    pickFile(dropped[0]);
+  }
 
   async function validate(event: FormEvent) {
     event.preventDefault();
@@ -44,10 +64,22 @@ export function RequirementExcelClient() {
       </section>
       <section className="panel">
         <div className="panel-head"><h2>업로드</h2><span>ID 열이 비어있으면 신규 등록, 채워져 있으면 해당 요구사항을 수정합니다.</span></div>
-        <form className="inline-create" onSubmit={validate}>
-          <label>엑셀 파일<input type="file" accept=".xlsx" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setReport(null); }} required /></label>
-          <button className="button secondary" type="submit" disabled={!file || !!pending}>{pending === "validate" ? "검증 중…" : "검증(Dry-run)"}</button>
-          {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건)`}</button>}
+        <form className="excel-upload-form" onSubmit={validate}>
+          <label
+            className={`file-dropzone${dragActive ? " drag-active" : ""}${file ? " has-file" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={handleDrop}
+          >
+            <input ref={fileInputRef} type="file" accept=".xlsx" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} required />
+            <span className="file-dropzone-icon" aria-hidden>⇪</span>
+            <span className="file-dropzone-text">{file ? file.name : "엑셀 파일을 여기로 끌어다 놓거나 클릭해서 선택하세요"}</span>
+            <span className="file-dropzone-hint">.xlsx 파일만 지원</span>
+          </label>
+          <div className="form-actions">
+            <button className="button secondary" type="submit" disabled={!file || !!pending}>{pending === "validate" ? "검증 중…" : "검증(Dry-run)"}</button>
+            {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건)`}</button>}
+          </div>
         </form>
         {message && <p className={message.includes("반영했습니다") ? "form-success" : "form-error"} role="status">{message}</p>}
         {report && <div className="table-wrap">

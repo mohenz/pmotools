@@ -8,11 +8,11 @@ export default async function WbsPage({ searchParams }: { searchParams: Promise<
   const { projectId } = await getLocalContext(), p = await searchParams;
   const value = (key: string) => typeof p[key] === "string" ? p[key] as string : "";
   const numberOrUndefined = (key: string) => value(key) === "" ? undefined : Number(value(key));
-  const pageSize = value("pageSize") === "all" ? "all" as const : [10, 20, 40, 60, 80, 100].includes(Number(value("pageSize"))) ? Number(value("pageSize")) : 20;
+  const pageSize = value("pageSize") === "all" ? "all" as const : [10, 20, 40, 60, 80, 100].includes(Number(value("pageSize"))) ? Number(value("pageSize")) : 10;
   const filters = {
     page: Number(value("page")) || 1, pageSize, q: value("q"), assignee: value("assignee"),
     startDate: value("startDate"), dueDate: value("dueDate"), groupLabel: value("groupLabel"),
-    leaf: (value("leaf") === "y" || value("leaf") === "n" ? value("leaf") : "") as "" | "y" | "n",
+    delayed: (value("delayed") === "y" || value("delayed") === "n" ? value("delayed") : "") as "" | "y" | "n",
     plannedMin: numberOrUndefined("plannedMin"), actualMin: numberOrUndefined("actualMin"), progressMin: numberOrUndefined("progressMin"),
   };
   const result = await listWbsItemsExcelColumns(projectId, filters);

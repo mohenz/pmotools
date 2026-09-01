@@ -6,10 +6,10 @@ import type { WbsExcelListResult } from "@/lib/server/wbs";
 
 type Filters = {
   page: number; pageSize: number | "all"; q: string; assignee: string;
-  startDate: string; dueDate: string; groupLabel: string; leaf: "" | "y" | "n";
+  startDate: string; dueDate: string; groupLabel: string; delayed: "" | "y" | "n";
   plannedMin?: number; actualMin?: number; progressMin?: number;
 };
-function queryString(filters: Filters, overrides: Record<string, string | number | undefined> = {}) { const p = new URLSearchParams(); Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => { if (value != null && value !== "" && !(key === "page" && value === 1) && !(key === "pageSize" && value === 20)) p.set(key, String(value)); }); return p.toString(); }
+function queryString(filters: Filters, overrides: Record<string, string | number | undefined> = {}) { const p = new URLSearchParams(); Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => { if (value != null && value !== "" && !(key === "page" && value === 1) && !(key === "pageSize" && value === 10)) p.set(key, String(value)); }); return p.toString(); }
 
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
 const pct = (value: number | null) => (value === null ? "" : `${Math.round(value * 100)}%`);
@@ -25,13 +25,13 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
     <div className="content">
       <section className="panel compact">
         <form className="filters inline-filter" method="get">
-          {filters.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
+          {filters.pageSize !== 10 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
           <input name="q" defaultValue={filters.q} placeholder="Task 코드·이름 검색" aria-label="Task 검색" />
           <input name="assignee" defaultValue={filters.assignee} placeholder="담당자 검색" aria-label="담당자 검색" />
           <label>계획시작일<input type="date" name="startDate" defaultValue={filters.startDate} /></label>
           <label>계획종료일<input type="date" name="dueDate" defaultValue={filters.dueDate} /></label>
           <input name="groupLabel" defaultValue={filters.groupLabel} placeholder="지원모듈 검색" aria-label="지원모듈 검색" />
-          <select name="leaf" defaultValue={filters.leaf} aria-label="세부진도"><option value="">전체 세부진도</option><option value="y">대상</option><option value="n">비대상</option></select>
+          <select name="delayed" defaultValue={filters.delayed} aria-label="지연여부"><option value="">전체 지연여부</option><option value="y">지연</option><option value="n">정상</option></select>
           <input type="number" name="plannedMin" min={0} max={100} defaultValue={filters.plannedMin ?? ""} placeholder="목표 %이상" aria-label="목표 최소값" />
           <input type="number" name="actualMin" min={0} max={100} defaultValue={filters.actualMin ?? ""} placeholder="실적 %이상" aria-label="실적 최소값" />
           <input type="number" name="progressMin" min={0} max={100} defaultValue={filters.progressMin ?? ""} placeholder="진척율 %이상" aria-label="진척율 최소값" />
@@ -41,8 +41,8 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
         </form>
       </section>
       <section className="panel compact">
-        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{displayHeader(h)}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th></tr></thead>
-          <tbody>{result.rows.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
+        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{displayHeader(h)}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th><th>지연여부</th></tr></thead>
+          <tbody>{result.rows.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} className={item.isDelayed ? "high-risk-row" : undefined} key={item.id}>
             <td>{item.level}</td>
             <td className="mono">{sortKeyFromCode(item.code)}</td>
             <td>{item.projectCode}</td>
@@ -80,9 +80,10 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
             <td data-numeric>{item.actualWorkingDays ?? "-"}</td>
             <td data-numeric>{item.delayRate === null ? "-" : `${item.delayRate}%`}</td>
             <td data-numeric>{item.delayDays === null ? "-" : `${item.delayDays}일`}</td>
+            <td>{item.isDelayed ? <span className="badge band-red">지연</span> : ""}</td>
           </ClickableTableRow>)}</tbody></table></div> : <div className="empty">등록된 WBS 항목이 없습니다.</div>}
       </section>
-      {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동"><form className="page-size-form" method="get">{filters.q && <input type="hidden" name="q" value={filters.q} />}{filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}{filters.startDate && <input type="hidden" name="startDate" value={filters.startDate} />}{filters.dueDate && <input type="hidden" name="dueDate" value={filters.dueDate} />}{filters.groupLabel && <input type="hidden" name="groupLabel" value={filters.groupLabel} />}{filters.leaf && <input type="hidden" name="leaf" value={filters.leaf} />}{filters.plannedMin != null && <input type="hidden" name="plannedMin" value={filters.plannedMin} />}{filters.actualMin != null && <input type="hidden" name="actualMin" value={filters.actualMin} />}{filters.progressMin != null && <input type="hidden" name="progressMin" value={filters.progressMin} />}<label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="10">10개</option><option value="20">20개</option><option value="40">40개</option><option value="60">60개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label><button className="button secondary" type="submit">적용</button></form><div className="page-links">{result.page > 1 && <Link href={`/wbs?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}{pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/wbs?${queryString(filters, { page })}`} key={page}>{page}</Link>)}{result.page < result.totalPages && <Link href={`/wbs?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}</div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}
+      {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동"><form className="page-size-form" method="get">{filters.q && <input type="hidden" name="q" value={filters.q} />}{filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}{filters.startDate && <input type="hidden" name="startDate" value={filters.startDate} />}{filters.dueDate && <input type="hidden" name="dueDate" value={filters.dueDate} />}{filters.groupLabel && <input type="hidden" name="groupLabel" value={filters.groupLabel} />}{filters.delayed && <input type="hidden" name="delayed" value={filters.delayed} />}{filters.plannedMin != null && <input type="hidden" name="plannedMin" value={filters.plannedMin} />}{filters.actualMin != null && <input type="hidden" name="actualMin" value={filters.actualMin} />}{filters.progressMin != null && <input type="hidden" name="progressMin" value={filters.progressMin} />}<label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="10">10개</option><option value="20">20개</option><option value="40">40개</option><option value="60">60개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label><button className="button secondary" type="submit">적용</button></form><div className="page-links">{result.page > 1 && <Link href={`/wbs?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}{pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/wbs?${queryString(filters, { page })}`} key={page}>{page}</Link>)}{result.page < result.totalPages && <Link href={`/wbs?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}</div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}
     </div>
   </>;
 }

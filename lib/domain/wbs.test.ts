@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
+import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
 
 describe("nextSegment", () => {
   it("starts a fresh sibling group at 0001", () => {
@@ -131,6 +131,35 @@ describe("wbsDelayRate", () => {
   it("is 0 when there is no delay or no planned duration", () => {
     expect(wbsDelayRate(0, 10)).toBe(0);
     expect(wbsDelayRate(2, 0)).toBe(0);
+  });
+});
+
+describe("isWbsItemDelayed", () => {
+  const today = "2026-09-01";
+  it("flags a planned start in the past with no actual start", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: "2026-08-20", actualStart: null, plannedDue: null, actualDue: null })).toBe(true);
+  });
+  it("flags a planned due date in the past with no actual due date", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: null, actualStart: null, plannedDue: "2026-08-20", actualDue: null })).toBe(true);
+  });
+  it("is not delayed once the actual date is filled in, even if it's late", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: "2026-08-20", actualStart: "2026-08-25", plannedDue: "2026-08-20", actualDue: "2026-08-28" })).toBe(false);
+  });
+  it("is not delayed when the planned date is today or in the future", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: today, actualStart: null, plannedDue: today, actualDue: null })).toBe(false);
+    expect(isWbsItemDelayed(today, { plannedStart: "2026-09-05", actualStart: null, plannedDue: "2026-09-05", actualDue: null })).toBe(false);
+  });
+  it("is not delayed when there is no plan to compare against", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: null, actualStart: null, plannedDue: null, actualDue: null })).toBe(false);
+  });
+  it("is not delayed on a late start alone when the due date hasn't arrived and nothing is logged yet", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: "2026-08-20", actualStart: null, plannedDue: "2026-09-16", actualDue: null })).toBe(false);
+  });
+  it("is still delayed once the due date itself has passed, even with a late start and no plan for a due date change", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: "2026-08-20", actualStart: null, plannedDue: "2026-08-25", actualDue: null })).toBe(true);
+  });
+  it("keeps flagging a late start when there is no due date at all to exempt it", () => {
+    expect(isWbsItemDelayed(today, { plannedStart: "2026-08-20", actualStart: null, plannedDue: null, actualDue: null })).toBe(true);
   });
 });
 
