@@ -9,7 +9,7 @@ import type { PasswordResetRequestRow } from "@/lib/server/password-reset-reques
 
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "슈퍼관리자", ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
-type ProfileDraft = { name: string; email: string; department: string; jobTitle: string };
+type ProfileDraft = { userId: string; name: string; email: string; department: string; jobTitle: string };
 const emptyCreateDraft = { userId: "", name: "", email: "", department: "", jobTitle: "", role: "MEMBER" };
 type UserFilters = { q: string; page: number; pageSize: number | "all" };
 
@@ -33,7 +33,6 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
   const [drafts, setDrafts] = useState<Record<string, ProfileDraft>>({});
   const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
   const [resetDrafts, setResetDrafts] = useState<Record<string, string>>({});
-  const [loginIdDrafts, setLoginIdDrafts] = useState<Record<string, string>>({});
   const [workGroupDrafts, setWorkGroupDrafts] = useState<Record<string, string[]>>({});
 
   async function resolveRequest(requestId: string) {
@@ -46,7 +45,7 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
   }
 
   function draftFor(user: AdminUserRow): ProfileDraft {
-    return drafts[user.id] ?? { name: user.name, email: user.email ?? "", department: user.department ?? "", jobTitle: user.jobTitle ?? "" };
+    return drafts[user.id] ?? { userId: user.userId, name: user.name, email: user.email ?? "", department: user.department ?? "", jobTitle: user.jobTitle ?? "" };
   }
   function updateDraft(user: AdminUserRow, field: keyof ProfileDraft, value: string) {
     setDrafts((prev) => ({ ...prev, [user.id]: { ...draftFor(user), [field]: value } }));
@@ -79,17 +78,6 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
     if (!response.ok) { setMessage(payload?.error?.message ?? "비밀번호를 초기화하지 못했습니다."); return; }
     setResetDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
     setTempPassword({ userId: user.userId, value: payload.data.tempPassword });
-  }
-  async function changeLoginId(user: AdminUserRow) {
-    const next = (loginIdDrafts[user.id] ?? user.userId).trim();
-    if (!next || next === user.userId) return;
-    setPending(`loginid-${user.id}`); setMessage("");
-    const response = await fetch(`/api/v1/admin/users/${user.id}/login-id`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId: next }) });
-    const payload = await response.json().catch(() => null);
-    setPending("");
-    if (!response.ok) { setMessage(payload?.error?.message ?? "아이디를 변경하지 못했습니다."); return; }
-    setLoginIdDrafts((prev) => { const next = { ...prev }; delete next[user.id]; return next; });
-    router.refresh();
   }
   async function saveProfile(user: AdminUserRow) {
     const draft = draftFor(user);
@@ -199,14 +187,9 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
               {users.map((user) => {
                 const draft = draftFor(user);
                 return <tr key={user.id}>
-                  <td>
-                    <span className="inline-action-group">
-                      <input aria-label={`${user.userId} 아이디`} className="mono" style={{ width: 110 }} value={loginIdDrafts[user.id] ?? user.userId} onChange={(event) => setLoginIdDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))} minLength={3} maxLength={50} />
-                      <button className="button secondary" type="button" disabled={pending === `loginid-${user.id}` || (loginIdDrafts[user.id] ?? user.userId).trim() === user.userId} onClick={() => changeLoginId(user)}>{pending === `loginid-${user.id}` ? "변경 중…" : "아이디 변경"}</button>
-                    </span>
-                  </td>
+                  <td><input aria-label={`${user.userId} 아이디`} className="mono" style={{ width: 110 }} value={draft.userId} onChange={(event) => updateDraft(user, "userId", event.target.value)} required minLength={3} maxLength={50} /></td>
                   <td><input aria-label={`${user.userId} 이름`} style={{ width: 120 }} value={draft.name} onChange={(event) => updateDraft(user, "name", event.target.value)} required maxLength={50} /></td>
-                  <td><input aria-label={`${user.userId} 이메일`} style={{ width: 190 }} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
+                  <td><input aria-label={`${user.userId} 이메일`} style={{ width: 95 }} type="email" value={draft.email} onChange={(event) => updateDraft(user, "email", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 회사명`} style={{ width: 150 }} value={draft.department} onChange={(event) => updateDraft(user, "department", event.target.value)} maxLength={100} /></td>
                   <td><input aria-label={`${user.userId} 직무`} style={{ width: 120 }} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
                   <td><WorkGroupSelector user={user} groups={workGroups} selectedIds={selectedWorkGroups(user)} pending={pending === `groups-${user.id}`} onSave={(groupId) => saveWorkGroups(user, groupId)} /></td>
@@ -223,7 +206,7 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
                         <AlertDialog.Overlay className="calendar-modal-backdrop" />
                         <AlertDialog.Content className="alert-dialog">
                           <AlertDialog.Title asChild><h2>{user.userId}의 정보를 저장하시겠습니까?</h2></AlertDialog.Title>
-                          <AlertDialog.Description asChild><p>이름·이메일·회사명·직무 변경사항이 저장됩니다.</p></AlertDialog.Description>
+                          <AlertDialog.Description asChild><p>아이디·이름·이메일·회사명·직무 변경사항이 저장됩니다.</p></AlertDialog.Description>
                           <div className="alert-dialog-actions">
                             <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
                             <AlertDialog.Action asChild><button className="button primary" type="button" onClick={() => saveProfile(user)}>저장</button></AlertDialog.Action>

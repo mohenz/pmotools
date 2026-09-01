@@ -126,6 +126,7 @@ export async function createUser(projectId: string, adminUserId: string, input: 
 }
 
 const updateUserProfileSchema = z.object({
+  userId: z.string().trim().min(3).max(50).regex(/^[A-Za-z0-9._-]+$/, "아이디는 영문/숫자/._- 만 사용할 수 있습니다."),
   name: z.string().trim().min(1).max(50),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   department: z.string().trim().max(100).nullable().optional(),
@@ -137,27 +138,13 @@ export async function updateUserProfile(projectId: string, adminUserId: string, 
   const prisma = getPrisma();
   const current = await prisma.user.findUnique({ where: { id: targetUserId } });
   if (!current) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
-  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { name: data.name, email: data.email || null, department: data.department || null, jobTitle: data.jobTitle || null } });
-  await writeAuditLog(projectId, adminUserId, "USER_PROFILE_UPDATE", "users", targetUserId, { name: current.name, email: current.email, department: current.department, jobTitle: current.jobTitle }, { name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle });
-  return { id: targetUserId, name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle };
-}
-
-const loginIdSchema = z.object({
-  userId: z.string().trim().min(3).max(50).regex(/^[A-Za-z0-9._-]+$/, "아이디는 영문/숫자/._- 만 사용할 수 있습니다."),
-});
-export async function updateUserLoginId(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
-  await assertAdmin(projectId, adminUserId);
-  const data = loginIdSchema.parse(input);
-  const prisma = getPrisma();
-  const current = await prisma.user.findUnique({ where: { id: targetUserId } });
-  if (!current) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
   if (data.userId !== current.userId) {
     const existing = await prisma.user.findUnique({ where: { userId: data.userId } });
     if (existing) throw new DomainError("DUPLICATE_CODE", "이미 사용 중인 아이디입니다.");
   }
-  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { userId: data.userId } });
-  await writeAuditLog(projectId, adminUserId, "USER_LOGIN_ID_UPDATE", "users", targetUserId, { userId: current.userId }, { userId: updated.userId });
-  return { id: targetUserId, userId: updated.userId };
+  const updated = await prisma.user.update({ where: { id: targetUserId }, data: { userId: data.userId, name: data.name, email: data.email || null, department: data.department || null, jobTitle: data.jobTitle || null } });
+  await writeAuditLog(projectId, adminUserId, "USER_PROFILE_UPDATE", "users", targetUserId, { userId: current.userId, name: current.name, email: current.email, department: current.department, jobTitle: current.jobTitle }, { userId: updated.userId, name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle });
+  return { id: targetUserId, userId: updated.userId, name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle };
 }
 
 export async function deleteUser(projectId: string, adminUserId: string, targetUserId: string) {
