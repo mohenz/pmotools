@@ -82,6 +82,9 @@ function datasetLegend(unit: string) {
 
 export type WbsStageProgress = { stage: string; planned: number; actual: number; delayed: boolean };
 
+// WBS 진척과 요구사항관리 카드의 세로 높이를 맞추기 위해 두 차트가 공유하는 고정 높이.
+const DOMAIN_CHART_HEIGHT = 260;
+
 // Stage별로 한 줄씩 — 계획 대비 실적을 겹쳐 그린 불릿 막대 한 줄에 담아, Stage 전체 진행 상태를 한 화면에서 보여준다.
 export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   const canvasRef = useThemedChart((canvas) => {
@@ -127,8 +130,7 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
       },
     });
   }, [stages]);
-  const height = 260;
-  return <div className="domain-chart" style={{ height }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
 export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }: { accepted: number; partiallyAccepted: number; rejected: number }) {
@@ -160,7 +162,7 @@ export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }
       },
     });
   }, [accepted, partiallyAccepted, rejected]);
-  return <div className="domain-chart"><canvas ref={canvasRef} role="img" aria-label={`요구사항 수용 ${accepted}건, 부분수용 ${partiallyAccepted}건, 미수용 ${rejected}건 막대 그래프`} /></div>;
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`요구사항 수용 ${accepted}건, 부분수용 ${partiallyAccepted}건, 미수용 ${rejected}건 막대 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
