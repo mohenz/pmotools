@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { WbsStats, WbsOwnerStatus } from "@/lib/server/wbs";
-import type { RequirementStatistics } from "@/lib/server/requirements";
-import { RequirementStatusChart, WbsProgressChart } from "@/components/PortfolioDomainCharts";
+import { WbsOwnerStatusChart, WbsProgressChart } from "@/components/PortfolioDomainCharts";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
 
 const pct = (value: number) => Math.round(value * 100);
@@ -9,9 +8,8 @@ const pctOrDash = (value: number | null) => (value === null ? "-" : `${Math.roun
 const fmt = (value: number) => value.toLocaleString("ko-KR");
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
 
-export function PortfolioScreen({ wbsStats, requirementStats, myWbsStatus }: {
+export function PortfolioScreen({ wbsStats, myWbsStatus }: {
   wbsStats: WbsStats;
-  requirementStats: RequirementStatistics;
   myWbsStatus: WbsOwnerStatus;
 }) {
   // 미완료 Task를 먼저 보여주되, 전부 완료된 담당자라도 목록이 비지 않도록 완료 건도 뒤이어 채운다.
@@ -22,6 +20,10 @@ export function PortfolioScreen({ wbsStats, requirementStats, myWbsStatus }: {
       return (a.dueDate ?? "9999-99-99").localeCompare(b.dueDate ?? "9999-99-99");
     })
     .slice(0, 8);
+  const myLeafItems = (myWbsStatus?.items ?? []).filter((item) => item.isLeaf);
+  const myCompleted = myLeafItems.filter((item) => item.actualProgress >= 1).length;
+  const myDelayed = myLeafItems.filter((item) => item.isDelayed && item.actualProgress < 1).length;
+  const myInProgress = myLeafItems.length - myCompleted - myDelayed;
   return <>
     <div className="content">
       <section className="portfolio-domain-grid" aria-label="핵심 업무 현황">
@@ -31,10 +33,10 @@ export function PortfolioScreen({ wbsStats, requirementStats, myWbsStatus }: {
           <p className="domain-summary-foot">지연 <strong className={wbsStats.delayedCount > 0 ? "critical" : undefined}>{fmt(wbsStats.delayedCount)}건</strong> · 전체 지연율 <strong>{pct(wbsStats.delayRate)}%</strong></p>
         </Link>
 
-        <Link href="/requirements/statistics" className="panel domain-summary">
-          <div className="panel-head"><h2>요구사항관리</h2><span>{fmt(requirementStats.total)}건</span></div>
-          <RequirementStatusChart accepted={requirementStats.accepted} partiallyAccepted={requirementStats.partiallyAccepted} rejected={requirementStats.rejected} />
-          <p className="domain-summary-foot">수용률 <strong>{requirementStats.total ? Math.round((requirementStats.accepted / requirementStats.total) * 100) : 0}%</strong></p>
+        <Link href={myWbsStatus ? `/wbs/by-owner/${myWbsStatus.owner.loginId}` : "/wbs"} className="panel domain-summary">
+          <div className="panel-head"><h2>나의 WBS 현황</h2><span>{fmt(myLeafItems.length)}건</span></div>
+          <WbsOwnerStatusChart completed={myCompleted} inProgress={myInProgress} delayed={myDelayed} />
+          <p className="domain-summary-foot">진척율 <strong>{myWbsStatus ? pct(myWbsStatus.overall.progressIndex) : 0}%</strong></p>
         </Link>
       </section>
 

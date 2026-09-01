@@ -114,17 +114,17 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
           legend: {
             position: "bottom",
             labels: {
-              color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11 },
+              color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
               generateLabels: () => [
                 { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, index: 0 },
-                { text: "실적(정상)", fillStyle: actualColor, strokeStyle: actualColor, index: 1 },
-                { text: "실적(지연)", fillStyle: destructiveColor, strokeStyle: destructiveColor, index: 2 },
+                { text: "완료", fillStyle: actualColor, strokeStyle: actualColor, index: 1 },
+                { text: "지연", fillStyle: destructiveColor, strokeStyle: destructiveColor, index: 2 },
               ],
             },
           },
           tooltip: {
             backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8,
-            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`, afterLabel: (ctx) => (ctx.datasetIndex === 0 ? (stages[ctx.dataIndex].delayed ? "지연" : "정상") : "") },
+            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`, afterLabel: (ctx) => (ctx.datasetIndex === 0 ? (stages[ctx.dataIndex].delayed ? "지연" : "완료") : "") },
           },
         },
       },
@@ -133,19 +133,19 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
-export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }: { accepted: number; partiallyAccepted: number; rejected: number }) {
+export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card");
-    const success = cssVar("--success"), warning = cssVar("--warning"), destructive = cssVar("--destructive");
-    const total = accepted + partiallyAccepted + rejected;
+    const success = cssVar("--success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--destructive");
+    const total = completed + inProgress + delayed;
     return new Chart(canvas, {
       type: "bar",
       data: {
-        labels: ["요구사항"],
+        labels: ["나의 WBS"],
         datasets: [
-          { label: "수용", data: [accepted], backgroundColor: success, borderRadius: 4, maxBarThickness: 22 },
-          { label: "부분수용", data: [partiallyAccepted], backgroundColor: warning, borderRadius: 4, maxBarThickness: 22 },
-          { label: "미수용", data: [rejected], backgroundColor: destructive, borderRadius: 4, maxBarThickness: 22 },
+          { label: "완료", data: [completed], backgroundColor: success, borderRadius: 4, maxBarThickness: 22 },
+          { label: "진행중", data: [inProgress], backgroundColor: plannedColor, borderRadius: 4, maxBarThickness: 22 },
+          { label: "지연", data: [delayed], backgroundColor: destructive, borderRadius: 4, maxBarThickness: 22 },
         ],
       },
       options: {
@@ -156,13 +156,13 @@ export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }
           y: { stacked: true, grid: { display: false }, ticks: { display: false } },
         },
         plugins: {
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11 }, generateLabels: datasetLegend("건") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 }, generateLabels: datasetLegend("건") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
     });
-  }, [accepted, partiallyAccepted, rejected]);
-  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`요구사항 수용 ${accepted}건, 부분수용 ${partiallyAccepted}건, 미수용 ${rejected}건 막대 그래프`} /></div>;
+  }, [completed, inProgress, delayed]);
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 막대 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
