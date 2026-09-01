@@ -96,17 +96,16 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
       data: {
         labels,
         datasets: [
-          // grouped: false로 두 데이터셋을 같은 줄에 겹쳐 그린다 — 배열 앞쪽이 위로 그려지므로 실적을 먼저, 계획을 배경으로 나중에 넣는다.
-          { label: "실적", data: actualPct, backgroundColor: actualColors, borderRadius: 3, maxBarThickness: 16, grouped: false },
-          { label: "계획", data: plannedPct, backgroundColor: plannedColor, borderRadius: 3, maxBarThickness: 16, grouped: false },
+          // grouped: false로 두 데이터셋을 같은 x축 위치에 겹쳐 그린다 — 배열 앞쪽이 위로 그려지므로 실적을 먼저, 계획을 배경으로 나중에 넣는다.
+          { label: "실적", data: actualPct, backgroundColor: actualColors, borderRadius: 3, maxBarThickness: 26, grouped: false },
+          { label: "계획", data: plannedPct, backgroundColor: plannedColor, borderRadius: 3, maxBarThickness: 26, grouped: false },
         ],
       },
       options: {
-        indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { min: 0, max: 100, position: "top", grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
-          y: { grid: { display: false }, ticks: { color: foreground, font: { size: 11 } } },
+          x: { grid: { display: false }, ticks: { color: foreground, font: { size: 10 } } },
+          y: { min: 0, max: 100, grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
         },
         plugins: {
           legend: {
@@ -122,13 +121,13 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
           },
           tooltip: {
             backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8,
-            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}%`, afterLabel: (ctx) => (ctx.datasetIndex === 0 ? (stages[ctx.dataIndex].delayed ? "지연" : "정상") : "") },
+            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`, afterLabel: (ctx) => (ctx.datasetIndex === 0 ? (stages[ctx.dataIndex].delayed ? "지연" : "정상") : "") },
           },
         },
       },
     });
   }, [stages]);
-  const height = Math.max(140, stages.length * 22 + 60);
+  const height = 260;
   return <div className="domain-chart" style={{ height }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
