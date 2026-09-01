@@ -261,7 +261,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .kpi:hover { transform: translateY(-1px); border-color: var(--primary); }
 .panel { min-width: 0; max-width: 100%; padding: 16px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-xs); }
 .panel.compact { padding: 12px 14px; }
-.portfolio-domain-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.portfolio-domain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .domain-summary { display: block; transition: transform .12s, border-color .12s; }
 .domain-summary:hover { transform: translateY(-1px); border-color: var(--primary); }
 .domain-chart { position: relative; height: 140px; margin-top: 4px; }

@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 
 export default async function RootPage() {
   await getLocalContext();
-  redirect("/announcements");
+  redirect("/portfolio");
 }

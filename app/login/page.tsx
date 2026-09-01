@@ -42,7 +42,7 @@ function LoginForm() {
       if (rememberUserId) localStorage.setItem(SAVED_USER_ID_KEY, userId);
       else localStorage.removeItem(SAVED_USER_ID_KEY);
     } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
-    router.push(params.get("callbackUrl") ?? "/announcements");
+    router.push(params.get("callbackUrl") ?? "/portfolio");
     router.refresh();
   }
 

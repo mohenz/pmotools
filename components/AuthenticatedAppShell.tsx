@@ -54,7 +54,7 @@ export function AuthenticatedAppShell({
       <div className="app-shell">
         <header className="global-header">
           <div className="global-header-main">
-            <Link className="brand" href="/announcements" aria-label="PMOTOOLS 메인 화면으로 이동">
+            <Link className="brand" href="/portfolio" aria-label="PMOTOOLS 메인 화면으로 이동">
               <div className="brand-mark" aria-hidden="true" />
               <span className="brand-text">
                 <span>PROJECT MANAGEMENT</span>
