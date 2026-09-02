@@ -26,17 +26,21 @@ function applyTheme(preference: ThemePreference) {
 // 사용자가 고른 적 없는데도 화면이 갑자기 바뀌는 것처럼 보이는 문제가 있어, 명시적으로 고정한다.
 const DEFAULT_THEME: ThemePreference = "light";
 
+// localStorage는 서버에는 없으므로 SSR 시점엔 기본값을 쓰고, 브라우저에서만 실제 저장값을 읽는다.
+function readPreference(): ThemePreference {
+  if (typeof window === "undefined") return DEFAULT_THEME;
+  const saved = localStorage.getItem("pmo-control-theme");
+  return saved === "light" || saved === "dark" || saved === "system" ? saved : DEFAULT_THEME;
+}
+
 export function ThemeSelector() {
-  const [preference, setPreference] = useState<ThemePreference>(DEFAULT_THEME);
-  const [resolved, setResolved] = useState<"light" | "dark">("light");
+  // head의 차단 스크립트가 마운트 전에 이미 올바른 테마를 적용해 두므로, 여기서도 첫 렌더부터 저장된
+  // 값을 읽어야 한다. 이전엔 항상 기본값(화이트)으로 먼저 그렸다가 useEffect에서야 실제 값으로 고쳐써서,
+  // 새로고침할 때마다 라디오 선택과 "현재 모드" 표시가 화이트로 한 프레임 반짝인 뒤 바뀌는 것처럼 보였다.
+  const [preference, setPreference] = useState<ThemePreference>(readPreference);
+  const [resolved, setResolved] = useState<"light" | "dark">(() => (typeof window === "undefined" ? "light" : resolveTheme(readPreference())));
 
   useEffect(() => {
-    const saved = localStorage.getItem("pmo-control-theme");
-    const initial = saved === "light" || saved === "dark" || saved === "system" ? saved : DEFAULT_THEME;
-    setPreference(initial);
-    applyTheme(initial);
-    setResolved(resolveTheme(initial));
-
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const followSystem = () => {
       if ((localStorage.getItem("pmo-control-theme") ?? DEFAULT_THEME) === "system") {
