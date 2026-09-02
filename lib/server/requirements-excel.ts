@@ -1,6 +1,6 @@
 import "server-only";
 import ExcelJS from "exceljs";
-import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { acceptanceLabels } from "@/lib/domain/requirements";
 import type { RequirementAcceptance, Prisma } from "@/lib/generated/prisma/client";
@@ -14,7 +14,9 @@ type ParsedRequirementData = {
   content: string; precondition: string; resolution: string; basis: string; notes: string;
 };
 
-// ID 열 없음 — 반영 시 프로젝트의 기존 요구사항을 전부 삭제하고 이 파일 내용으로 새로 등록하는 전체교체 방식이다(WBS 데이터 관리와 동일한 정책).
+// 요구사항ID(수기 코드)를 기준으로 파일 = 전체 목록이 되도록 동기화한다: 요구사항ID가 기존과 일치하면 그 행의
+// 내부 id를 유지한 채 갱신(변경이력 보존), 파일에 없는 기존 요구사항ID는 삭제, 새로 나타난 것은 신규 생성한다.
+// 요구사항ID가 비어있는 행은 매칭 기준이 없어 항상 신규 생성으로 처리된다.
 const HEADERS = ["요구사항ID", "요구사항명", "업무분류(대)", "업무분류(중)", "업무분류(소)", "요구사항구분", "요구사항분류", "요청부서", "담당자(아이디)", "우선순위", "중요도", "수용여부", "확정후추가", "내용", "사전조건", "처리방안", "근거", "비고"] as const;
 const PRIORITY_LABEL: Record<string, string> = { high: "상", medium: "중", low: "하" };
 const PRIORITY_VALUE: Record<string, string> = { 상: "high", 중: "medium", 하: "low" };
@@ -46,26 +48,29 @@ export async function exportRequirementsToExcel(projectId: string): Promise<Buff
   return Buffer.from(buffer);
 }
 
-export type ImportRowResult = { row: number; title: string; errors: string[]; warnings: string[] };
-export type ImportReport = { rows: ImportRowResult[]; validCount: number; errorCount: number };
+export type ImportRowResult = { row: number; action: "create" | "update"; title: string; errors: string[]; warnings: string[] };
+export type ImportReport = { rows: ImportRowResult[]; validCount: number; errorCount: number; willDeleteCount: number };
 
-async function parseAndValidate(projectId: string, buffer: Buffer): Promise<{ report: ImportReport; parsed: { row: number; data: ParsedRequirementData }[] }> {
+async function parseAndValidate(projectId: string, buffer: Buffer): Promise<{ report: ImportReport; parsed: { row: number; matchId: string | null; data: ParsedRequirementData }[]; deleteIds: string[] }> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
   const sheet = workbook.worksheets[0];
   const prisma = getPrisma();
 
-  const [codes, members] = await Promise.all([
+  const [existing, codes, members] = await Promise.all([
+    prisma.requirement.findMany({ where: { projectId }, select: { id: true, requirementId: true } }),
     prisma.commonCode.findMany({ where: { projectId, groupCode: { in: ["requirement_division", "requirement_category"] }, isActive: true }, select: { id: true, groupCode: true, label: true } }),
     prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { deletedAt: null } }, select: { user: { select: { id: true, userId: true } } } }),
   ]);
+  const existingByRequirementId = new Map(existing.filter((r) => r.requirementId).map((r) => [r.requirementId as string, r.id]));
   const divisionByLabel = new Map(codes.filter((c) => c.groupCode === "requirement_division").map((c) => [c.label, c.id]));
   const categoryByLabel = new Map(codes.filter((c) => c.groupCode === "requirement_category").map((c) => [c.label, c.id]));
   const userIdByLogin = new Map(members.map((m) => [m.user.userId, m.user.id]));
   const seenRequirementIds = new Map<string, number>();
+  const matchedRequirementIds = new Set<string>();
 
   const rows: ImportRowResult[] = [];
-  const parsed: { row: number; data: ParsedRequirementData }[] = [];
+  const parsed: { row: number; matchId: string | null; data: ParsedRequirementData }[] = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const cell = (index: number) => String(row.getCell(index).value ?? "").trim();
@@ -77,10 +82,12 @@ async function parseAndValidate(projectId: string, buffer: Buffer): Promise<{ re
     if (!title) errors.push("요구사항명은 필수입니다.");
     if (title.length > 200) errors.push("요구사항명은 200자를 초과할 수 없습니다.");
 
+    const matchId = requirementIdCell ? (existingByRequirementId.get(requirementIdCell) ?? null) : null;
     if (requirementIdCell) {
       const dupRow = seenRequirementIds.get(requirementIdCell);
       if (dupRow) errors.push(`요구사항ID(${requirementIdCell})가 ${dupRow}행과 중복됩니다.`);
       seenRequirementIds.set(requirementIdCell, rowNumber);
+      matchedRequirementIds.add(requirementIdCell);
     }
 
     let divisionCodeId: string | null = null;
@@ -108,14 +115,16 @@ async function parseAndValidate(projectId: string, buffer: Buffer): Promise<{ re
       if (value.length > max) errors.push(`${label}은(는) ${max}자를 초과할 수 없습니다.`);
     }
 
-    rows.push({ row: rowNumber, title: title || "(제목 없음)", errors, warnings });
+    rows.push({ row: rowNumber, action: matchId ? "update" : "create", title: title || "(제목 없음)", errors, warnings });
     if (!errors.length) parsed.push({
-      row: rowNumber,
+      row: rowNumber, matchId,
       data: { requirementId: requirementIdCell || null, title, businessMajorCategory: majorCategory, businessMiddleCategory: middleCategory, businessMinorCategory: minorCategory, divisionCodeId, categoryCodeId, requestDepartment, ownerUserId, priority, importance, acceptanceStatus, addedAfterConfirmation, content, precondition, resolution, basis, notes },
     });
   });
   const errorCount = rows.filter((r) => r.errors.length > 0).length;
-  return { report: { rows, validCount: rows.length - errorCount, errorCount }, parsed };
+  // 파일에서 매칭되지 않은(=요구사항ID가 없거나, 있어도 파일에 다시 나타나지 않은) 기존 요구사항은 삭제 대상이다.
+  const deleteIds = existing.filter((r) => !r.requirementId || !matchedRequirementIds.has(r.requirementId)).map((r) => r.id);
+  return { report: { rows, validCount: rows.length - errorCount, errorCount, willDeleteCount: deleteIds.length }, parsed, deleteIds };
 }
 
 export async function validateRequirementsImport(projectId: string, buffer: Buffer): Promise<ImportReport> {
@@ -123,26 +132,34 @@ export async function validateRequirementsImport(projectId: string, buffer: Buff
   return report;
 }
 
-// 전체교체: 기존 요구사항(및 그에 딸린 변경요청·이력 — onDelete: Cascade)을 전부 지우고 파일 내용으로 새로 등록한다.
+// 요구사항ID 매칭 동기화: 매칭되는 기존 요구사항은 id를 유지한 채 갱신(이력 보존), 매칭 안 된 기존 요구사항은 삭제,
+// 새로 나타난 요구사항ID(또는 요구사항ID가 없는 행)는 신규 생성한다.
 export async function applyRequirementsImport(projectId: string, userId: string, buffer: Buffer) {
   await assertManager(projectId, userId);
-  const { report, parsed } = await parseAndValidate(projectId, buffer);
-  if (report.errorCount > 0) return { applied: 0, report };
+  const { report, parsed, deleteIds } = await parseAndValidate(projectId, buffer);
+  if (report.errorCount > 0) return { applied: 0, created: 0, updated: 0, deleted: 0, report };
 
   const prisma = getPrisma();
-  const year = new Date().getUTCFullYear();
-  const requirementRows: Prisma.RequirementCreateManyInput[] = parsed.map((item, index) => ({
-    id: crypto.randomUUID(),
-    displayId: `REQ-${year}-${String(index + 1).padStart(6, "0")}`,
-    projectId, createdBy: userId,
-    ...item.data,
-  }));
+  const actorName = await actorNameOf(userId);
+  let created = 0, updated = 0;
 
   await prisma.$transaction(async (tx) => {
-    await tx.requirement.deleteMany({ where: { projectId } });
-    if (requirementRows.length) await tx.requirement.createMany({ data: requirementRows });
-    await tx.requirementSequence.upsert({ where: { projectId }, create: { projectId, value: requirementRows.length }, update: { value: requirementRows.length } });
+    if (deleteIds.length) await tx.requirement.deleteMany({ where: { id: { in: deleteIds } } });
+    for (const item of parsed) {
+      if (item.matchId) {
+        const before = await tx.requirement.findUniqueOrThrow({ where: { id: item.matchId } });
+        const after = await tx.requirement.update({ where: { id: item.matchId }, data: { ...item.data, version: { increment: 1 } } });
+        await tx.requirementEvent.create({ data: { requirementId: item.matchId, eventType: "edited", actorId: userId, actorName, body: "엑셀 일괄 동기화", beforeData: before as unknown as Prisma.InputJsonValue, afterData: after as unknown as Prisma.InputJsonValue } });
+        updated += 1;
+      } else {
+        const sequence = await tx.requirementSequence.upsert({ where: { projectId }, create: { projectId, value: 1 }, update: { value: { increment: 1 } } });
+        const displayId = `REQ-${new Date().getUTCFullYear()}-${String(sequence.value).padStart(6, "0")}`;
+        const requirement = await tx.requirement.create({ data: { displayId, projectId, createdBy: userId, ...item.data } });
+        await tx.requirementEvent.create({ data: { requirementId: requirement.id, eventType: "created", actorId: userId, actorName, body: "엑셀 일괄 동기화" } });
+        created += 1;
+      }
+    }
   });
-  await writeAuditLog(projectId, userId, "REQUIREMENTS_EXCEL_IMPORT_REPLACE", "requirements", projectId, null, { importedCount: requirementRows.length });
-  return { applied: requirementRows.length, report };
+  await writeAuditLog(projectId, userId, "REQUIREMENTS_EXCEL_IMPORT_SYNC", "requirements", projectId, null, { created, updated, deleted: deleteIds.length });
+  return { applied: created + updated, created, updated, deleted: deleteIds.length, report };
 }

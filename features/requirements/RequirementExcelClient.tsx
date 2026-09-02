@@ -50,7 +50,7 @@ export function RequirementExcelClient() {
     const payload = await response.json().catch(() => null);
     setPending("");
     if (!response.ok) { setMessage(payload?.error?.message ?? "반영에 실패했습니다."); if (payload?.data) setReport(payload.data); return; }
-    setMessage(`${payload.data.applied}건을 반영했습니다.`);
+    setMessage(`신규 ${payload.data.created}건 · 수정 ${payload.data.updated}건 · 삭제 ${payload.data.deleted}건을 반영했습니다.`);
     setReport(null); setFile(null);
   }
 
@@ -64,7 +64,7 @@ export function RequirementExcelClient() {
         <a className="button primary" href="/api/v1/requirements/excel/export">엑셀 다운로드</a>
       </section>
       <section className="panel">
-        <div className="panel-head"><h2>업로드</h2><span>반영 시 현재 등록된 요구사항을 전부 삭제하고 파일 내용으로 새로 등록합니다(전체교체).</span></div>
+        <div className="panel-head"><h2>업로드</h2><span>요구사항ID가 일치하면 갱신, 파일에 없는 기존 요구사항ID는 삭제, 새 요구사항ID(또는 빈 값)는 신규 등록됩니다.</span></div>
         <form className="excel-upload-form" onSubmit={validate}>
           <label
             className={`file-dropzone${dragActive ? " drag-active" : ""}${file ? " has-file" : ""}`}
@@ -84,11 +84,11 @@ export function RequirementExcelClient() {
               <AlertDialog.Portal>
                 <AlertDialog.Overlay className="calendar-modal-backdrop" />
                 <AlertDialog.Content className="alert-dialog">
-                  <AlertDialog.Title asChild><h2>현재 등록된 요구사항 전체를 삭제하고 새로 등록하시겠습니까?</h2></AlertDialog.Title>
-                  <AlertDialog.Description asChild><p>기존 요구사항과 그에 딸린 변경요청·이력이 모두 삭제되며, 되돌릴 수 없습니다. 이 파일에 담긴 {report.validCount}건으로 전체가 교체됩니다.</p></AlertDialog.Description>
+                  <AlertDialog.Title asChild><h2>이 파일 내용으로 요구사항을 동기화하시겠습니까?</h2></AlertDialog.Title>
+                  <AlertDialog.Description asChild><p>신규 {report.rows.filter((r) => !r.errors.length && r.action === "create").length}건 등록, 수정 {report.rows.filter((r) => !r.errors.length && r.action === "update").length}건 갱신{report.willDeleteCount > 0 && <>, 파일에 없는 기존 요구사항 <strong className="critical">{report.willDeleteCount}건 삭제</strong></>}됩니다. 삭제는 되돌릴 수 없습니다.</p></AlertDialog.Description>
                   <div className="alert-dialog-actions">
                     <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
-                    <AlertDialog.Action asChild><button className="button danger" type="button" onClick={apply}>전체교체 반영</button></AlertDialog.Action>
+                    <AlertDialog.Action asChild><button className="button danger" type="button" onClick={apply}>동기화 반영</button></AlertDialog.Action>
                   </div>
                 </AlertDialog.Content>
               </AlertDialog.Portal>
@@ -96,15 +96,18 @@ export function RequirementExcelClient() {
           </div>
         </form>
         {message && <p className={message.includes("반영했습니다") ? "form-success" : "form-error"} role="status">{message}</p>}
-        {report && <div className="table-wrap">
-          <table>
-            <thead><tr><th>행</th><th>요구사항명</th><th>오류</th><th>주의</th></tr></thead>
-            <tbody>
-              {report.rows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}><td>{row.row}</td><td>{row.title}</td><td>{row.errors.join(" / ") || "정상"}</td><td>{row.warnings.join(" / ") || "-"}</td></tr>)}
-              {!report.rows.length && <tr><td colSpan={4} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
-            </tbody>
-          </table>
-        </div>}
+        {report && <>
+          {report.willDeleteCount > 0 && <p className="form-error" role="alert">이 파일에 없는 기존 요구사항 {report.willDeleteCount}건이 삭제됩니다.</p>}
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>행</th><th>구분</th><th>요구사항명</th><th>오류</th><th>주의</th></tr></thead>
+              <tbody>
+                {report.rows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}><td>{row.row}</td><td>{row.action === "create" ? "신규" : "수정"}</td><td>{row.title}</td><td>{row.errors.join(" / ") || "정상"}</td><td>{row.warnings.join(" / ") || "-"}</td></tr>)}
+                {!report.rows.length && <tr><td colSpan={5} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>}
       </section>
     </div>
   </>;
