@@ -1,6 +1,6 @@
 "use client";
 
-import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Legend, LinearScale, Tooltip, type ChartType, type LegendItem } from "chart.js";
+import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Legend, LinearScale, PieController, Tooltip, type ChartType, type LegendItem } from "chart.js";
 import { cssVar, themeColor, useThemedChart } from "@/components/chart-theme";
 
 type CenterTextOptions = { text: string; subtext?: string; color: string; subColor: string; font: string };
@@ -36,7 +36,7 @@ const centerTextPlugin = {
   },
 };
 
-Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, LinearScale, Tooltip, Legend, centerTextPlugin);
+Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, PieController, LinearScale, Tooltip, Legend, centerTextPlugin);
 
 // usePointStyle:true인 범례는 항목별 LegendItem.pointStyle을 직접 읽는다 — 여기서 빠뜨리면
 // labels.pointStyle 전역 설정과 무관하게 기본값(원)으로 그려지므로, 아래 두 헬퍼 모두 호출한 쪽이
@@ -44,7 +44,7 @@ Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutCon
 type PointStyle = NonNullable<LegendItem["pointStyle"]>;
 
 // 범례에 항목명만이 아니라 실제 건수(테스크수 등)를 함께 표기해, 차트로 바꾼 뒤에도 숫자가 항상 보이게 한다.
-// 도넛(단일 데이터셋, 슬라이스별 배열 색상)용 — chart.data.labels 기준으로 순회한다.
+// 파이/도넛(단일 데이터셋, 슬라이스별 배열 색상)용 — chart.data.labels 기준으로 순회한다.
 function countLegend(unit: string, pointStyle: PointStyle) {
   return (chart: Chart): LegendItem[] => {
     const { labels = [], datasets } = chart.data;
@@ -52,11 +52,6 @@ function countLegend(unit: string, pointStyle: PointStyle) {
     const values = (datasets[0]?.data ?? []) as number[];
     return labels.map((label, i) => ({ text: `${label as string} ${values[i] ?? 0}${unit}`, fillStyle: colors[i] ?? "", strokeStyle: colors[i] ?? "", pointStyle, index: i }));
   };
-}
-
-// 1줄 막대(단일 카테고리, 데이터셋별 단색)용 — chart.data.datasets 기준으로 순회한다.
-function datasetLegend(unit: string, pointStyle: PointStyle) {
-  return (chart: Chart): LegendItem[] => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number) ?? 0}${unit}`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, pointStyle, index: i }));
 }
 
 export type WbsStageProgress = { stage: string; planned: number; actual: number; delayed: boolean };
@@ -114,34 +109,24 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
 
 export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
+    const foreground = themeColor("--foreground", "#ffffff"), border = cssVar("--border"), card = cssVar("--card");
     const success = cssVar("--chart-success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--chart-destructive");
-    const total = completed + inProgress + delayed;
     return new Chart(canvas, {
-      type: "bar",
+      type: "pie",
       data: {
-        labels: ["나의 WBS"],
-        datasets: [
-          { label: "완료", data: [completed], backgroundColor: success, borderRadius: 4, maxBarThickness: 22 },
-          { label: "진행중", data: [inProgress], backgroundColor: plannedColor, borderRadius: 4, maxBarThickness: 22 },
-          { label: "지연", data: [delayed], backgroundColor: destructive, borderRadius: 4, maxBarThickness: 22 },
-        ],
+        labels: ["완료", "진행중", "지연"],
+        datasets: [{ data: [completed, inProgress, delayed], backgroundColor: [success, plannedColor, destructive], borderColor: card, borderWidth: 2 }],
       },
       options: {
-        indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
-        scales: {
-          x: { stacked: true, min: 0, max: total || 1, grid: { color: border }, ticks: { color: muted, font: { size: 10 }, precision: 0 } },
-          y: { stacked: true, grid: { display: false }, ticks: { display: false } },
-        },
         plugins: {
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 }, generateLabels: datasetLegend("건", "rect") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 }, generateLabels: countLegend("건", "rect") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
     });
   }, [completed, inProgress, delayed]);
-  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 막대 그래프`} /></div>;
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 파이 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
