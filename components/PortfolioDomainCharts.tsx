@@ -40,6 +40,10 @@ Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutCon
 
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+// 다크모드에서는 CSS 변수 계산값을 거치지 않고 확실히 밝은 리터럴 색을 바로 써서, 텍스트가 안 보이는 문제를 원천 차단한다.
+const isDarkTheme = () => document.documentElement.dataset.theme === "dark";
+const themeColor = (varName: string, darkFallback: string) => (isDarkTheme() ? darkFallback : cssVar(varName));
+
 // 시스템 차트 기준(components/WbsStageChart.tsx)과 동일하게 다크모드 전환(data-theme 변경) 시 CSS 변수 색상을 다시 읽어 재렌더링한다.
 function useThemedChart(build: (canvas: HTMLCanvasElement) => Chart, deps: unknown[]) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,7 +97,7 @@ const DOMAIN_CHART_HEIGHT = 260;
 // Stage별로 한 줄씩 — 계획 대비 실적을 겹쳐 그린 불릿 막대 한 줄에 담아, Stage 전체 진행 상태를 한 화면에서 보여준다.
 export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card");
+    const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
     const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual"), destructiveColor = cssVar("--destructive");
     const labels = stages.map((s) => s.stage);
     const plannedPct = stages.map((s) => Math.round(s.planned * 100));
@@ -140,7 +144,7 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
 
 export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card");
+    const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
     const success = cssVar("--success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--destructive");
     const total = completed + inProgress + delayed;
     return new Chart(canvas, {
