@@ -64,20 +64,25 @@ function useThemedChart(build: (canvas: HTMLCanvasElement) => Chart, deps: unkno
   return canvasRef;
 }
 
+// usePointStyle:true인 범례는 항목별 LegendItem.pointStyle을 직접 읽는다 — 여기서 빠뜨리면
+// labels.pointStyle 전역 설정과 무관하게 기본값(원)으로 그려지므로, 아래 두 헬퍼 모두 호출한 쪽이
+// 실제 쓰는 도형을 그대로 넘겨받아 채워 넣는다.
+type PointStyle = NonNullable<LegendItem["pointStyle"]>;
+
 // 범례에 항목명만이 아니라 실제 건수(테스크수 등)를 함께 표기해, 차트로 바꾼 뒤에도 숫자가 항상 보이게 한다.
 // 도넛(단일 데이터셋, 슬라이스별 배열 색상)용 — chart.data.labels 기준으로 순회한다.
-function countLegend(unit: string) {
+function countLegend(unit: string, pointStyle: PointStyle) {
   return (chart: Chart): LegendItem[] => {
     const { labels = [], datasets } = chart.data;
     const colors = (datasets[0]?.backgroundColor ?? []) as string[];
     const values = (datasets[0]?.data ?? []) as number[];
-    return labels.map((label, i) => ({ text: `${label as string} ${values[i] ?? 0}${unit}`, fillStyle: colors[i] ?? "", strokeStyle: colors[i] ?? "", index: i }));
+    return labels.map((label, i) => ({ text: `${label as string} ${values[i] ?? 0}${unit}`, fillStyle: colors[i] ?? "", strokeStyle: colors[i] ?? "", pointStyle, index: i }));
   };
 }
 
 // 1줄 막대(단일 카테고리, 데이터셋별 단색)용 — chart.data.datasets 기준으로 순회한다.
-function datasetLegend(unit: string) {
-  return (chart: Chart): LegendItem[] => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number) ?? 0}${unit}`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i }));
+function datasetLegend(unit: string, pointStyle: PointStyle) {
+  return (chart: Chart): LegendItem[] => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number) ?? 0}${unit}`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, pointStyle, index: i }));
 }
 
 export type WbsStageProgress = { stage: string; planned: number; actual: number; delayed: boolean };
@@ -107,7 +112,7 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
       options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { grid: { display: false }, ticks: { color: foreground, font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: foreground, font: { size: 11, weight: 600 }, maxRotation: 60, minRotation: 60 } },
           y: { min: 0, max: 100, grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
         },
         plugins: {
@@ -116,9 +121,9 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
             labels: {
               color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
               generateLabels: () => [
-                { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, index: 0 },
-                { text: "완료", fillStyle: actualColor, strokeStyle: actualColor, index: 1 },
-                { text: "지연", fillStyle: destructiveColor, strokeStyle: destructiveColor, index: 2 },
+                { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, pointStyle: "rect", index: 0 },
+                { text: "완료", fillStyle: actualColor, strokeStyle: actualColor, pointStyle: "rect", index: 1 },
+                { text: "지연", fillStyle: destructiveColor, strokeStyle: destructiveColor, pointStyle: "rect", index: 2 },
               ],
             },
           },
@@ -152,11 +157,11 @@ export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { comple
         indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { stacked: true, min: 0, max: total || 1, grid: { color: border }, ticks: { color: muted, font: { size: 10 } } },
+          x: { stacked: true, min: 0, max: total || 1, grid: { color: border }, ticks: { color: muted, font: { size: 10 }, precision: 0 } },
           y: { stacked: true, grid: { display: false }, ticks: { display: false } },
         },
         plugins: {
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 }, generateLabels: datasetLegend("건") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 }, generateLabels: datasetLegend("건", "rect") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
@@ -177,7 +182,7 @@ export function ManagementBandChart({ red, yellow, green }: { red: number; yello
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 }, cutout: "62%",
         plugins: {
           centerText: { text: `${total}`, subtext: "건", color: foreground, subColor: muted, font: mono },
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "circle", font: { size: 11 }, generateLabels: countLegend("건") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "circle", font: { size: 11 }, generateLabels: countLegend("건", "circle") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
