@@ -39,7 +39,7 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
       </form>
       <section className="panel compact">
         {result.requirements.length ? <div className="table-wrap"><table>
-          <thead><tr><th>요구사항 ID</th><th>요구사항명</th><th>업무분류</th><th>담당자</th><th>요구사항구분</th><th>요청부서</th><th>우선순위</th><th>중요도</th><th>수용여부</th><th>확정후추가</th><th>변경관리</th><th>최종갱신</th></tr></thead>
+          <thead><tr><th>요구사항 ID</th><th>요구사항명</th><th>업무분류</th><th>담당자</th><th>요구사항구분</th><th>요청부서</th><th>등록일자</th><th>중요도</th><th>우선순위</th><th>수용여부</th><th>확정후추가</th><th>변경관리</th><th>최종갱신</th></tr></thead>
           <tbody>{result.requirements.map((row) => <ClickableTableRow href={`/requirements/${row.id}`} ariaLabel={`${row.requirementId || row.title} 요구사항 상세보기`} key={row.id}>
             <td className="mono requirement-id"><Link className="table-link" href={`/requirements/${row.id}`}>{row.requirementId || "-"}</Link></td>
             <td className="title-cell"><Link className="table-link" href={`/requirements/${row.id}`}>{row.title}</Link></td>
@@ -47,8 +47,9 @@ export function RequirementListScreen({ result, filters, divisions, isManager }:
             <td>{row.ownerName ?? "-"}</td>
             <td>{row.divisionLabel ?? "-"}</td>
             <td>{row.requestDepartment || "-"}</td>
-            <td>{row.priority ? probabilityLabel(row.priority) : "-"}</td>
+            <td>{row.registrationDate ? formatDate(row.registrationDate) : "-"}</td>
             <td>{row.importance ? probabilityLabel(row.importance) : "-"}</td>
+            <td>{row.priority ? probabilityLabel(row.priority) : "-"}</td>
             <td><span className={`badge ${row.acceptanceStatus}`}>{acceptanceLabel(row.acceptanceStatus)}</span></td>
             <td>{row.addedAfterConfirmation === null ? "-" : row.addedAfterConfirmation ? "예" : "아니요"}</td>
             <td>{row.changeCount > 0 ? <span className="badge risk">{row.changeCount}건</span> : "-"}</td>

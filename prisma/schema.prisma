@@ -496,8 +496,11 @@ model Requirement {
   businessMajorCategory  String                @default("")
   businessMiddleCategory String                @default("")
   businessMinorCategory  String                @default("")
+  registrationDate       DateTime?
   addedAfterConfirmation Boolean?
   notes                  String                @default("")
+  finalCheckNote         String                @default("")
+  inspectionCriteria     String                @default("")
   acceptanceStatus       RequirementAcceptance @default(pending)
   requestDepartment      String                @default("")
   divisionCodeId         String?

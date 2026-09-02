@@ -25,7 +25,9 @@ export function RequirementCreateScreen({ options }: { options: Options }) {
         title: form.get("title"), content: form.get("content"), ownerUserId: form.get("ownerUserId") || null,
         basis: form.get("basis"), precondition: form.get("precondition"), resolution: form.get("resolution"),
         businessMajorCategory: form.get("businessMajorCategory"), businessMiddleCategory: form.get("businessMiddleCategory"), businessMinorCategory: form.get("businessMinorCategory"),
+        registrationDate: form.get("registrationDate") || null,
         addedAfterConfirmation: form.get("addedAfterConfirmation") === "" ? null : form.get("addedAfterConfirmation") === "true", notes: form.get("notes"),
+        finalCheckNote: form.get("finalCheckNote"), inspectionCriteria: form.get("inspectionCriteria"),
         acceptanceStatus: form.get("acceptanceStatus"), requestDepartment: form.get("requestDepartment"),
         divisionCodeId: form.get("divisionCodeId") || null, categoryCodeId: form.get("categoryCodeId") || null,
         priority: form.get("priority") || null, importance: form.get("importance") || null,
@@ -58,15 +60,20 @@ export function RequirementCreateScreen({ options }: { options: Options }) {
         <label>요구사항분류<select name="categoryCodeId" defaultValue=""><option value="">미지정</option>{options.categories.map((code) => <option value={code.id} key={code.id}>{code.label}</option>)}</select></label>
       </div>
       <div className="form-grid">
-        <label>우선순위<select name="priority" defaultValue=""><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
         <label>중요도<select name="importance" defaultValue=""><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+        <label>우선순위<select name="priority" defaultValue=""><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
       </div>
       <label>요구사항출처<textarea name="basis" rows={3} maxLength={5000} placeholder="관련 규정, 요청 부서, 출처 자료 등" /></label>
       <label>사전확인사항<textarea name="precondition" rows={3} maxLength={5000} placeholder="이 요구사항을 처리하기 전에 확인해야 하는 사항" /></label>
       <label>요구사항해결방안<textarea name="resolution" rows={3} maxLength={5000} placeholder="적용 예정이거나 검토 중인 해결 방안" /></label>
-      <label>요구사항요청부서<input name="requestDepartment" maxLength={200} placeholder="예: 현업 운영팀" /></label>
+      <div className="form-grid">
+        <label>요구사항요청부서<input name="requestDepartment" maxLength={200} placeholder="예: 현업 운영팀" /></label>
+        <label>등록일자<input type="date" name="registrationDate" /></label>
+      </div>
+      <label>최종확인사항<textarea name="finalCheckNote" rows={3} maxLength={5000} placeholder="검토 라운드별 최종 확인 메모" /></label>
       <label>확정후추가<select name="addedAfterConfirmation" defaultValue=""><option value="">미입력</option><option value="true">예</option><option value="false">아니요</option></select></label>
       <label>비고<textarea name="notes" rows={3} maxLength={5000} /></label>
+      <label>검수기준<textarea name="inspectionCriteria" rows={3} maxLength={5000} placeholder="인수 기준" /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="button primary" type="submit" disabled={saving}>{saving ? "등록 중…" : "등록하기"}</button>
     </form></section></div>

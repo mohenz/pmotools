@@ -13,6 +13,9 @@ type Options = { members: ProjectMemberOption[]; divisions: CommonCode[]; catego
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
+function toDateInputValue(value: string | null) {
+  return value ? value.slice(0, 10) : "";
+}
 
 export function RequirementInfoPanel({ requirement, options, editing, onEditingChange }: { requirement: RequirementRow; options: Options; editing: boolean; onEditingChange: (value: boolean) => void }) {
   const router = useRouter();
@@ -30,7 +33,9 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
         title: form.get("title"), content: form.get("content"), ownerUserId: form.get("ownerUserId") || null,
         basis: form.get("basis"), precondition: form.get("precondition"), resolution: form.get("resolution"),
         businessMajorCategory: form.get("businessMajorCategory"), businessMiddleCategory: form.get("businessMiddleCategory"), businessMinorCategory: form.get("businessMinorCategory"),
+        registrationDate: form.get("registrationDate") || null,
         addedAfterConfirmation: form.get("addedAfterConfirmation") === "" ? null : form.get("addedAfterConfirmation") === "true", notes: form.get("notes"),
+        finalCheckNote: form.get("finalCheckNote"), inspectionCriteria: form.get("inspectionCriteria"),
         acceptanceStatus: form.get("acceptanceStatus"), requestDepartment: form.get("requestDepartment"),
         divisionCodeId: form.get("divisionCodeId") || null, categoryCodeId: form.get("categoryCodeId") || null,
         priority: form.get("priority") || null, importance: form.get("importance") || null,
@@ -64,15 +69,20 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
           <label>요구사항분류<select name="categoryCodeId" defaultValue={requirement.categoryCodeId ?? ""}><option value="">미지정</option>{options.categories.map((code) => <option value={code.id} key={code.id}>{code.label}</option>)}</select></label>
         </div>
         <div className="form-grid">
-          <label>우선순위<select name="priority" defaultValue={requirement.priority ?? ""}><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
           <label>중요도<select name="importance" defaultValue={requirement.importance ?? ""}><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+          <label>우선순위<select name="priority" defaultValue={requirement.priority ?? ""}><option value="">미지정</option>{probabilities.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
         </div>
         <label>요구사항출처<textarea name="basis" rows={3} maxLength={5000} defaultValue={requirement.basis} /></label>
         <label>사전확인사항<textarea name="precondition" rows={3} maxLength={5000} defaultValue={requirement.precondition} /></label>
         <label>요구사항해결방안<textarea name="resolution" rows={3} maxLength={5000} defaultValue={requirement.resolution} /></label>
-        <label>요구사항요청부서<input name="requestDepartment" maxLength={200} defaultValue={requirement.requestDepartment} /></label>
+        <div className="form-grid">
+          <label>요구사항요청부서<input name="requestDepartment" maxLength={200} defaultValue={requirement.requestDepartment} /></label>
+          <label>등록일자<input type="date" name="registrationDate" defaultValue={toDateInputValue(requirement.registrationDate)} /></label>
+        </div>
+        <label>최종확인사항<textarea name="finalCheckNote" rows={3} maxLength={5000} defaultValue={requirement.finalCheckNote} /></label>
         <label>확정후추가<select name="addedAfterConfirmation" defaultValue={requirement.addedAfterConfirmation === null ? "" : String(requirement.addedAfterConfirmation)}><option value="">미입력</option><option value="true">예</option><option value="false">아니요</option></select></label>
         <label>비고<textarea name="notes" rows={3} maxLength={5000} defaultValue={requirement.notes} /></label>
+        <label>검수기준<textarea name="inspectionCriteria" rows={3} maxLength={5000} defaultValue={requirement.inspectionCriteria} /></label>
         {message && <p className="form-error">{message}</p>}
         <button className="button primary" type="submit" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
       </form>
@@ -91,14 +101,17 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
         <div><dt>요구사항내용</dt><dd className="prewrap">{requirement.content || "-"}</dd></div>
         <div><dt>업무분류</dt><dd>{[requirement.businessMajorCategory, requirement.businessMiddleCategory, requirement.businessMinorCategory].filter(Boolean).join(" › ") || "-"}</dd></div>
         <div><dt>담당자</dt><dd>{requirement.ownerName ?? "미지정"}</dd></div>
-        <div><dt>우선순위 / 중요도</dt><dd>{requirement.priority ? probabilityLabel(requirement.priority) : "미지정"} / {requirement.importance ? probabilityLabel(requirement.importance) : "미지정"}</dd></div>
+        <div><dt>중요도 / 우선순위</dt><dd>{requirement.importance ? probabilityLabel(requirement.importance) : "미지정"} / {requirement.priority ? probabilityLabel(requirement.priority) : "미지정"}</dd></div>
         <div><dt>요구사항출처</dt><dd className="prewrap">{requirement.basis || "-"}</dd></div>
         <div><dt>사전확인사항</dt><dd className="prewrap">{requirement.precondition || "-"}</dd></div>
         <div><dt>요구사항해결방안</dt><dd className="prewrap">{requirement.resolution || "-"}</dd></div>
         <div><dt>요구사항요청부서</dt><dd>{requirement.requestDepartment || "-"}</dd></div>
+        <div><dt>등록일자</dt><dd>{requirement.registrationDate ? formatDate(requirement.registrationDate) : "-"}</dd></div>
+        <div><dt>최종확인사항</dt><dd className="prewrap">{requirement.finalCheckNote || "-"}</dd></div>
         <div><dt>확정후추가</dt><dd>{requirement.addedAfterConfirmation === null ? "-" : requirement.addedAfterConfirmation ? "예" : "아니요"}</dd></div>
         <div><dt>비고</dt><dd className="prewrap">{requirement.notes || "-"}</dd></div>
-        <div><dt>등록일</dt><dd>{formatDate(requirement.createdAt)}</dd></div>
+        <div><dt>검수기준</dt><dd className="prewrap">{requirement.inspectionCriteria || "-"}</dd></div>
+        <div><dt>시스템 등록일</dt><dd>{formatDate(requirement.createdAt)}</dd></div>
       </dl>
     </article>
   );

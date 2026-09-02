@@ -32,8 +32,16 @@ export const createRequirementSchema = z.object({
   businessMajorCategory: z.string().trim().max(200).default(""),
   businessMiddleCategory: z.string().trim().max(200).default(""),
   businessMinorCategory: z.string().trim().max(200).default(""),
+  registrationDate: z.union([z.string(), z.null()]).optional().transform((value, ctx) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: "등록일자 형식이 올바르지 않습니다." }); return z.NEVER; }
+    return date;
+  }),
   addedAfterConfirmation: z.boolean().nullable().default(null),
   notes: z.string().trim().max(5000).default(""),
+  finalCheckNote: z.string().trim().max(5000).default(""),
+  inspectionCriteria: z.string().trim().max(5000).default(""),
   acceptanceStatus: acceptanceSchema.default("pending"),
   requestDepartment: z.string().trim().max(200).default(""),
   divisionCodeId: z.string().uuid().nullable().optional(),
@@ -60,7 +68,8 @@ export type RequirementRow = {
   id: string; displayId: string; requirementId: string | null; projectId: string; title: string; content: string;
   ownerUserId: string | null; ownerName: string | null; basis: string; precondition: string; resolution: string;
   businessMajorCategory: string; businessMiddleCategory: string; businessMinorCategory: string;
-  addedAfterConfirmation: boolean | null; notes: string;
+  registrationDate: string | null;
+  addedAfterConfirmation: boolean | null; notes: string; finalCheckNote: string; inspectionCriteria: string;
   acceptanceStatus: RequirementAcceptance; requestDepartment: string;
   divisionCodeId: string | null; divisionLabel: string | null; categoryCodeId: string | null; categoryLabel: string | null;
   priority: RequirementLevel | null; importance: RequirementLevel | null;
@@ -88,6 +97,7 @@ export type RequirementStatistics = {
   rejected: number;
   byCategory: RequirementStatisticsRow[];
   byDivision: { label: string; count: number }[];
+  byBusinessMajorCategory: { label: string; count: number }[];
 };
 
 const requirementInclude = { owner: { select: { name: true } }, division: { select: { label: true } }, category: { select: { label: true } } } as const;
@@ -100,7 +110,8 @@ function toRow(row: RequirementWithRelations, changeCount = 0): RequirementRow {
     id: row.id, displayId: row.displayId, requirementId: row.requirementId, projectId: row.projectId, title: row.title, content: row.content,
     ownerUserId: row.ownerUserId, ownerName: row.owner?.name ?? null, basis: row.basis, precondition: row.precondition, resolution: row.resolution,
     businessMajorCategory: row.businessMajorCategory, businessMiddleCategory: row.businessMiddleCategory, businessMinorCategory: row.businessMinorCategory,
-    addedAfterConfirmation: row.addedAfterConfirmation, notes: row.notes,
+    registrationDate: row.registrationDate?.toISOString() ?? null,
+    addedAfterConfirmation: row.addedAfterConfirmation, notes: row.notes, finalCheckNote: row.finalCheckNote, inspectionCriteria: row.inspectionCriteria,
     acceptanceStatus: row.acceptanceStatus, requestDepartment: row.requestDepartment,
     divisionCodeId: row.divisionCodeId, divisionLabel: row.division?.label ?? null, categoryCodeId: row.categoryCodeId, categoryLabel: row.category?.label ?? null,
     priority: row.priority, importance: row.importance,
@@ -209,12 +220,14 @@ export async function getRequirementStatistics(projectId: string): Promise<Requi
     where: { projectId, archivedAt: null },
     select: {
       acceptanceStatus: true,
+      businessMajorCategory: true,
       category: { select: { label: true, sortOrder: true } },
       division: { select: { label: true, sortOrder: true } },
     },
   });
   const categories = new Map<string, RequirementStatisticsRow & { sortOrder: number }>();
   const divisions = new Map<string, { label: string; count: number; sortOrder: number }>();
+  const businessMajorCategories = new Map<string, { label: string; count: number }>();
   let accepted = 0, partiallyAccepted = 0, rejected = 0;
   for (const requirement of requirements) {
     if (requirement.acceptanceStatus === "accepted") accepted += 1;
@@ -231,6 +244,10 @@ export async function getRequirementStatistics(projectId: string): Promise<Requi
     const division = divisions.get(divisionLabel) ?? { label: divisionLabel, count: 0, sortOrder: requirement.division?.sortOrder ?? 9999 };
     division.count += 1;
     divisions.set(divisionLabel, division);
+    const majorLabel = requirement.businessMajorCategory.trim() || "미지정";
+    const majorCategory = businessMajorCategories.get(majorLabel) ?? { label: majorLabel, count: 0 };
+    majorCategory.count += 1;
+    businessMajorCategories.set(majorLabel, majorCategory);
   }
   return {
     total: requirements.length,
@@ -239,6 +256,7 @@ export async function getRequirementStatistics(projectId: string): Promise<Requi
     rejected,
     byCategory: [...categories.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko")).map(({ sortOrder: _, ...row }) => row),
     byDivision: [...divisions.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko")).map(({ sortOrder: _, ...row }) => row),
+    byBusinessMajorCategory: [...businessMajorCategories.values()].sort((a, b) => a.label.localeCompare(b.label, "ko")),
   };
 }
 async function assertUniqueRequirementId(projectId: string, requirementId: string, excludeId?: string) {
@@ -261,7 +279,7 @@ export async function createRequirement(projectId: string, userId: string, input
   const { requirement, displayId } = await prisma.$transaction(async (tx) => {
     const sequence = await tx.requirementSequence.upsert({ where: { projectId }, create: { projectId, value: 1 }, update: { value: { increment: 1 } } });
     const displayId = `REQ-${new Date().getUTCFullYear()}-${String(sequence.value).padStart(6, "0")}`;
-    const requirement = await tx.requirement.create({ data: { displayId, requirementId: data.requirementId || null, projectId, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, businessMajorCategory: data.businessMajorCategory, businessMiddleCategory: data.businessMiddleCategory, businessMinorCategory: data.businessMinorCategory, addedAfterConfirmation: data.addedAfterConfirmation, notes: data.notes, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, createdBy: userId } });
+    const requirement = await tx.requirement.create({ data: { displayId, requirementId: data.requirementId || null, projectId, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, businessMajorCategory: data.businessMajorCategory, businessMiddleCategory: data.businessMiddleCategory, businessMinorCategory: data.businessMinorCategory, registrationDate: data.registrationDate, addedAfterConfirmation: data.addedAfterConfirmation, notes: data.notes, finalCheckNote: data.finalCheckNote, inspectionCriteria: data.inspectionCriteria, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, createdBy: userId } });
     await tx.requirementEvent.create({ data: { requirementId: requirement.id, eventType: "created", actorId: userId, actorName, body: "신규 등록" } });
     return { requirement, displayId };
   });
@@ -284,7 +302,7 @@ export async function updateRequirement(projectId: string, userId: string, requi
     const before = await tx.requirement.findUnique({ where: { id: requirementId } });
     mutationError(before, data.version);
     const version = data.version + 1;
-    const update = { requirementId: data.requirementId || null, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, businessMajorCategory: data.businessMajorCategory, businessMiddleCategory: data.businessMiddleCategory, businessMinorCategory: data.businessMinorCategory, addedAfterConfirmation: data.addedAfterConfirmation, notes: data.notes, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, version };
+    const update = { requirementId: data.requirementId || null, title: data.title, content: data.content, ownerUserId: data.ownerUserId || null, basis: data.basis, precondition: data.precondition, resolution: data.resolution, businessMajorCategory: data.businessMajorCategory, businessMiddleCategory: data.businessMiddleCategory, businessMinorCategory: data.businessMinorCategory, registrationDate: data.registrationDate, addedAfterConfirmation: data.addedAfterConfirmation, notes: data.notes, finalCheckNote: data.finalCheckNote, inspectionCriteria: data.inspectionCriteria, acceptanceStatus: data.acceptanceStatus, requestDepartment: data.requestDepartment, divisionCodeId: data.divisionCodeId || null, categoryCodeId: data.categoryCodeId || null, priority: data.priority || null, importance: data.importance || null, version };
     await tx.requirement.update({ where: { id: requirementId }, data: update });
     await tx.requirementEvent.create({ data: { requirementId, eventType: "edited", actorId: userId, actorName, body: "기본 정보 수정", beforeData: before as never, afterData: update as never } });
     return { before, version };

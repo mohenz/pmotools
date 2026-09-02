@@ -35,6 +35,14 @@ export function RequirementStatisticsScreen({ statistics }: { statistics: Requir
           <div className="distribution-track" aria-label={`${row.label} ${percent(row.count, statistics.total)}`}><span style={{ width: percent(row.count, statistics.total) }} /></div>
         </article>)}</div>
       </section>
+
+      <section className="panel requirement-distribution">
+        <div className="panel-head"><div><h2>업무 대분류별 분포</h2><p>전체 요구사항 대비 구성 비율</p></div></div>
+        <div className="distribution-list">{statistics.byBusinessMajorCategory.map((row) => <article key={row.label}>
+          <div><strong>{row.label}</strong><span>{fmt(row.count)}건 · {percent(row.count, statistics.total)}</span></div>
+          <div className="distribution-track" aria-label={`${row.label} ${percent(row.count, statistics.total)}`}><span style={{ width: percent(row.count, statistics.total) }} /></div>
+        </article>)}</div>
+      </section>
     </div>
   </>;
 }
