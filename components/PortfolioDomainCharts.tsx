@@ -56,8 +56,10 @@ function countLegend(unit: string, pointStyle: PointStyle) {
 
 export type WbsStageProgress = { stage: string; planned: number; actual: number; delayed: boolean };
 
-// WBS 진척과 요구사항관리 카드의 세로 높이를 맞추기 위해 두 차트가 공유하는 고정 높이.
+// WBS 진척 카드(Stage별 막대 그래프)의 고정 높이.
 const DOMAIN_CHART_HEIGHT = 260;
+// 나의 WBS 현황 카드는 범례·중심 텍스트가 더 넉넉히 보이도록 더 긴 높이를 쓴다.
+const MY_WBS_STATUS_CHART_HEIGHT = 420;
 
 // Stage별로 한 줄씩 — 계획 대비 실적을 겹쳐 그린 불릿 막대 한 줄에 담아, Stage 전체 진행 상태를 한 화면에서 보여준다.
 export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
@@ -126,7 +128,7 @@ export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { comple
       },
     });
   }, [completed, inProgress, delayed]);
-  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 파이 그래프`} /></div>;
+  return <div className="domain-chart" style={{ height: MY_WBS_STATUS_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 파이 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {

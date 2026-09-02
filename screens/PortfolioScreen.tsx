@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { WbsStats, WbsOwnerStatus } from "@/lib/server/wbs";
+import type { InvitationSummary } from "@/lib/server/messages";
 import type { PortfolioPanelRow } from "@/lib/domain/portfolio-panels";
 import { WbsOwnerStatusChart, WbsProgressChart } from "@/components/PortfolioDomainCharts";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
@@ -8,15 +9,25 @@ const pct = (value: number) => Math.round(value * 100);
 const pctOrDash = (value: number | null) => (value === null ? "-" : `${Math.round(value * 100)}%`);
 const fmt = (value: number) => value.toLocaleString("ko-KR");
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
+const invitationDateFormat = new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short" });
 
-export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs }: {
+function invitationTitle(invitation: InvitationSummary) {
+  if (invitation.messageType === "CALENDAR_INVITATION") return invitation.calendarInvitation?.title ?? "일정 초청";
+  return invitation.meetingInvitation?.roomName ?? "회의실 예약 초청";
+}
+
+export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations }: {
   wbsStats: WbsStats;
   myWbsStatus: WbsOwnerStatus;
   panelPrefs: PortfolioPanelRow[];
+  invitations: InvitationSummary[];
 }) {
   const isPanelVisible = (key: string) => panelPrefs.find((panel) => panel.key === key)?.visible ?? true;
+  const showInvitations = isPanelVisible("invitations");
   const showWbsProgress = isPanelVisible("wbs-progress");
   const showMyWbsStatus = isPanelVisible("my-wbs-status");
+  const unreadInvitations = invitations.filter((invitation) => !invitation.isRead).length;
+  const recentInvitations = invitations.slice(0, 5);
   // 미완료 Task를 먼저 보여주되, 전부 완료된 담당자라도 목록이 비지 않도록 완료 건도 뒤이어 채운다.
   const myTasks = [...(myWbsStatus?.items ?? [])]
     .sort((a, b) => {
@@ -31,6 +42,22 @@ export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs }: {
   const myInProgress = myLeafItems.length - myCompleted - myDelayed;
   return <>
     <div className="content">
+      {showInvitations && <section className="panel">
+        <div className="panel-head"><h2>초청 조회</h2><span>{unreadInvitations > 0 ? `미확인 ${unreadInvitations}건` : `${invitations.length}건`}</span></div>
+        <div className="history-list dashboard-subpanel-scroll">
+          {recentInvitations.map((invitation) => <Link href="/messages" className="history-item" key={invitation.id}>
+            <div>
+              <small>{invitation.messageType === "CALENDAR_INVITATION" ? "일정 초청" : "회의실 예약 초청"} · {invitation.senderName}</small>
+              {!invitation.isRead && <span className="badge issue">미확인</span>}
+            </div>
+            <p>{invitationTitle(invitation)}</p>
+            <time>{invitationDateFormat.format(new Date(invitation.createdAt))}</time>
+          </Link>)}
+          {!recentInvitations.length && <div className="empty">받은 초청이 없습니다.</div>}
+        </div>
+        {invitations.length > recentInvitations.length && <Link className="text-button" href="/messages">전체 {invitations.length}건 보기</Link>}
+      </section>}
+
       {(showWbsProgress || showMyWbsStatus) && <section className="portfolio-domain-grid" aria-label="핵심 업무 현황">
         {showWbsProgress && <Link href="/wbs/stats" className="panel domain-summary">
           <div className="panel-head"><h2>WBS 진척</h2><span>{wbsStats.stages.length}개 Stage · {fmt(wbsStats.itemCount)}건</span></div>
