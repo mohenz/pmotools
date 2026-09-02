@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PMOTOOLS 요구사항관리 엑셀관리 메뉴얼</title>
+  <style>
+    :root{--brand:#2457d6;--ink:#172033;--muted:#64748b;--line:#dbe3ee;--soft:#f5f8fc;--brand-soft:#eaf0ff;--warn:#a15c00;--warn-soft:#fff5df;--ok:#08765b}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#eef2f7;color:var(--ink);font:15px/1.7 system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif}.page{width:min(1120px,calc(100% - 32px));margin:30px auto;background:#fff;box-shadow:0 16px 48px #20314d20}.hero{padding:54px 62px;background:linear-gradient(135deg,#172554,var(--brand));color:#fff}.eyebrow{margin:0;font-size:13px;font-weight:800;letter-spacing:.14em}.hero h1{margin:5px 0;font-size:38px}.hero>p:not(.eyebrow){max-width:760px;margin:12px 0 0;color:#dbe7ff;font-size:17px}.meta{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:26px;color:#c7d7ff;font-size:13px}.layout{display:grid;grid-template-columns:235px minmax(0,1fr)}.toc{position:sticky;top:16px;align-self:start;padding:30px 22px}.toc strong{display:block;margin-bottom:10px}.toc a{display:block;padding:6px 8px;border-radius:7px;color:var(--muted);text-decoration:none}.toc a:hover{background:var(--brand-soft);color:var(--brand)}main{min-width:0;padding:40px 54px 64px;border-left:1px solid var(--line)}section{scroll-margin-top:20px;margin-bottom:50px}h2{margin:0 0 18px;padding-bottom:10px;border-bottom:2px solid var(--ink);font-size:25px}h3{margin:26px 0 10px;font-size:18px}p{margin:8px 0}.lead{font-size:17px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card,.step,.note,.warning{padding:16px 18px;border:1px solid var(--line);border-radius:11px;background:var(--soft)}.card h3{margin:0 0 7px}.step{margin:11px 0;background:#fff}.note,.warning{margin:15px 0;border-left:4px solid var(--brand);background:var(--brand-soft)}.warning{border-color:var(--warn);background:var(--warn-soft)}.route{display:inline-block;padding:3px 8px;border-radius:6px;background:#111827;color:#fff;font:12px/1.5 ui-monospace,Consolas,monospace}.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#e5f7f1;color:var(--ok);font-size:12px;font-weight:800}table{width:100%;margin:14px 0;border-collapse:collapse}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:var(--soft)}ul,ol{padding-left:22px}.footer{padding:19px 62px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}@media(max-width:800px){.page{width:100%;margin:0;box-shadow:none}.hero,main{padding:34px 24px}.hero h1{font-size:30px}.layout{display:block}.toc{position:static;border-bottom:1px solid var(--line)}main{border:0}.grid{grid-template-columns:1fr}}@media print{body{background:#fff}.page{width:auto;margin:0;box-shadow:none}.hero{padding:30px 38px;background:#fff!important;color:#000;border-bottom:2px solid #000}.hero>p:not(.eyebrow),.meta{color:#333}.layout{display:block}.toc{display:none}main{padding:30px 38px;border:0}.card,.step,.note,.warning,table{break-inside:avoid}.footer{padding:16px 38px}}
+  </style>
+</head>
+<body><article class="page">
+  <header class="hero"><p class="eyebrow">PMOTOOLS · USER GUIDE</p><h1>요구사항관리 엑셀관리 메뉴얼</h1><p>요구사항정의서를 엑셀로 내려받고, 표준 서식 파일을 올려 요구사항 ID 기준으로 신규 등록·수정·삭제를 한 번에 동기화하는 절차를 안내합니다.</p><div class="meta"><span>대상: 관리자·운영자 전용 기능</span><span>기준 화면: 요구사항관리 → 엑셀 관리</span><span>작성일: 2026-09-03</span></div></header>
+  <div class="layout"><nav class="toc" aria-label="목차"><strong>목차</strong><a href="#overview">1. 기능 개요</a><a href="#download">2. 엑셀 다운로드</a><a href="#sync">3. 동기화 방식(요구사항 ID 매칭)</a><a href="#columns">4. 엑셀 컬럼 안내</a><a href="#upload">5. 업로드·검증(Dry-run)</a><a href="#apply">6. 반영</a><a href="#roles">7. 권한 기준</a><a href="#trouble">8. 문제 해결</a><a href="#check">9. 체크리스트</a></nav>
+  <main>
+    <section id="overview"><h2>1. 기능 개요</h2><p class="lead">요구사항 엑셀관리는 요구사항정의서 전체를 엑셀 파일로 내려받거나, 표준 서식 파일을 올려 대량으로 반영하는 관리자·운영자 전용 화면입니다.</p><div class="grid"><div class="card"><h3>요구사항 ID 매칭 동기화</h3><p>업로드한 파일이 곧 "요구사항 전체 목록"이 됩니다. 파일의 요구사항 ID가 기존과 일치하면 그 항목을 수정(이력 보존), 파일에 없는 기존 요구사항 ID는 삭제, 새 요구사항 ID(또는 빈 값)는 신규 등록됩니다.</p></div><div class="card"><h3>검증 후 반영</h3><p>파일을 바로 반영하지 않고, 먼저 <strong>검증(Dry-run)</strong>으로 행별 오류·경고와 신규/수정/삭제 건수를 확인한 뒤에만 <strong>반영</strong>할 수 있습니다.</p></div></div><p>경로: <span class="route">요구사항관리 → 엑셀 관리</span> (관리자·운영자만 메뉴에 노출됩니다)</p></section>
+
+    <section id="download"><h2>2. 엑셀 다운로드</h2><p>화면 상단 <strong>다운로드</strong> 영역의 <strong>엑셀 다운로드</strong> 버튼을 누르면, 현재 프로젝트의 요구사항정의서 전체(보관 처리되지 않은 항목)가 표준 20개 컬럼 엑셀 파일로 내려받아집니다.</p><div class="note">이 파일은 업로드 서식과 완전히 동일한 컬럼 구성입니다. 기존 데이터를 내려받아 값을 고친 뒤 그대로 다시 업로드하면 자연스럽게 수정 반영이 되는 구조입니다.</div></section>
+
+    <section id="sync"><h2>3. 동기화 방식(요구사항 ID 매칭)</h2><p>업로드 시 각 행은 <strong>요구사항 ID</strong>(수기로 관리하는 코드, 화면에 표시되는 내부 ID와는 다른 값) 컬럼을 기준으로 다음과 같이 처리됩니다.</p><table><thead><tr><th>파일의 요구사항 ID</th><th>처리</th></tr></thead><tbody><tr><td>기존에 등록된 요구사항 ID와 일치</td><td><strong>수정</strong> — 내부 ID(및 생성·변경 이력)를 그대로 유지한 채 내용만 갱신되고, 이력에 "엑셀 일괄 동기화" 수정 기록이 남습니다.</td></tr><tr><td>비어 있거나, 기존에 없던 새 값</td><td><strong>신규 등록</strong> — 새 요구사항으로 생성되고, 이력에 "엑셀 일괄 동기화" 등록 기록이 남습니다.</td></tr><tr><td>기존에는 있었지만 파일에 다시 나타나지 않음</td><td><strong>삭제</strong> — 해당 요구사항이 완전히 삭제됩니다(요구사항 ID가 비어 있던 기존 항목도 파일에서 매칭될 수 없으므로 함께 삭제 대상이 됩니다).</td></tr></tbody></table><div class="warning"><strong>삭제는 되돌릴 수 없습니다</strong><br>삭제되는 요구사항은 변경관리 이력을 포함해 완전히 제거됩니다. 업로드 전 <strong>엑셀 다운로드</strong>로 현재 전체 목록을 받아 파일에 모든 요구사항 ID가 빠짐없이 포함되어 있는지 확인하십시오. 일부만 담긴 파일을 올리면 나머지 요구사항이 전부 삭제됩니다.</div></section>
+
+    <section id="columns"><h2>4. 엑셀 컬럼 안내</h2><p>업로드 파일은 아래 20개 컬럼을 이 순서 그대로 포함해야 합니다(다운로드한 파일을 그대로 사용하면 순서가 자동으로 맞습니다).</p><table><thead><tr><th>컬럼</th><th>필수</th><th>입력 형식</th></tr></thead><tbody>
+      <tr><td>요구사항 ID</td><td>-</td><td>수기 관리 코드. 기존 값과 일치시키면 수정, 비우면 신규 등록됩니다.</td></tr>
+      <tr><td>업무 대분류 / 업무 중분류 / 업무 소분류</td><td>-</td><td>자유 텍스트</td></tr>
+      <tr><td>기능분류</td><td>-</td><td><strong>설정 → 공통코드 → 요구사항 기능분류</strong>에 등록된 값과 정확히 일치해야 합니다. 일치하지 않으면 오류로 처리됩니다.</td></tr>
+      <tr><td>구분</td><td>-</td><td><strong>설정 → 공통코드 → 요구사항 구분</strong>에 등록된 값과 정확히 일치해야 합니다. 일치하지 않으면 오류로 처리됩니다.</td></tr>
+      <tr><td>요구사항 명</td><td>필수</td><td>200자 이내</td></tr>
+      <tr><td>요구사항 상세설명</td><td>-</td><td>10,000자 이내</td></tr>
+      <tr><td>사전 확인 사항 / 요구사항 해결방안 / 요구사항 출처 / 비고 / 최종 확인사항 / 검수 기준</td><td>-</td><td>각 5,000자 이내</td></tr>
+      <tr><td>요청부서/성명</td><td>-</td><td>자유 텍스트</td></tr>
+      <tr><td>등록일자</td><td>-</td><td>날짜 형식(엑셀 날짜 셀 또는 YYYY-MM-DD 등 인식 가능한 문자열)</td></tr>
+      <tr><td>중요도 / 우선순위</td><td>-</td><td><strong>상 / 중 / 하</strong> 중 하나 (비우면 미지정)</td></tr>
+      <tr><td>수용여부</td><td>-</td><td><strong>검토중 / 수용 / 부분수용 / 미수용 / 보류</strong> 중 하나 (비우면 검토중)</td></tr>
+      <tr><td>확정후추가</td><td>-</td><td><strong>예 / 아니요</strong> 중 하나 (비우면 미지정)</td></tr>
+    </tbody></table></section>
+
+    <section id="upload"><h2>5. 업로드·검증(Dry-run)</h2><p>경로: <span class="route">요구사항관리 → 엑셀 관리 → 업로드</span></p><div class="step"><strong>① 파일 선택</strong><br>업로드 영역에 .xlsx 파일을 끌어다 놓거나 클릭해 선택합니다. .xlsx가 아닌 파일은 선택되지 않습니다.</div><div class="step"><strong>② 검증(Dry-run)</strong><br><strong>검증(Dry-run)</strong> 버튼을 누르면 실제로 반영하지 않고 파일 내용만 확인합니다. 결과로 행별 처리 구분(신규/수정), 오류, 주의(경고)가 표에 나타나고, 파일에 없어 삭제될 기존 요구사항 건수가 있으면 상단에 붉은 안내가 표시됩니다.</div><div class="note"><strong>흔한 주의(경고) 메시지</strong> — 기능분류·구분 값이 공통코드에 없을 때 등은 오류로 처리되어 반영이 막힙니다. 검증 결과 표의 "오류" 열에 표시된 행은 값을 고쳐 파일을 다시 올려야 합니다.</div></section>
+
+    <section id="apply"><h2>6. 반영</h2><p>검증 결과에 <strong>오류가 0건</strong>이고 정상 행이 1건 이상이면 <strong>반영</strong> 버튼이 활성화됩니다.</p><div class="step"><strong>① 반영 버튼 클릭</strong><br>신규/수정 건수와, 삭제될 요구사항이 있다면 그 건수까지 표시하는 확인 대화상자가 뜹니다.</div><div class="step"><strong>② 동기화 반영 확인</strong><br>대화상자에서 <strong>동기화 반영</strong>을 눌러야 실제로 적용됩니다. <strong>취소</strong>를 누르면 아무 것도 반영되지 않습니다.</div><div class="step"><strong>③ 결과 확인</strong><br>반영이 끝나면 "신규 N건 · 수정 N건 · 삭제 N건을 반영했습니다." 메시지가 나타나고, 요구사항정의서 목록에서 즉시 확인할 수 있습니다.</div><div class="warning"><strong>동시 작업 주의</strong><br>반영은 프로젝트의 요구사항 전체를 대상으로 하는 작업입니다. 다른 담당자가 요구사항을 개별 화면에서 동시에 수정하고 있지 않은지 확인한 뒤 반영하십시오.</div></section>
+
+    <section id="roles"><h2>7. 권한 기준</h2><table><thead><tr><th>기능</th><th>일반 사용자</th><th>관리자·운영자</th></tr></thead><tbody><tr><td>엑셀 관리 메뉴 접근</td><td>불가(메뉴 미노출)</td><td>가능</td></tr><tr><td>엑셀 다운로드</td><td>불가</td><td>가능</td></tr><tr><td>검증(Dry-run)</td><td>불가</td><td>가능</td></tr><tr><td>반영(동기화)</td><td>불가</td><td>가능</td></tr></tbody></table></section>
+
+    <section id="trouble"><h2>8. 문제 해결</h2><table><thead><tr><th>상황</th><th>확인 및 조치</th></tr></thead><tbody>
+      <tr><td>기능분류·구분 값이 오류로 표시됨</td><td><strong>설정 → 공통코드</strong>에 등록된 요구사항 기능분류/구분 라벨과 파일의 값이 정확히 일치하는지 확인하십시오(공백·오탈자 포함 완전 일치).</td></tr>
+      <tr><td>중요도·우선순위·수용여부·확정후추가 값 오류</td><td>각각 상/중/하, 검토중·수용·부분수용·미수용·보류, 예/아니요 중 정확한 값인지 확인하십시오.</td></tr>
+      <tr><td>등록일자 형식 오류</td><td>엑셀 날짜 셀 형식이거나, 문자열이면 YYYY-MM-DD와 같이 날짜로 인식 가능한 형식이어야 합니다.</td></tr>
+      <tr><td>같은 요구사항 ID가 중복 오류로 표시됨</td><td>파일 안에 동일한 요구사항 ID가 두 행 이상 있는 경우입니다. 한 행만 남기고 나머지를 정리하십시오.</td></tr>
+      <tr><td>의도치 않게 요구사항이 삭제될 것으로 표시됨</td><td>파일이 전체 목록이 아니라 일부만 담고 있을 가능성이 높습니다. <strong>엑셀 다운로드</strong>로 현재 전체 데이터를 받아 그 위에서 수정한 뒤 다시 업로드하십시오.</td></tr>
+      <tr><td>반영 버튼이 비활성화됨</td><td>검증 결과에 오류가 1건이라도 있으면 반영할 수 없습니다. 오류 0건이 될 때까지 파일을 수정하고 다시 검증하십시오.</td></tr>
+      <tr><td>엑셀 관리 메뉴가 보이지 않음</td><td>관리자·운영자 권한인지 확인하십시오.</td></tr>
+    </tbody></table></section>
+
+    <section id="check"><h2>9. 운영 체크리스트</h2><div class="grid"><div class="card"><h3>업로드 전</h3><ul><li>□ 최신 엑셀 다운로드로 전체 목록 확보</li><li>□ 기존 요구사항 ID를 임의로 지우거나 바꾸지 않았는지 확인</li><li>□ 기능분류·구분 값이 공통코드와 일치하는지 확인</li><li>□ 신규 행은 요구사항 ID를 비워 두었는지 확인</li></ul></div><div class="card"><h3>반영 전</h3><ul><li>□ 검증(Dry-run) 오류 0건 확인</li><li>□ 신규/수정 건수가 예상과 일치하는지 확인</li><li>□ 삭제 예정 건수가 있다면 의도한 것인지 확인</li><li>□ 다른 담당자의 동시 수정 여부 확인</li></ul></div></div></section>
+  </main></div>
+  <footer class="footer">PMOTOOLS 요구사항관리 엑셀관리 메뉴얼 · 새 창에서 열거나 브라우저 인쇄 기능으로 PDF 저장할 수 있습니다.</footer>
+</article></body></html>

@@ -6,6 +6,7 @@ export const MANUALS = [
   { slug: "calendar", title: "캘린더", description: "일정 조회·등록·반복 일정·검색·엑셀 사용 절차", file: "/manuals/calendar.html" },
   { slug: "meeting-rooms", title: "회의실", description: "회의실 조회·예약·취소와 관리자 운영 절차", file: "/manuals/meeting-rooms.html" },
   { slug: "wbs", title: "WBS", description: "WBS 항목 등록·조회·수정, 엑셀 업/다운로드, 통계 절차", file: "/manuals/wbs.html" },
+  { slug: "requirements-excel", title: "요구사항관리 엑셀관리", description: "요구사항정의서 엑셀 다운로드와 요구사항 ID 매칭 동기화(신규·수정·삭제) 절차", file: "/manuals/requirements-excel.html" },
 ] as const;
 
 export function getManual(slug: string) {
