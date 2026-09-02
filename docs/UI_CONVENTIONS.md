@@ -102,12 +102,15 @@
 
 **이 프로젝트의 모든 차트(막대·선·도넛·파이 등 다계열 시각화)는 반드시 `chart.js`(현재 `^4.5.1`)로 그린다.** 손으로 좌표를 계산하는 `<svg>` 막대/도형, `ctx.fillRect`/`ctx.arc` 등을 직접 호출하는 수동 canvas 드로잉, 퍼센트 `width`만으로 여러 계열을 흉내 낸 CSS 막대 등은 새로 만들지 않는다. (단순히 값 하나를 채우는 단일 진행바처럼 "차트"라 부르기 애매한 것은 예외.)
 
-- 다크모드 대응: CSS 커스텀 프로퍼티(`--foreground` 등)를 `getComputedStyle`로 읽어 canvas에 넘기는 방식은 계산값 자체는 유효해도 실제 렌더링에서 텍스트가 사라지는 사례가 있었다. **다크모드에서는 리터럴 색을 직접 쓴다** — `components/PortfolioDomainCharts.tsx`의 `themeColor(varName, darkFallback)` 패턴을 그대로 재사용한다(`document.documentElement.dataset.theme === "dark"`일 때 `darkFallback`을 반환).
-- 테마 전환 시 재렌더링: `data-theme` 속성 변경을 `MutationObserver`로 감지해 차트를 `destroy()` 후 다시 생성한다(`useThemedChart` 훅, 또는 `components/WbsStageChart.tsx`의 동일 패턴).
+- 공용 헬퍼: `components/chart-theme.ts`의 `cssVar`/`themeColor`/`useThemedChart`를 항상 재사용한다. 새 차트 파일마다 이 셋을 다시 만들지 않는다.
+- 다크모드 대응: CSS 커스텀 프로퍼티(`--foreground` 등)를 `getComputedStyle`로 읽어 canvas에 넘기는 방식은 계산값 자체는 유효해도 실제 렌더링에서 텍스트가 사라지는 사례가 있었다. **다크모드에서는 리터럴 색을 직접 쓴다** — `themeColor(varName, darkFallback)`이 `document.documentElement.dataset.theme === "dark"`일 때 `darkFallback`을 반환한다.
+- 테마 전환 시 재렌더링: `data-theme` 속성 변경을 `MutationObserver`로 감지해 차트를 `destroy()` 후 다시 생성한다 — `useThemedChart` 훅이 이미 처리해준다.
 - 범례 도형: `usePointStyle: true`를 쓸 때 커스텀 `generateLabels`를 직접 작성한다면 **각 항목에 `pointStyle`을 반드시 채운다** — 전역 `labels.pointStyle`은 기본 `generateLabels`에서만 쓰이고, 커스텀 함수가 반환하는 개별 항목에 빠져 있으면 Chart.js가 기본값(원)으로 그린다(`countLegend`/`datasetLegend` 참고).
 - 색상 값 자체는 Chart.js가 정하는 게 아니라 이 프로젝트 `app/globals.css`의 디자인 시스템 변수(`--chart-planned`, `--chart-actual`, `--success`, `--warning`, `--destructive` 등)를 그대로 쓴다.
+- **예외 — `screens/DashboardScreen.tsx`의 "리스크 매트릭스"(3×3 확률×영향 히트맵)**: 사용자 확인 결과 **의도적으로 Chart.js로 바꾸지 않고 현재의 `<Link className="matrix-cell">` 9칸 그리드를 유지한다.** 캔버스 하나로 그리면 칸별 개별 키보드 포커스·스크린리더 라벨(`aria-label="확률 상, 영향 중, 목록 N건"`)이 사라지는데, 접근성을 이 규칙보다 우선한다는 결정(2026-09-02). 이 화면을 다시 손댈 때 이 예외를 임의로 뒤집지 않는다.
 
 ### 참조 구현
 
 - `components/PortfolioDomainCharts.tsx` (WbsProgressChart, WbsOwnerStatusChart) — 1줄 막대/겹쳐 그리는 불릿 차트 패턴
 - `components/WbsStageChart.tsx` — Stage별 계획/실적 막대 차트
+- `components/DistributionBarChart.tsx` — 항목별 건수를 보여주는 1열 가로 막대(옵션으로 행 클릭 시 필터링된 목록 이동)
