@@ -97,3 +97,21 @@
 ## 폼 에러 텍스트
 
 `.form-error`에 `min-height: 16px`가 적용되어 있어, 에러 메시지 엘리먼트를 조건부로 마운트/언마운트하는 대신 **항상 DOM에 유지하고 빈 문자열/텍스트만 바꾸는 방식**을 쓰면 에러가 나타나도 아래 레이아웃이 밀리지 않는다. 신규 폼에서는 이 패턴을 우선 적용하고, 기존 폼은 점진적으로 전환한다.
+
+## 차트/그래프
+
+**이 프로젝트의 모든 차트(막대·선·도넛·파이 등 다계열 시각화)는 반드시 `chart.js`(현재 `^4.5.1`)로 그린다.** 손으로 좌표를 계산하는 `<svg>` 막대/도형, `ctx.fillRect`/`ctx.arc` 등을 직접 호출하는 수동 canvas 드로잉, 퍼센트 `width`만으로 여러 계열을 흉내 낸 CSS 막대 등은 새로 만들지 않는다. (단순히 값 하나를 채우는 단일 진행바처럼 "차트"라 부르기 애매한 것은 예외.)
+
+- 공용 헬퍼: `components/chart-theme.ts`의 `cssVar`/`themeColor`/`useThemedChart`를 항상 재사용한다. 새 차트 파일마다 이 셋을 다시 만들지 않는다.
+- 다크모드 대응: CSS 커스텀 프로퍼티(`--foreground` 등)를 `getComputedStyle`로 읽어 canvas에 넘기는 방식은 계산값 자체는 유효해도 실제 렌더링에서 텍스트가 사라지는 사례가 있었다. **다크모드에서는 리터럴 색을 직접 쓴다** — `themeColor(varName, darkFallback)`이 `document.documentElement.dataset.theme === "dark"`일 때 `darkFallback`을 반환한다.
+- 테마 전환 시 재렌더링: `data-theme` 속성 변경을 `MutationObserver`로 감지해 차트를 `destroy()` 후 다시 생성한다 — `useThemedChart` 훅이 이미 처리해준다.
+- 범례 도형: `usePointStyle: true`를 쓸 때 커스텀 `generateLabels`를 직접 작성한다면 **각 항목에 `pointStyle`을 반드시 채운다** — 전역 `labels.pointStyle`은 기본 `generateLabels`에서만 쓰이고, 커스텀 함수가 반환하는 개별 항목에 빠져 있으면 Chart.js가 기본값(원)으로 그린다(`countLegend`/`datasetLegend` 참고).
+- 채우기(막대/도넛 조각) 색상은 파스텔톤을 쓴다 — `app/globals.css`의 차트 전용 변수 `--chart-planned`(파스텔 블루) / `--chart-actual`(파스텔 오렌지) / `--chart-success`(파스텔 그린) / `--chart-warning`(파스텔 옐로) / `--chart-destructive`(파스텔 레드)를 쓰고, 배지·버튼 등 다른 UI가 쓰는 진한 `--success`/`--warning`/`--destructive`는 차트 채우기에 재사용하지 않는다(2026-09-02 결정 — Chart.js 공식 예제의 파스텔 배색 참고, 정확한 색상값을 그대로 따르라는 의미는 아니었음).
+- 단, **텍스트/눈금 색은 파스텔이 아니라 기존의 진한(고대비) 색을 쓴다** — 예: `WbsStageChart`가 지연된 Stage 라벨을 강조할 때 쓰는 `themeColor("--destructive", "#ff8a8a")`. 파스텔은 채우기 전용이며, 다크모드 텍스트 가독성 문제(위 항목)와 다시 부딪히지 않도록 텍스트 색상 규칙과 분리해서 다룬다.
+- **예외 — `screens/DashboardScreen.tsx`의 "리스크 매트릭스"(3×3 확률×영향 히트맵)**: 사용자 확인 결과 **의도적으로 Chart.js로 바꾸지 않고 현재의 `<Link className="matrix-cell">` 9칸 그리드를 유지한다.** 캔버스 하나로 그리면 칸별 개별 키보드 포커스·스크린리더 라벨(`aria-label="확률 상, 영향 중, 목록 N건"`)이 사라지는데, 접근성을 이 규칙보다 우선한다는 결정(2026-09-02). 이 화면을 다시 손댈 때 이 예외를 임의로 뒤집지 않는다.
+
+### 참조 구현
+
+- `components/PortfolioDomainCharts.tsx` (WbsProgressChart, WbsOwnerStatusChart) — 1줄 막대/겹쳐 그리는 불릿 차트 패턴
+- `components/WbsStageChart.tsx` — Stage별 계획/실적 막대 차트
+- `components/DistributionBarChart.tsx` — 항목별 건수를 보여주는 1열 가로 막대(옵션으로 행 클릭 시 필터링된 목록 이동)

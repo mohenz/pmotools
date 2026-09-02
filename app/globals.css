@@ -27,8 +27,11 @@
   --info: oklch(0.488 0.243 264.376);
   --info-bg: #edf3f9;
   --info-foreground: oklch(0.97 0.014 254.604);
-  --chart-planned: #2a78d6;
-  --chart-actual: #eb6834;
+  --chart-planned: #A0C4FF;
+  --chart-actual: #FFD6A5;
+  --chart-success: #CAFFBF;
+  --chart-warning: #FDFFB6;
+  --chart-destructive: #FFADAD;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: var(--primary);
@@ -261,7 +264,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .kpi:hover { transform: translateY(-1px); border-color: var(--primary); }
 .panel { min-width: 0; max-width: 100%; padding: 16px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-xs); }
 .panel.compact { padding: 12px 14px; }
-.portfolio-domain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.portfolio-domain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
 .domain-summary { display: block; transition: transform .12s, border-color .12s; }
 .domain-summary:hover { transform: translateY(-1px); border-color: var(--primary); }
 .domain-chart { position: relative; height: 140px; margin-top: 4px; }
@@ -893,8 +896,11 @@ a.history-item:hover { background: var(--accent); }
   --info: oklch(0.623 0.214 259.815);
   --info-bg: #17263a;
   --info-foreground: oklch(0.97 0.014 254.604);
-  --chart-planned: #3987e5;
-  --chart-actual: #d95926;
+  --chart-planned: #A0C4FF;
+  --chart-actual: #FFD6A5;
+  --chart-success: #CAFFBF;
+  --chart-warning: #FDFFB6;
+  --chart-destructive: #FFADAD;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: var(--primary);

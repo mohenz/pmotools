@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Legend, LinearScale, Tooltip, type ChartType, type LegendItem } from "chart.js";
+import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Legend, LinearScale, PieController, Tooltip, type ChartType, type LegendItem } from "chart.js";
+import { cssVar, themeColor, useThemedChart } from "@/components/chart-theme";
 
 type CenterTextOptions = { text: string; subtext?: string; color: string; subColor: string; font: string };
 declare module "chart.js" {
@@ -36,106 +36,103 @@ const centerTextPlugin = {
   },
 };
 
-Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, LinearScale, Tooltip, Legend, centerTextPlugin);
+Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, PieController, LinearScale, Tooltip, Legend, centerTextPlugin);
 
-const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-// 시스템 차트 기준(components/WbsStageChart.tsx)과 동일하게 다크모드 전환(data-theme 변경) 시 CSS 변수 색상을 다시 읽어 재렌더링한다.
-function useThemedChart(build: (canvas: HTMLCanvasElement) => Chart, deps: unknown[]) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<Chart | null>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    function render() {
-      chartRef.current?.destroy();
-      chartRef.current = build(canvas!);
-    }
-    render();
-    const observer = new MutationObserver(render);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => {
-      observer.disconnect();
-      chartRef.current?.destroy();
-      chartRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return canvasRef;
-}
+// usePointStyle:true인 범례는 항목별 LegendItem.pointStyle을 직접 읽는다 — 여기서 빠뜨리면
+// labels.pointStyle 전역 설정과 무관하게 기본값(원)으로 그려지므로, 아래 두 헬퍼 모두 호출한 쪽이
+// 실제 쓰는 도형을 그대로 넘겨받아 채워 넣는다.
+type PointStyle = NonNullable<LegendItem["pointStyle"]>;
 
 // 범례에 항목명만이 아니라 실제 건수(테스크수 등)를 함께 표기해, 차트로 바꾼 뒤에도 숫자가 항상 보이게 한다.
-function countLegend(unit: string) {
+// 파이/도넛(단일 데이터셋, 슬라이스별 배열 색상)용 — chart.data.labels 기준으로 순회한다.
+function countLegend(unit: string, pointStyle: PointStyle) {
   return (chart: Chart): LegendItem[] => {
     const { labels = [], datasets } = chart.data;
     const colors = (datasets[0]?.backgroundColor ?? []) as string[];
     const values = (datasets[0]?.data ?? []) as number[];
-    return labels.map((label, i) => ({ text: `${label as string} ${values[i] ?? 0}${unit}`, fillStyle: colors[i] ?? "", strokeStyle: colors[i] ?? "", index: i }));
+    return labels.map((label, i) => ({ text: `${label as string} ${values[i] ?? 0}${unit}`, fillStyle: colors[i] ?? "", strokeStyle: colors[i] ?? "", pointStyle, index: i }));
   };
 }
 
-export function WbsProgressChart({ planned, actual }: { planned: number; actual: number }) {
+export type WbsStageProgress = { stage: string; planned: number; actual: number; delayed: boolean };
+
+// WBS 진척과 요구사항관리 카드의 세로 높이를 맞추기 위해 두 차트가 공유하는 고정 높이.
+const DOMAIN_CHART_HEIGHT = 260;
+
+// Stage별로 한 줄씩 — 계획 대비 실적을 겹쳐 그린 불릿 막대 한 줄에 담아, Stage 전체 진행 상태를 한 화면에서 보여준다.
+export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card");
-    const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual");
-    const plannedPct = Math.round(planned * 100), actualPct = Math.round(actual * 100);
+    const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
+    const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual"), destructiveColor = cssVar("--chart-destructive");
+    const labels = stages.map((s) => s.stage);
+    const plannedPct = stages.map((s) => Math.round(s.planned * 100));
+    const actualPct = stages.map((s) => Math.round(s.actual * 100));
+    const actualColors = stages.map((s) => (s.delayed ? destructiveColor : actualColor));
     return new Chart(canvas, {
       type: "bar",
       data: {
-        labels: ["공정율"],
+        labels,
         datasets: [
-          { label: "계획", data: [plannedPct], backgroundColor: plannedColor, borderRadius: 4, maxBarThickness: 22 },
-          { label: "실적", data: [actualPct], backgroundColor: actualColor, borderRadius: 4, maxBarThickness: 22 },
+          // grouped: false로 두 데이터셋을 같은 x축 위치에 겹쳐 그린다 — 배열 앞쪽이 위로 그려지므로 실적을 먼저, 계획을 배경으로 나중에 넣는다.
+          { label: "실적", data: actualPct, backgroundColor: actualColors, borderRadius: 3, maxBarThickness: 26, grouped: false },
+          { label: "계획", data: plannedPct, backgroundColor: plannedColor, borderRadius: 3, maxBarThickness: 26, grouped: false },
         ],
       },
       options: {
-        indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { min: 0, max: 100, grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
-          y: { grid: { display: false }, ticks: { display: false } },
+          x: { grid: { display: false }, ticks: { color: foreground, font: { size: 11, weight: 600 }, maxRotation: 60, minRotation: 60 } },
+          y: { min: 0, max: 100, grid: { color: border }, ticks: { color: muted, stepSize: 25, font: { size: 10 }, callback: (v) => `${v}%` } },
         },
         plugins: {
           legend: {
             position: "bottom",
             labels: {
-              color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11 },
-              generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({ text: `${ds.label} ${(ds.data[0] as number)}%`, fillStyle: ds.backgroundColor as string, strokeStyle: ds.backgroundColor as string, index: i })),
+              color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
+              generateLabels: () => [
+                { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, pointStyle: "rect", index: 0 },
+                { text: "완료", fillStyle: actualColor, strokeStyle: actualColor, pointStyle: "rect", index: 1 },
+                { text: "지연", fillStyle: destructiveColor, strokeStyle: destructiveColor, pointStyle: "rect", index: 2 },
+              ],
             },
           },
-          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}%` } },
+          tooltip: {
+            backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8,
+            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%`, afterLabel: (ctx) => (ctx.datasetIndex === 0 ? (stages[ctx.dataIndex].delayed ? "지연" : "완료") : "") },
+          },
         },
       },
     });
-  }, [planned, actual]);
-  return <div className="domain-chart"><canvas ref={canvasRef} role="img" aria-label={`WBS 계획 ${Math.round(planned * 100)}% 대비 실적 ${Math.round(actual * 100)}% 막대 그래프`} /></div>;
+  }, [stages]);
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
-export function RequirementStatusChart({ accepted, partiallyAccepted, rejected }: { accepted: number; partiallyAccepted: number; rejected: number }) {
+export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card"), mono = cssVar("--font-mono");
-    const success = cssVar("--success"), warning = cssVar("--warning"), destructive = cssVar("--destructive");
-    const total = accepted + partiallyAccepted + rejected;
+    const foreground = themeColor("--foreground", "#ffffff"), border = cssVar("--border"), card = cssVar("--card");
+    const success = cssVar("--chart-success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--chart-destructive");
     return new Chart(canvas, {
-      type: "doughnut",
-      data: { labels: ["수용", "부분수용", "미수용"], datasets: [{ data: [accepted, partiallyAccepted, rejected], backgroundColor: [success, warning, destructive], borderColor: card, borderWidth: 2 }] },
+      type: "pie",
+      data: {
+        labels: ["완료", "진행중", "지연"],
+        datasets: [{ data: [completed, inProgress, delayed], backgroundColor: [success, plannedColor, destructive], borderColor: card, borderWidth: 2 }],
+      },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: { duration: 200 }, cutout: "62%",
+        responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         plugins: {
-          centerText: { text: `${total}`, subtext: "건", color: foreground, subColor: muted, font: mono },
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "circle", font: { size: 11 }, generateLabels: countLegend("건") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 }, generateLabels: countLegend("건", "rect") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
     });
-  }, [accepted, partiallyAccepted, rejected]);
-  return <div className="domain-chart"><canvas ref={canvasRef} role="img" aria-label={`요구사항 수용 ${accepted}건, 부분수용 ${partiallyAccepted}건, 미수용 ${rejected}건 도넛 그래프`} /></div>;
+  }, [completed, inProgress, delayed]);
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 파이 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card"), mono = cssVar("--font-mono");
-    const destructive = cssVar("--destructive"), warning = cssVar("--warning"), success = cssVar("--success");
+    const destructive = cssVar("--chart-destructive"), warning = cssVar("--chart-warning"), success = cssVar("--chart-success");
     const total = red + yellow + green;
     return new Chart(canvas, {
       type: "doughnut",
@@ -144,7 +141,7 @@ export function ManagementBandChart({ red, yellow, green }: { red: number; yello
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 }, cutout: "62%",
         plugins: {
           centerText: { text: `${total}`, subtext: "건", color: foreground, subColor: muted, font: mono },
-          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "circle", font: { size: 11 }, generateLabels: countLegend("건") } },
+          legend: { position: "bottom", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "circle", font: { size: 11 }, generateLabels: countLegend("건", "circle") } },
           tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8 },
         },
       },
