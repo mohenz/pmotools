@@ -27,8 +27,11 @@
   --info: oklch(0.488 0.243 264.376);
   --info-bg: #edf3f9;
   --info-foreground: oklch(0.97 0.014 254.604);
-  --chart-planned: #2a78d6;
-  --chart-actual: #eb6834;
+  --chart-planned: #A0C4FF;
+  --chart-actual: #FFD6A5;
+  --chart-success: #CAFFBF;
+  --chart-warning: #FDFFB6;
+  --chart-destructive: #FFADAD;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: var(--primary);
@@ -893,8 +896,11 @@ a.history-item:hover { background: var(--accent); }
   --info: oklch(0.623 0.214 259.815);
   --info-bg: #17263a;
   --info-foreground: oklch(0.97 0.014 254.604);
-  --chart-planned: #3987e5;
-  --chart-actual: #d95926;
+  --chart-planned: #A0C4FF;
+  --chart-actual: #FFD6A5;
+  --chart-success: #CAFFBF;
+  --chart-warning: #FDFFB6;
+  --chart-destructive: #FFADAD;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: var(--primary);

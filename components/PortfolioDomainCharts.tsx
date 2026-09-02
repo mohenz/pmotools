@@ -68,7 +68,7 @@ const DOMAIN_CHART_HEIGHT = 260;
 export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
-    const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual"), destructiveColor = cssVar("--destructive");
+    const plannedColor = cssVar("--chart-planned"), actualColor = cssVar("--chart-actual"), destructiveColor = cssVar("--chart-destructive");
     const labels = stages.map((s) => s.stage);
     const plannedPct = stages.map((s) => Math.round(s.planned * 100));
     const actualPct = stages.map((s) => Math.round(s.actual * 100));
@@ -115,7 +115,7 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
 export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
-    const success = cssVar("--success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--destructive");
+    const success = cssVar("--chart-success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--chart-destructive");
     const total = completed + inProgress + delayed;
     return new Chart(canvas, {
       type: "bar",
@@ -147,7 +147,7 @@ export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { comple
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = cssVar("--foreground"), muted = cssVar("--muted-foreground"), border = cssVar("--border"), card = cssVar("--card"), mono = cssVar("--font-mono");
-    const destructive = cssVar("--destructive"), warning = cssVar("--warning"), success = cssVar("--success");
+    const destructive = cssVar("--chart-destructive"), warning = cssVar("--chart-warning"), success = cssVar("--chart-success");
     const total = red + yellow + green;
     return new Chart(canvas, {
       type: "doughnut",
