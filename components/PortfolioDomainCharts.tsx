@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Legend, LinearScale, Tooltip, type ChartType, type LegendItem } from "chart.js";
+import { cssVar, themeColor, useThemedChart } from "@/components/chart-theme";
 
 type CenterTextOptions = { text: string; subtext?: string; color: string; subColor: string; font: string };
 declare module "chart.js" {
@@ -37,36 +37,6 @@ const centerTextPlugin = {
 };
 
 Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, LinearScale, Tooltip, Legend, centerTextPlugin);
-
-const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-// 다크모드에서는 CSS 변수 계산값을 거치지 않고 확실히 밝은 리터럴 색을 바로 써서, 텍스트가 안 보이는 문제를 원천 차단한다.
-const isDarkTheme = () => document.documentElement.dataset.theme === "dark";
-const themeColor = (varName: string, darkFallback: string) => (isDarkTheme() ? darkFallback : cssVar(varName));
-
-// 시스템 차트 기준(components/WbsStageChart.tsx)과 동일하게 다크모드 전환(data-theme 변경) 시 CSS 변수 색상을 다시 읽어 재렌더링한다.
-function useThemedChart(build: (canvas: HTMLCanvasElement) => Chart, deps: unknown[]) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<Chart | null>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    function render() {
-      chartRef.current?.destroy();
-      chartRef.current = build(canvas!);
-    }
-    render();
-    const observer = new MutationObserver(render);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => {
-      observer.disconnect();
-      chartRef.current?.destroy();
-      chartRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return canvasRef;
-}
 
 // usePointStyle:true인 범례는 항목별 LegendItem.pointStyle을 직접 읽는다 — 여기서 빠뜨리면
 // labels.pointStyle 전역 설정과 무관하게 기본값(원)으로 그려지므로, 아래 두 헬퍼 모두 호출한 쪽이

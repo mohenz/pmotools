@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { probabilityLabel, statusLabels } from "@/lib/domain/items";
 import type { ItemRow } from "@/lib/server/items";
+import { DistributionBarChart } from "@/components/DistributionBarChart";
 
 type DashboardData = {
   summary: { total: number; openIssues: number; openRisks: number; stale: number };
@@ -13,7 +14,6 @@ const levels = ["high", "medium", "low"];
 
 export function DashboardScreen({ data }: { data: DashboardData }) {
   const matrix = new Map(data.matrix.map((cell) => [`${cell.probability}:${cell.impact}`, cell.count]));
-  const maxCategory = Math.max(1, ...data.categories.map((item) => item.count));
 
   return (
     <>
@@ -49,11 +49,7 @@ export function DashboardScreen({ data }: { data: DashboardData }) {
 
         <section className="panel">
           <div className="panel-head"><h2>유형별 미해결 현황</h2><span>6개 관리 유형</span></div>
-          <div className="category-list">
-            {data.categories.map((category) => {
-              return <Link href={`/items?category=${category.category}&open=true`} className="category-row" key={category.category}><span>{category.label}</span><div><i style={{ width: `${category.count / maxCategory * 100}%` }} /></div><strong>{category.count}</strong></Link>;
-            })}
-          </div>
+          <DistributionBarChart rows={data.categories.map((category) => ({ label: category.label, count: category.count, href: `/items?category=${category.category}&open=true` }))} />
         </section>
 
         {data.staleItems.length > 0 && <section className="panel">
