@@ -186,6 +186,7 @@ model Project {
   requirementChanges        RequirementChange[]
   requirementChangeSequence RequirementChangeSequence?
   menuPreferences           MenuPreference[]
+  portfolioPanelPreferences PortfolioPanelPreference[]
   announcements             Announcement[]
   managementTasks           ManagementTask[]
   managementTaskSequence    ManagementTaskSequence?
@@ -214,6 +215,17 @@ model MenuPreference {
 
   @@id([projectId, menuKey])
   @@map("menu_preferences")
+}
+
+model PortfolioPanelPreference {
+  projectId String
+  panelKey  String
+  visible   Boolean @default(true)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, panelKey])
+  @@map("portfolio_panel_preferences")
 }
 
 // ---------------------------------------------------------------------------

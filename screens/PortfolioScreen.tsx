@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { WbsStats, WbsOwnerStatus } from "@/lib/server/wbs";
+import type { PortfolioPanelRow } from "@/lib/domain/portfolio-panels";
 import { WbsOwnerStatusChart, WbsProgressChart } from "@/components/PortfolioDomainCharts";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
 
@@ -8,10 +9,14 @@ const pctOrDash = (value: number | null) => (value === null ? "-" : `${Math.roun
 const fmt = (value: number) => value.toLocaleString("ko-KR");
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
 
-export function PortfolioScreen({ wbsStats, myWbsStatus }: {
+export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs }: {
   wbsStats: WbsStats;
   myWbsStatus: WbsOwnerStatus;
+  panelPrefs: PortfolioPanelRow[];
 }) {
+  const isPanelVisible = (key: string) => panelPrefs.find((panel) => panel.key === key)?.visible ?? true;
+  const showWbsProgress = isPanelVisible("wbs-progress");
+  const showMyWbsStatus = isPanelVisible("my-wbs-status");
   // 미완료 Task를 먼저 보여주되, 전부 완료된 담당자라도 목록이 비지 않도록 완료 건도 뒤이어 채운다.
   const myTasks = [...(myWbsStatus?.items ?? [])]
     .sort((a, b) => {
@@ -26,19 +31,19 @@ export function PortfolioScreen({ wbsStats, myWbsStatus }: {
   const myInProgress = myLeafItems.length - myCompleted - myDelayed;
   return <>
     <div className="content">
-      <section className="portfolio-domain-grid" aria-label="핵심 업무 현황">
-        <Link href="/wbs/stats" className="panel domain-summary">
+      {(showWbsProgress || showMyWbsStatus) && <section className="portfolio-domain-grid" aria-label="핵심 업무 현황">
+        {showWbsProgress && <Link href="/wbs/stats" className="panel domain-summary">
           <div className="panel-head"><h2>WBS 진척</h2><span>{wbsStats.stages.length}개 Stage · {fmt(wbsStats.itemCount)}건</span></div>
           <WbsProgressChart stages={wbsStats.stages} />
           <p className="domain-summary-foot">지연 <strong className={wbsStats.delayedCount > 0 ? "critical" : undefined}>{fmt(wbsStats.delayedCount)}건</strong> · 전체 지연율 <strong>{pct(wbsStats.delayRate)}%</strong></p>
-        </Link>
+        </Link>}
 
-        <Link href={myWbsStatus ? `/wbs/by-owner/${myWbsStatus.owner.loginId}` : "/wbs"} className="panel domain-summary">
+        {showMyWbsStatus && <Link href={myWbsStatus ? `/wbs/by-owner/${myWbsStatus.owner.loginId}` : "/wbs"} className="panel domain-summary">
           <div className="panel-head"><h2>나의 WBS 현황</h2><span>{fmt(myLeafItems.length)}건</span></div>
           <WbsOwnerStatusChart completed={myCompleted} inProgress={myInProgress} delayed={myDelayed} />
           <p className="domain-summary-foot">진척율 <strong>{myWbsStatus ? pct(myWbsStatus.overall.progressIndex) : 0}%</strong></p>
-        </Link>
-      </section>
+        </Link>}
+      </section>}
 
       <section className="panel">
         <div className="panel-head">

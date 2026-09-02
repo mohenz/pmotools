@@ -50,6 +50,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
         { href: "/settings/meeting-rooms", label: "회의실 관리", active: pathname.startsWith("/settings/meeting-rooms") },
         { href: "/settings/recurring-meetings", label: "정기예약 승인", active: pathname.startsWith("/settings/recurring-meetings") },
         { href: "/settings/menu", label: "메뉴 설정", active: pathname.startsWith("/settings/menu") },
+        { href: "/settings/portfolio-panels", label: "포트폴리오 패널 설정", active: pathname.startsWith("/settings/portfolio-panels") },
       ] : []),
       ...(isAdmin ? [
         { href: "/settings/users", label: "사용자 관리", active: pathname.startsWith("/settings/users") },
