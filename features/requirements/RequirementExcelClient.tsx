@@ -2,6 +2,7 @@
 
 import { DragEvent, FormEvent, useRef, useState } from "react";
 import Link from "next/link";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { ImportReport } from "@/lib/server/requirements-excel";
 
 export function RequirementExcelClient() {
@@ -63,7 +64,7 @@ export function RequirementExcelClient() {
         <a className="button primary" href="/api/v1/requirements/excel/export">엑셀 다운로드</a>
       </section>
       <section className="panel">
-        <div className="panel-head"><h2>업로드</h2><span>ID 열이 비어있으면 신규 등록, 채워져 있으면 해당 요구사항을 수정합니다.</span></div>
+        <div className="panel-head"><h2>업로드</h2><span>반영 시 현재 등록된 요구사항을 전부 삭제하고 파일 내용으로 새로 등록합니다(전체교체).</span></div>
         <form className="excel-upload-form" onSubmit={validate}>
           <label
             className={`file-dropzone${dragActive ? " drag-active" : ""}${file ? " has-file" : ""}`}
@@ -78,16 +79,29 @@ export function RequirementExcelClient() {
           </label>
           <div className="form-actions">
             <button className="button secondary" type="submit" disabled={!file || !!pending}>{pending === "validate" ? "검증 중…" : "검증(Dry-run)"}</button>
-            {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건)`}</button>}
+            {canApply && <AlertDialog.Root>
+              <AlertDialog.Trigger asChild><button className="button primary" type="button" disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건)`}</button></AlertDialog.Trigger>
+              <AlertDialog.Portal>
+                <AlertDialog.Overlay className="calendar-modal-backdrop" />
+                <AlertDialog.Content className="alert-dialog">
+                  <AlertDialog.Title asChild><h2>현재 등록된 요구사항 전체를 삭제하고 새로 등록하시겠습니까?</h2></AlertDialog.Title>
+                  <AlertDialog.Description asChild><p>기존 요구사항과 그에 딸린 변경요청·이력이 모두 삭제되며, 되돌릴 수 없습니다. 이 파일에 담긴 {report.validCount}건으로 전체가 교체됩니다.</p></AlertDialog.Description>
+                  <div className="alert-dialog-actions">
+                    <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                    <AlertDialog.Action asChild><button className="button danger" type="button" onClick={apply}>전체교체 반영</button></AlertDialog.Action>
+                  </div>
+                </AlertDialog.Content>
+              </AlertDialog.Portal>
+            </AlertDialog.Root>}
           </div>
         </form>
         {message && <p className={message.includes("반영했습니다") ? "form-success" : "form-error"} role="status">{message}</p>}
         {report && <div className="table-wrap">
           <table>
-            <thead><tr><th>행</th><th>구분</th><th>요구사항명</th><th>오류</th><th>주의</th></tr></thead>
+            <thead><tr><th>행</th><th>요구사항명</th><th>오류</th><th>주의</th></tr></thead>
             <tbody>
-              {report.rows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}><td>{row.row}</td><td>{row.action === "create" ? "신규" : "수정"}</td><td>{row.title}</td><td>{row.errors.join(" / ") || "정상"}</td><td>{row.warnings.join(" / ") || "-"}</td></tr>)}
-              {!report.rows.length && <tr><td colSpan={5} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
+              {report.rows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}><td>{row.row}</td><td>{row.title}</td><td>{row.errors.join(" / ") || "정상"}</td><td>{row.warnings.join(" / ") || "-"}</td></tr>)}
+              {!report.rows.length && <tr><td colSpan={4} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>}
