@@ -4,6 +4,7 @@ import type { InvitationSummary } from "@/lib/server/messages";
 import type { PortfolioPanelRow } from "@/lib/domain/portfolio-panels";
 import { WbsOwnerStatusChart, WbsProgressChart } from "@/components/PortfolioDomainCharts";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
+import { MessageIcon } from "@/components/icons/PmoIcons";
 
 const pct = (value: number) => Math.round(value * 100);
 const pctOrDash = (value: number | null) => (value === null ? "-" : `${Math.round(value * 100)}%`);
@@ -43,14 +44,15 @@ export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations
   return <>
     <div className="content">
       {showInvitations && <section className="panel">
-        <div className="panel-head"><h2>초청 조회</h2><span>{unreadInvitations > 0 ? `미확인 ${unreadInvitations}건` : `${invitations.length}건`}</span></div>
-        <div className="history-list dashboard-subpanel-scroll">
-          {recentInvitations.map((invitation) => <Link href="/messages" className="history-item" key={invitation.id}>
-            <div>
-              <small>{invitation.messageType === "CALENDAR_INVITATION" ? "일정 초청" : "회의실 예약 초청"} · {invitation.senderName}</small>
-              {!invitation.isRead && <span className="badge issue">미확인</span>}
-            </div>
-            <p>{invitationTitle(invitation)}</p>
+        <div className="panel-head">
+          <div className="panel-head-title"><h2>초청 조회</h2><Link href="/messages" className="panel-head-icon" aria-label="초청함으로 이동"><MessageIcon aria-hidden="true" /></Link></div>
+          <span>{unreadInvitations > 0 ? `미확인 ${unreadInvitations}건` : `${invitations.length}건`}</span>
+        </div>
+        <div className="invitation-list">
+          {recentInvitations.map((invitation) => <Link href="/messages" className="invitation-row" key={invitation.id}>
+            {!invitation.isRead && <span className="badge issue">미확인</span>}
+            <span className="invitation-row-title">{invitationTitle(invitation)}</span>
+            <span className="invitation-row-sender">{invitation.senderName}</span>
             <time>{invitationDateFormat.format(new Date(invitation.createdAt))}</time>
           </Link>)}
           {!recentInvitations.length && <div className="empty">받은 초청이 없습니다.</div>}
