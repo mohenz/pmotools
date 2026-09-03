@@ -58,6 +58,8 @@ export type WbsStageProgress = { stage: string; planned: number; actual: number;
 
 // WBS 진척 카드(Stage별 막대 그래프)의 고정 높이.
 const DOMAIN_CHART_HEIGHT = 260;
+// 나의 WBS 현황 카드는 한 줄짜리 누적 막대라 큰 높이가 필요 없다.
+const MY_WBS_STATUS_CHART_HEIGHT = 140;
 
 // Stage별로 한 줄씩 — 계획 대비 실적을 겹쳐 그린 불릿 막대 한 줄에 담아, Stage 전체 진행 상태를 한 화면에서 보여준다.
 export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
@@ -107,6 +109,7 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
+// 완료·진행중·지연을 한 막대에 이어 붙여(누적) 한 줄로 보여준다.
 export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
     const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
@@ -114,24 +117,38 @@ export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { comple
     return new Chart(canvas, {
       type: "bar",
       data: {
-        labels: ["완료", "진행중", "지연"],
-        datasets: [{ data: [completed, inProgress, delayed], backgroundColor: [success, plannedColor, destructive], borderRadius: 4, maxBarThickness: 40 }],
+        labels: [""],
+        datasets: [
+          { label: "완료", data: [completed], backgroundColor: success, maxBarThickness: 48 },
+          { label: "진행중", data: [inProgress], backgroundColor: plannedColor, maxBarThickness: 48 },
+          { label: "지연", data: [delayed], backgroundColor: destructive, maxBarThickness: 48 },
+        ],
       },
       options: {
         indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { beginAtZero: true, grid: { color: border }, ticks: { color: muted, precision: 0, font: { size: 10 } } },
-          y: { grid: { display: false }, ticks: { color: foreground, font: { size: 12, weight: 600 } } },
+          x: { stacked: true, beginAtZero: true, grid: { color: border }, ticks: { color: muted, precision: 0, font: { size: 10 } } },
+          y: { stacked: true, grid: { display: false }, ticks: { display: false } },
         },
         plugins: {
-          legend: { display: false },
-          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.parsed.x}건` } },
+          legend: {
+            position: "bottom",
+            labels: {
+              color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
+              generateLabels: () => [
+                { text: `완료 ${completed}건`, fillStyle: success, strokeStyle: success, pointStyle: "rect", index: 0 },
+                { text: `진행중 ${inProgress}건`, fillStyle: plannedColor, strokeStyle: plannedColor, pointStyle: "rect", index: 1 },
+                { text: `지연 ${delayed}건`, fillStyle: destructive, strokeStyle: destructive, pointStyle: "rect", index: 2 },
+              ],
+            },
+          },
+          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}건` } },
         },
       },
     });
   }, [completed, inProgress, delayed]);
-  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 가로 막대 그래프`} /></div>;
+  return <div className="domain-chart" style={{ height: MY_WBS_STATUS_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건, 하나의 막대에 표시`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
