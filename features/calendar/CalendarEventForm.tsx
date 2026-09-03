@@ -5,13 +5,10 @@ import type { CommonCode } from "@/lib/server/common-codes";
 import type { CalendarEvent } from "@/lib/server/calendar";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
-const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
-const minutes = ["00", "10", "20", "30", "40", "50"];
 function localInput(value: string | undefined, fallback: string) { if (!value) return fallback; const d = new Date(value), pad = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function shifted(value: string, milliseconds: number) { const date = new Date(value); if (Number.isNaN(date.getTime())) return value; date.setTime(date.getTime() + milliseconds); const pad = (n: number) => String(n).padStart(2, "0"); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; }
-function replacePart(value: string, part: "date" | "hour" | "minute", next: string) { const date = value.slice(0, 10), hour = value.slice(11, 13), minute = value.slice(14, 16); if (part === "date") return `${next}T${hour}:${minute}`; if (part === "hour") return `${date}T${next}:${minute}`; return `${date}T${hour}:${next}`; }
-function DateTimePicker({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label>{label}<div className="calendar-time-picker"><input aria-label={`${label} 날짜`} type="date" value={value.slice(0, 10)} onChange={(e) => onChange(replacePart(value, "date", e.target.value))} required /><select aria-label={`${label} 시간`} value={value.slice(11, 13)} onChange={(e) => onChange(replacePart(value, "hour", e.target.value))}>{hours.map((hour) => <option value={hour} key={hour}>{hour}시</option>)}</select><select aria-label={`${label} 분`} value={value.slice(14, 16)} onChange={(e) => onChange(replacePart(value, "minute", e.target.value))}>{minutes.map((minute) => <option value={minute} key={minute}>{minute}분</option>)}</select></div></label>; }
 
 function plusOneHour(time: string) { const [h, m] = time.split(":").map(Number); const total = (h * 60 + m + 60) % 1440; return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
 

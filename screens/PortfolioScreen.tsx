@@ -16,6 +16,16 @@ function invitationTitle(invitation: InvitationSummary) {
   if (invitation.messageType === "CALENDAR_INVITATION") return invitation.calendarInvitation?.title ?? "일정 초청";
   return invitation.meetingInvitation?.roomName ?? "회의실 예약 초청";
 }
+// 목록에는 쪽지가 생성된 시각이 아니라, 실제 일정/예약이 시작하는 일시·장소를 보여준다.
+function invitationStartAt(invitation: InvitationSummary) {
+  if (invitation.messageType === "CALENDAR_INVITATION") return invitation.calendarInvitation?.startAt ?? invitation.createdAt;
+  return invitation.meetingInvitation?.startAt ?? invitation.createdAt;
+}
+function invitationLocation(invitation: InvitationSummary) {
+  // 회의실 예약 초청은 방 이름이 곧 제목이라 장소를 따로 표시하면 중복되므로 일정 초청에만 표시한다.
+  if (invitation.messageType === "CALENDAR_INVITATION") return invitation.calendarInvitation?.location ?? "";
+  return "";
+}
 
 export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations }: {
   wbsStats: WbsStats;
@@ -52,8 +62,9 @@ export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations
           {recentInvitations.map((invitation) => <Link href="/messages" className="invitation-row" key={invitation.id}>
             {!invitation.isRead && <span className="badge issue">미확인</span>}
             <span className="invitation-row-title">{invitationTitle(invitation)}</span>
+            {invitationLocation(invitation) && <span className="invitation-row-location">{invitationLocation(invitation)}</span>}
+            <time>{invitationDateFormat.format(new Date(invitationStartAt(invitation)))}</time>
             <span className="invitation-row-sender">{invitation.senderName}</span>
-            <time>{invitationDateFormat.format(new Date(invitation.createdAt))}</time>
           </Link>)}
           {!recentInvitations.length && <div className="empty">받은 초청이 없습니다.</div>}
         </div>
