@@ -115,22 +115,23 @@ export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { comple
       type: "bar",
       data: {
         labels: ["완료", "진행중", "지연"],
-        datasets: [{ data: [completed, inProgress, delayed], backgroundColor: [success, plannedColor, destructive], borderRadius: 4, maxBarThickness: 64 }],
+        datasets: [{ data: [completed, inProgress, delayed], backgroundColor: [success, plannedColor, destructive], borderRadius: 4, maxBarThickness: 40 }],
       },
       options: {
+        indexAxis: "y",
         responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
         scales: {
-          x: { grid: { display: false }, ticks: { color: foreground, font: { size: 12, weight: 600 } } },
-          y: { beginAtZero: true, grid: { color: border }, ticks: { color: muted, precision: 0, font: { size: 10 } } },
+          x: { beginAtZero: true, grid: { color: border }, ticks: { color: muted, precision: 0, font: { size: 10 } } },
+          y: { grid: { display: false }, ticks: { color: foreground, font: { size: 12, weight: 600 } } },
         },
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.parsed.y}건` } },
+          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.parsed.x}건` } },
         },
       },
     });
   }, [completed, inProgress, delayed]);
-  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 막대 그래프`} /></div>;
+  return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건 가로 막대 그래프`} /></div>;
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {
