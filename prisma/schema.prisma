@@ -83,6 +83,8 @@ model User {
   createdPmoDelayedTasks        PmoDelayedTask[]              @relation("PmoDelayedTaskCreator")
   assignedPmoDelayedTasks       PmoDelayedTaskAssignee[]
   createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
+  assignedActionItems           ActionItem[]                  @relation("ActionItemAssignee")
+  createdActionItems            ActionItem[]                  @relation("ActionItemCreator")
   generatedWeeklySummaries      WeeklySummary[]               @relation("WeeklySummaryGenerator")
   workLogs                      WorkLog[]                     @relation("WorkLogAssignee")
   createdWbsItems               WbsItem[]                     @relation("WbsItemCreator")
@@ -191,6 +193,7 @@ model Project {
   managementTasks           ManagementTask[]
   managementTaskSequence    ManagementTaskSequence?
   managementTaskLinks       ManagementTaskLink[]
+  actionItems               ActionItem[]
   pmoDailySnapshots         PmoDailySnapshot[]
   pmoDelayedTaskSequences   PmoDelayedTaskSequence?
   workLogs                  WorkLog[]
@@ -262,6 +265,7 @@ model Groups {
   managementTasks ManagementTask[]
   pmoDelayedTasks PmoDelayedTask[]
   workLogs        WorkLog[]
+  actionItems     ActionItem[]
 
   @@unique([projectId, groupType, code])
   @@index([leaderId])
@@ -368,6 +372,7 @@ model CommonCode {
   requirementsByCategory Requirement[]   @relation("RequirementCategory")
   wbsItems               WbsItem[]
   wbsAssignments         WbsAssignment[]
+  actionItemsByCategory  ActionItem[]    @relation("ActionItemCategory")
 
   @@unique([groupId, code])
   @@map("common_codes")
@@ -633,16 +638,6 @@ model ManagementTask {
   status           ManagementTaskStatus @default(IDENTIFIED)
   purpose          String               @default("")
   impactAnalysis   String               @default("")
-  prepContent      String               @default("")
-  prepPercent      Int                  @default(0)
-  ownerContent     String               @default("")
-  ownerPercent     Int                  @default(0)
-  progressContent  String               @default("")
-  progressPercent  Int                  @default(0)
-  issueContent     String               @default("")
-  issuePercent     Int                  @default(0)
-  closeContent     String               @default("")
-  closePercent     Int                  @default(0)
   totalScore       Int                  @default(0)
   band             ManagementTaskBand   @default(RED)
   createdBy        String
@@ -651,12 +646,13 @@ model ManagementTask {
   updatedAt        DateTime             @updatedAt
   archivedAt       DateTime?
 
-  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  group            Groups                   @relation(fields: [groupId], references: [id])
-  creator          User                     @relation("ManagementTaskCreator", fields: [createdBy], references: [id])
-  predecessorLinks ManagementTaskLink[]     @relation("TaskSuccessor")
-  successorLinks   ManagementTaskLink[]     @relation("TaskPredecessor")
+  project          Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group            Groups                     @relation(fields: [groupId], references: [id])
+  creator          User                       @relation("ManagementTaskCreator", fields: [createdBy], references: [id])
+  predecessorLinks ManagementTaskLink[]       @relation("TaskSuccessor")
+  successorLinks   ManagementTaskLink[]       @relation("TaskPredecessor")
   assignees        ManagementTaskAssignee[]
+  detailItems      ManagementTaskDetailItem[]
 
   @@index([projectId, archivedAt])
   @@index([projectId, groupId])
@@ -702,6 +698,68 @@ model ManagementTaskLink {
   @@index([projectId, predecessorId])
   @@index([projectId, successorId])
   @@map("management_task_links")
+}
+
+enum ActionItemStatus {
+  IDENTIFIED
+  IN_PROGRESS
+  DELAYED
+  ISSUE
+  CLOSED
+}
+
+model ManagementTaskDetailItem {
+  id        String             @id @default(uuid())
+  taskId    String
+  axisKey   String // "prep" | "owner" | "progress" | "issue" | "close" (ManagementTaskAxisKey)
+  axisScore Int                @default(0) // 0/10/20 환산 점수 — ManagementTask.totalScore 합산에 쓰임
+  band      ManagementTaskBand @default(RED)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  task        ManagementTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actionItems ActionItem[]
+
+  @@unique([taskId, axisKey])
+  @@index([taskId])
+  @@map("management_task_detail_items")
+}
+
+model ActionItem {
+  id             String           @id @default(uuid())
+  detailItemId   String
+  projectId      String // PM/PMO 전체 액션아이템목록조회용 비정규화
+  sequenceNo     Int // detailItem 범위 내 순번
+  categoryCodeId String? // CommonCode(action_item_category)
+  name           String
+  priority       Priority
+  importance     Priority
+  groupId        String // Groups(WORK_MODULE), assertWorkModuleGroup으로 검증
+  assigneeId     String
+  createdBy      String
+  dueDate        DateTime?        @db.Date
+  status         ActionItemStatus @default(IDENTIFIED)
+  wbsItemId      String?
+  note           String           @default("")
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  archivedAt     DateTime?
+
+  detailItem   ManagementTaskDetailItem @relation(fields: [detailItemId], references: [id], onDelete: Cascade)
+  project      Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group        Groups                   @relation(fields: [groupId], references: [id])
+  assignee     User                     @relation("ActionItemAssignee", fields: [assigneeId], references: [id])
+  creator      User                     @relation("ActionItemCreator", fields: [createdBy], references: [id])
+  wbsItem      WbsItem?                 @relation(fields: [wbsItemId], references: [id])
+  categoryCode CommonCode?              @relation("ActionItemCategory", fields: [categoryCodeId], references: [id])
+
+  @@unique([detailItemId, sequenceNo])
+  @@index([projectId, archivedAt])
+  @@index([projectId, status])
+  @@index([groupId])
+  @@index([assigneeId])
+  @@map("action_items")
 }
 
 // ---------------------------------------------------------------------------
@@ -1284,30 +1342,30 @@ enum WbsItemEventType {
 }
 
 model WbsItem {
-  id           String        @id @default(uuid())
-  displayId    String        @unique
-  projectId    String
-  parentId     String?
-  path         String // 레벨당 4자리 고정폭 세그먼트("0001.0002.0007") — 문자열 정렬이 곧 트리 순서
-  level        Int // path 세그먼트 수(1부터 시작). path로부터 산출해 저장한다.
-  name         String
-  description  String        @default("")
-  ownerUserId  String?
-  ownerNameRaw String        @default("") // 엑셀 R&R(실행) 원본 텍스트 — 시스템 사용자와 매칭 안 돼도 표시·검색은 되도록 항상 보존
-  ownerLoginId String        @default("") // 엑셀 사용자ID 원본 텍스트 — 로그인 ID로 담당자를 확정 지정할 때 쓰며, 매칭 안 돼도 항상 보존
-  groupId      String?
-  startDate    DateTime?     @db.Date // 계획시작일 — 엑셀 StartDate 컬럼과 매핑되는 원본 필드명은 유지한다.
-  dueDate      DateTime?     @db.Date // 계획종료일 — 엑셀 DueDate 컬럼과 매핑되는 원본 필드명은 유지한다.
-  actualStartDate DateTime?  @db.Date // 실적시작일 — 엑셀 47개 컬럼 서식에는 없는 웹 화면 전용 커스텀 컬럼(사용자ID와 동일 패턴).
-  actualDueDate   DateTime?  @db.Date // 실적종료일 — 위와 동일.
-  status       WbsItemStatus @default(not_started)
-  configStatus String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
-  weight       Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.
-  createdBy    String
-  version      Int           @default(1)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  archivedAt   DateTime?
+  id              String        @id @default(uuid())
+  displayId       String        @unique
+  projectId       String
+  parentId        String?
+  path            String // 레벨당 4자리 고정폭 세그먼트("0001.0002.0007") — 문자열 정렬이 곧 트리 순서
+  level           Int // path 세그먼트 수(1부터 시작). path로부터 산출해 저장한다.
+  name            String
+  description     String        @default("")
+  ownerUserId     String?
+  ownerNameRaw    String        @default("") // 엑셀 R&R(실행) 원본 텍스트 — 시스템 사용자와 매칭 안 돼도 표시·검색은 되도록 항상 보존
+  ownerLoginId    String        @default("") // 엑셀 사용자ID 원본 텍스트 — 로그인 ID로 담당자를 확정 지정할 때 쓰며, 매칭 안 돼도 항상 보존
+  groupId         String?
+  startDate       DateTime?     @db.Date // 계획시작일 — 엑셀 StartDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  dueDate         DateTime?     @db.Date // 계획종료일 — 엑셀 DueDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  actualStartDate DateTime?     @db.Date // 실적시작일 — 엑셀 47개 컬럼 서식에는 없는 웹 화면 전용 커스텀 컬럼(사용자ID와 동일 패턴).
+  actualDueDate   DateTime?     @db.Date // 실적종료일 — 위와 동일.
+  status          WbsItemStatus @default(not_started)
+  configStatus    String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
+  weight          Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.
+  createdBy       String
+  version         Int           @default(1)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?
 
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent      WbsItem?        @relation("WbsTree", fields: [parentId], references: [id])
@@ -1318,6 +1376,7 @@ model WbsItem {
   events      WbsItemEvent[]
   assignments WbsAssignment[]
   deliverable WbsDeliverable?
+  actionItems ActionItem[]
 
   @@index([projectId, archivedAt])
   @@index([projectId, path])

@@ -14,9 +14,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const { projectId, userId } = await getLocalContext();
+  const { projectId, userId, jobTitle } = await getLocalContext();
   try {
-    const result = await updateManagementTask(projectId, userId, id, await request.json());
+    const result = await updateManagementTask(projectId, userId, jobTitle, id, await request.json());
     return NextResponse.json({ data: result });
   } catch (error) {
     return mutationErrorResponse(error);

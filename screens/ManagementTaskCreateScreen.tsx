@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BAND_LABEL, MANAGEMENT_TASK_AXES, MANAGEMENT_TASK_STATUSES, scoreBand, totalScore, type ManagementTaskPercents } from "@/lib/domain/management-tasks";
+import { MANAGEMENT_TASK_STATUSES } from "@/lib/domain/management-tasks";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
@@ -11,12 +11,9 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export function ManagementTaskCreateScreen({ groups, members }: { groups: CommonCode[]; members: ProjectMemberOption[] }) {
   const router = useRouter();
-  const [percents, setPercents] = useState<ManagementTaskPercents>({ prep: 0, owner: 0, progress: 0, issue: 0, close: 0 });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const score = useMemo(() => totalScore(percents), [percents]);
-  const band = scoreBand(score);
   const ready = groups.length > 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -29,11 +26,6 @@ export function ManagementTaskCreateScreen({ groups, members }: { groups: Common
       body: JSON.stringify({
         groupId: form.get("groupId"), name: form.get("name"), registrationDate: form.get("registrationDate"),
         assigneeIds, status: form.get("status"), purpose: form.get("purpose"), impactAnalysis: form.get("impactAnalysis"),
-        prepContent: form.get("prepContent"), prepPercent: percents.prep,
-        ownerContent: form.get("ownerContent"), ownerPercent: percents.owner,
-        progressContent: form.get("progressContent"), progressPercent: percents.progress,
-        issueContent: form.get("issueContent"), issuePercent: percents.issue,
-        closeContent: form.get("closeContent"), closePercent: percents.close,
       }),
     });
     const payload = await response.json().catch(() => null);
@@ -59,17 +51,8 @@ export function ManagementTaskCreateScreen({ groups, members }: { groups: Common
       <label>관리목적<textarea name="purpose" rows={2} maxLength={2000} /></label>
       <label>영향도분석<textarea name="impactAnalysis" rows={2} maxLength={2000} /></label>
 
-      {MANAGEMENT_TASK_AXES.map((axis) => <fieldset key={axis.key}>
-        <legend>{axis.label} <small>({percents[axis.key]}% · {Math.round(percents[axis.key] * 0.2)}점)</small></legend>
-        <div className="form-grid management-axis-grid">
-          <label>내용<textarea name={`${axis.key}Content`} rows={2} maxLength={2000} placeholder={`${axis.label} 내용`} /></label>
-          <label>평가점수(%)<input type="number" min={0} max={100} value={percents[axis.key]} onChange={(e) => setPercents((prev) => ({ ...prev, [axis.key]: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))} /></label>
-        </div>
-      </fieldset>)}
-
-      <div className="suggest"><span className={`badge band-${band}`}>{BAND_LABEL[band]} · 총점 {score}점</span><p>5개 축의 평가점수 합산 결과입니다.</p></div>
+      <p className="auth-hint">저장 후 상세 화면에서 세부항목(일정/범위/자원/소통/품질)별 액션아이템을 등록할 수 있습니다. 신호등은 등록된 액션아이템 상태로 자동 산출됩니다.</p>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <p className="auth-hint">저장 후 선후행 관계를 등록할 수 있습니다.</p>
       <button className="button primary" type="submit" disabled={saving || !ready}>{saving ? "등록 중…" : "등록하기"}</button>
     </form></section></div>
   </>;

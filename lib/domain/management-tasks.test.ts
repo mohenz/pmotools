@@ -1,21 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { averageScore, axisPoints, scoreBand, totalScore, wouldCreateCycle } from "@/lib/domain/management-tasks";
-
-describe("axisPoints", () => {
-  it("퍼센트를 20점 만점으로 반올림 환산한다", () => {
-    expect(axisPoints(0)).toBe(0);
-    expect(axisPoints(50)).toBe(10);
-    expect(axisPoints(55)).toBe(11);
-    expect(axisPoints(33)).toBe(7);
-    expect(axisPoints(100)).toBe(20);
-  });
-});
+import { actionItemAxisBand, averageScore, bandToAxisScore, scoreBand, totalScore, wouldCreateCycle } from "@/lib/domain/management-tasks";
 
 describe("totalScore", () => {
   it("5개 축 점수를 합산한다", () => {
-    expect(totalScore({ prep: 100, owner: 100, progress: 100, issue: 100, close: 100 })).toBe(100);
+    expect(totalScore({ prep: 20, owner: 20, progress: 20, issue: 20, close: 20 })).toBe(100);
     expect(totalScore({ prep: 0, owner: 0, progress: 0, issue: 0, close: 0 })).toBe(0);
-    expect(totalScore({ prep: 100, owner: 50, progress: 0, issue: 80, close: 40 })).toBe(20 + 10 + 0 + 16 + 8);
+    expect(totalScore({ prep: 20, owner: 10, progress: 0, issue: 10, close: 20 })).toBe(60);
   });
 });
 
@@ -27,6 +17,36 @@ describe("scoreBand", () => {
     expect(scoreBand(80)).toBe("yellow");
     expect(scoreBand(81)).toBe("green");
     expect(scoreBand(100)).toBe("green");
+  });
+});
+
+describe("actionItemAxisBand", () => {
+  it("액션아이템이 없으면 red다", () => {
+    expect(actionItemAxisBand([])).toBe("red");
+  });
+
+  it("이슈가 하나라도 있으면 red다", () => {
+    expect(actionItemAxisBand(["CLOSED", "ISSUE", "IN_PROGRESS"])).toBe("red");
+  });
+
+  it("이슈가 없고 지연이 하나라도 있으면 yellow다", () => {
+    expect(actionItemAxisBand(["CLOSED", "DELAYED"])).toBe("yellow");
+  });
+
+  it("전부 종료면 green이다", () => {
+    expect(actionItemAxisBand(["CLOSED", "CLOSED"])).toBe("green");
+  });
+
+  it("식별/진행이 혼재하면 yellow다", () => {
+    expect(actionItemAxisBand(["IDENTIFIED", "IN_PROGRESS"])).toBe("yellow");
+  });
+});
+
+describe("bandToAxisScore", () => {
+  it("red/yellow/green을 0/10/20점으로 환산한다", () => {
+    expect(bandToAxisScore("red")).toBe(0);
+    expect(bandToAxisScore("yellow")).toBe(10);
+    expect(bandToAxisScore("green")).toBe(20);
   });
 });
 

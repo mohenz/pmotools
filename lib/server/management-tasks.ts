@@ -2,9 +2,10 @@ import "server-only";
 
 import { z } from "zod";
 import { revalidateTag, unstable_cache } from "next/cache";
-import { averageScore, scoreBand, totalScore, wouldCreateCycle, type ManagementTaskEdge, type ManagementTaskPercents } from "@/lib/domain/management-tasks";
+import { MANAGEMENT_TASK_AXES, averageScore, canManageManagementTask, scoreBand, totalScore, wouldCreateCycle, type ManagementTaskBand, type ManagementTaskEdge } from "@/lib/domain/management-tasks";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
-import { assertManager } from "@/lib/server/permissions";
+import { assertManager, getMemberRole, isManagerRole } from "@/lib/server/permissions";
+import { hasPmPmoAccess } from "@/lib/domain/job-access";
 import { assertWorkModuleGroup } from "@/lib/server/items";
 import { DomainError } from "@/lib/server/errors";
 import { managementTaskTag } from "@/lib/server/cache-tags";
@@ -12,7 +13,6 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 
 export { DomainError };
 
-const percentSchema = z.number().int().min(0).max(100);
 const contentSchema = z.string().trim().max(2000).default("");
 const baseTaskSchema = z.object({
   groupId: z.string().uuid(),
@@ -22,11 +22,6 @@ const baseTaskSchema = z.object({
   status: z.enum(["IDENTIFIED", "IN_PROGRESS", "ISSUE_TRANSFERRED", "RISK_TRANSFERRED", "CLOSED"]),
   purpose: contentSchema,
   impactAnalysis: contentSchema,
-  prepContent: contentSchema, prepPercent: percentSchema,
-  ownerContent: contentSchema, ownerPercent: percentSchema,
-  progressContent: contentSchema, progressPercent: percentSchema,
-  issueContent: contentSchema, issuePercent: percentSchema,
-  closeContent: contentSchema, closePercent: percentSchema,
 });
 export const createManagementTaskSchema = baseTaskSchema;
 export const updateManagementTaskSchema = baseTaskSchema.extend({ version: z.number().int().positive() });
@@ -34,57 +29,71 @@ export const archiveSchema = z.object({ version: z.number().int().positive() });
 export const linkTaskSchema = z.object({ targetId: z.string().uuid(), relation: z.enum(["predecessor", "successor"]), version: z.number().int().positive() });
 export const unlinkTaskSchema = z.object({ linkId: z.string().uuid(), version: z.number().int().positive() });
 
+export type ManagementTaskDetailItemRow = { detailItemId: string; axisKey: string; label: string; band: ManagementTaskBand; axisScore: number; actionItemCount: number };
 export type ManagementTaskRow = {
   id: string; displayId: string; projectId: string; groupId: string; groupLabel: string; groupCode: string;
   name: string; registrationDate: string;
   assignees: { id: string; userId: string; name: string }[];
   status: "IDENTIFIED" | "IN_PROGRESS" | "ISSUE_TRANSFERRED" | "RISK_TRANSFERRED" | "CLOSED";
   purpose: string; impactAnalysis: string;
-  prepContent: string; prepPercent: number;
-  ownerContent: string; ownerPercent: number;
-  progressContent: string; progressPercent: number;
-  issueContent: string; issuePercent: number;
-  closeContent: string; closePercent: number;
-  totalScore: number; band: "red" | "yellow" | "green";
+  detailItems: ManagementTaskDetailItemRow[];
+  totalScore: number; band: ManagementTaskBand;
   createdAt: string; updatedAt: string; version: number;
 };
 export type ManagementTaskLinkSummary = { linkId: string; id: string; displayId: string; name: string };
 export type ManagementTaskDetail = { task: ManagementTaskRow; predecessors: ManagementTaskLinkSummary[]; successors: ManagementTaskLinkSummary[] };
 export type ManagementTaskFilters = { q?: string; groupId?: string; band?: string; page?: number; pageSize?: number };
 export type ManagementTaskSearchResult = { id: string; displayId: string; name: string };
-export type ManagementTaskDashboard = { summary: { red: number; yellow: number; green: number; total: number }; projectScore: number | null; projectBand: "red" | "yellow" | "green" | null; tasks: ManagementTaskRow[] };
+export type ManagementTaskDashboard = { summary: { red: number; yellow: number; green: number; total: number }; projectScore: number | null; projectBand: ManagementTaskBand | null; tasks: ManagementTaskRow[] };
 
-const managementTaskInclude = { group: true, assignees: { include: { user: true } } } as const;
+const managementTaskInclude = {
+  group: true,
+  assignees: { include: { user: true } },
+  detailItems: { include: { actionItems: { where: { archivedAt: null }, select: { id: true } } } },
+} as const;
 type ManagementTaskWithGroup = Prisma.ManagementTaskGetPayload<{ include: typeof managementTaskInclude }>;
 
 const dateStr = (value: Date) => value.toISOString().slice(0, 10);
 
 function toRow(row: ManagementTaskWithGroup): ManagementTaskRow {
+  const detailItems: ManagementTaskDetailItemRow[] = MANAGEMENT_TASK_AXES.map((axis) => {
+    const detail = row.detailItems.find((item) => item.axisKey === axis.key);
+    return {
+      detailItemId: detail?.id ?? "",
+      axisKey: axis.key,
+      label: axis.label,
+      band: (detail?.band.toLowerCase() ?? "red") as ManagementTaskBand,
+      axisScore: detail?.axisScore ?? 0,
+      actionItemCount: detail?.actionItems.length ?? 0,
+    };
+  });
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, groupId: row.groupId, groupLabel: row.group.label, groupCode: row.group.code,
     name: row.name, registrationDate: dateStr(row.registrationDate),
     assignees: row.assignees.map(({ user }) => ({ id: user.id, userId: user.userId, name: user.name })),
     status: row.status, purpose: row.purpose, impactAnalysis: row.impactAnalysis,
-    prepContent: row.prepContent, prepPercent: row.prepPercent,
-    ownerContent: row.ownerContent, ownerPercent: row.ownerPercent,
-    progressContent: row.progressContent, progressPercent: row.progressPercent,
-    issueContent: row.issueContent, issuePercent: row.issuePercent,
-    closeContent: row.closeContent, closePercent: row.closePercent,
-    totalScore: row.totalScore, band: row.band.toLowerCase() as "red" | "yellow" | "green",
+    detailItems,
+    totalScore: row.totalScore, band: row.band.toLowerCase() as ManagementTaskBand,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), version: row.version,
   } satisfies ManagementTaskRow;
 }
 
-function percentsOf(data: { prepPercent: number; ownerPercent: number; progressPercent: number; issuePercent: number; closePercent: number }): ManagementTaskPercents {
-  return { prep: data.prepPercent, owner: data.ownerPercent, progress: data.progressPercent, issue: data.issuePercent, close: data.closePercent };
-}
-function computeScore(data: Parameters<typeof percentsOf>[0]) {
-  const score = totalScore(percentsOf(data));
-  return { totalScore: score, band: scoreBand(score).toUpperCase() as "RED" | "YELLOW" | "GREEN" };
-}
 function mutationError(task: { archivedAt: Date | null; version: number } | null, version: number) {
   if (!task || task.archivedAt) throw new DomainError("NOT_FOUND", "관리업무항목을 찾을 수 없습니다.");
   if (task.version !== version) throw new DomainError("VERSION_CONFLICT", "다른 사용자가 먼저 수정했습니다. 최신 내용을 다시 확인해 주세요.");
+}
+
+// 집중관리업무 등록·수정 권한: 업무그룹 리더 + PM/PMO + 담당자 + 관리자 이상 (보관은 assertManager로 별도 제한).
+async function assertManagementTaskAccess(projectId: string, userId: string, jobTitle: string | null | undefined, groupLeaderId: string | null, assigneeIds: string[]) {
+  const role = await getMemberRole(projectId, userId);
+  const allowed = canManageManagementTask({
+    viewerUserId: userId,
+    assigneeIds,
+    groupLeaderId,
+    isPmPmo: hasPmPmoAccess(jobTitle, role),
+    isManager: isManagerRole(role),
+  });
+  if (!allowed) throw new DomainError("FORBIDDEN", "이 작업을 수행할 권한이 없습니다.");
 }
 
 export function managementTaskWhere(projectId: string, filters: ManagementTaskFilters): Prisma.ManagementTaskWhereInput {
@@ -145,17 +154,16 @@ async function loadManagementTaskDashboard(projectId: string): Promise<Managemen
   const projectScore = averageScore(tasks.map((task) => task.totalScore));
   return { summary: { red, yellow, green, total: red + yellow + green }, projectScore, projectBand: projectScore === null ? null : scoreBand(projectScore), tasks };
 }
-// 대시보드는 여러 화면이 공유하는 읽기 중심 데이터라 30초 캐시하고, 등록/수정/보관/연결 변경 시 즉시 무효화한다.
+// 대시보드는 여러 화면이 공유하는 읽기 중심 데이터라 30초 캐시하고, 등록/수정/보관/연결/액션아이템 변경 시 즉시 무효화한다.
 export function getManagementTaskDashboard(projectId: string) {
   return unstable_cache(loadManagementTaskDashboard, ["management-task-dashboard"], { tags: [managementTaskTag(projectId)], revalidate: 30 })(projectId);
 }
 
-export async function createManagementTask(projectId: string, userId: string, input: unknown) {
+export async function createManagementTask(projectId: string, userId: string, jobTitle: string | null | undefined, input: unknown) {
   const data = createManagementTaskSchema.parse(input);
   const assigneeIds = [...new Set(data.assigneeIds)];
-  await assertManager(projectId, userId);
-  await assertWorkModuleGroup(projectId, data.groupId);
-  const { totalScore: score, band } = computeScore(data);
+  const group = await assertWorkModuleGroup(projectId, data.groupId);
+  await assertManagementTaskAccess(projectId, userId, jobTitle, group.leaderId, assigneeIds);
   const prisma = getPrisma();
   if (assigneeIds.length) {
     const validCount = await prisma.projectMember.count({ where: { projectId, userId: { in: assigneeIds }, isActive: true, user: { status: "ACTIVE" } } });
@@ -169,12 +177,8 @@ export async function createManagementTask(projectId: string, userId: string, in
         displayId, projectId, groupId: data.groupId, name: data.name, registrationDate: new Date(data.registrationDate),
         status: data.status, purpose: data.purpose, impactAnalysis: data.impactAnalysis,
         assignees: assigneeIds.length ? { createMany: { data: assigneeIds.map((assigneeId) => ({ userId: assigneeId })) } } : undefined,
-        prepContent: data.prepContent, prepPercent: data.prepPercent,
-        ownerContent: data.ownerContent, ownerPercent: data.ownerPercent,
-        progressContent: data.progressContent, progressPercent: data.progressPercent,
-        issueContent: data.issueContent, issuePercent: data.issuePercent,
-        closeContent: data.closeContent, closePercent: data.closePercent,
-        totalScore: score, band, createdBy: userId,
+        totalScore: 0, band: "RED", createdBy: userId,
+        detailItems: { createMany: { data: MANAGEMENT_TASK_AXES.map((axis) => ({ axisKey: axis.key, axisScore: 0, band: "RED" })) } },
       },
     });
     return { task, displayId };
@@ -184,20 +188,19 @@ export async function createManagementTask(projectId: string, userId: string, in
   return { id: task.id, displayId, version: task.version };
 }
 
-export async function updateManagementTask(projectId: string, userId: string, id: string, input: unknown) {
+export async function updateManagementTask(projectId: string, userId: string, jobTitle: string | null | undefined, id: string, input: unknown) {
   const data = updateManagementTaskSchema.parse(input);
   const assigneeIds = [...new Set(data.assigneeIds)];
-  await assertManager(projectId, userId);
-  await assertWorkModuleGroup(projectId, data.groupId);
-  const { totalScore: score, band } = computeScore(data);
   const prisma = getPrisma();
+  const before = await prisma.managementTask.findUnique({ where: { id }, include: { group: true, assignees: true } });
+  if (!before || before.projectId !== projectId) throw new DomainError("NOT_FOUND", "관리업무항목을 찾을 수 없습니다.");
+  await assertManagementTaskAccess(projectId, userId, jobTitle, before.group.leaderId, before.assignees.map((assignee) => assignee.userId));
+  await assertWorkModuleGroup(projectId, data.groupId);
   if (assigneeIds.length) {
     const validCount = await prisma.projectMember.count({ where: { projectId, userId: { in: assigneeIds }, isActive: true, user: { status: "ACTIVE" } } });
     if (validCount !== assigneeIds.length) throw new DomainError("INVALID_CODE", "담당자 목록에 유효하지 않은 사용자가 있습니다.");
   }
-  const { before, version } = await prisma.$transaction(async (tx) => {
-    const before = await tx.managementTask.findUnique({ where: { id } });
-    if (!before || before.projectId !== projectId) throw new DomainError("NOT_FOUND", "관리업무항목을 찾을 수 없습니다.");
+  const version = await prisma.$transaction(async (tx) => {
     mutationError(before, data.version);
     const version = data.version + 1;
     await tx.managementTask.update({
@@ -206,17 +209,12 @@ export async function updateManagementTask(projectId: string, userId: string, id
         groupId: data.groupId, name: data.name, registrationDate: new Date(data.registrationDate),
         status: data.status, purpose: data.purpose, impactAnalysis: data.impactAnalysis,
         assignees: { deleteMany: {}, ...(assigneeIds.length ? { createMany: { data: assigneeIds.map((assigneeId) => ({ userId: assigneeId })) } } : {}) },
-        prepContent: data.prepContent, prepPercent: data.prepPercent,
-        ownerContent: data.ownerContent, ownerPercent: data.ownerPercent,
-        progressContent: data.progressContent, progressPercent: data.progressPercent,
-        issueContent: data.issueContent, issuePercent: data.issuePercent,
-        closeContent: data.closeContent, closePercent: data.closePercent,
-        totalScore: score, band, version,
+        version,
       },
     });
-    return { before, version };
+    return version;
   });
-  await writeAuditLog(projectId, userId, "MANAGEMENT_TASK_UPDATE", "management_tasks", id, before, { ...data, totalScore: score, band });
+  await writeAuditLog(projectId, userId, "MANAGEMENT_TASK_UPDATE", "management_tasks", id, before, data);
   revalidateTag(managementTaskTag(projectId));
   return { id, version };
 }

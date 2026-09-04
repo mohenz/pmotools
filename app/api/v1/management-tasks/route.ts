@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { projectId, userId } = await getLocalContext();
+  const { projectId, userId, jobTitle } = await getLocalContext();
   try {
-    const result = await createManagementTask(projectId, userId, await request.json());
+    const result = await createManagementTask(projectId, userId, jobTitle, await request.json());
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) {
     return mutationErrorResponse(error);

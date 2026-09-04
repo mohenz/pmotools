@@ -1,3 +1,5 @@
+import type { ActionItemStatus } from "@/lib/domain/action-items";
+
 export type ManagementTaskAxisKey = "prep" | "owner" | "progress" | "issue" | "close";
 
 export const MANAGEMENT_TASK_AXES: { key: ManagementTaskAxisKey; label: string }[] = [
@@ -16,18 +18,10 @@ export const MANAGEMENT_TASK_STATUSES = [
   { value: "CLOSED", label: "종료" },
 ] as const;
 
-export type ManagementTaskPercents = Record<ManagementTaskAxisKey, number>;
+export type ManagementTaskAxisScores = Record<ManagementTaskAxisKey, number>;
 
-function clampPercent(percent: number) {
-  return Math.min(100, Math.max(0, percent));
-}
-
-export function axisPoints(percent: number) {
-  return Math.round(clampPercent(percent) * 0.2);
-}
-
-export function totalScore(percents: ManagementTaskPercents) {
-  return MANAGEMENT_TASK_AXES.reduce((sum, axis) => sum + axisPoints(percents[axis.key]), 0);
+export function totalScore(axisScores: ManagementTaskAxisScores) {
+  return MANAGEMENT_TASK_AXES.reduce((sum, axis) => sum + axisScores[axis.key], 0);
 }
 
 export type ManagementTaskBand = "red" | "yellow" | "green";
@@ -39,6 +33,27 @@ export function scoreBand(score: number): ManagementTaskBand {
 }
 
 export const BAND_LABEL: Record<ManagementTaskBand, string> = { red: "위험", yellow: "주의", green: "양호" };
+
+// 집중관리업무 등록·수정 권한: 업무그룹 리더 + PM/PMO + 담당자(등록 시엔 함께 지정하는 담당자, 수정 시엔 기존 담당자) + 관리자 이상.
+export function canManageManagementTask(input: { viewerUserId: string; assigneeIds: string[]; groupLeaderId: string | null; isPmPmo: boolean; isManager: boolean }) {
+  return input.isManager || input.isPmPmo || input.viewerUserId === input.groupLeaderId || input.assigneeIds.includes(input.viewerUserId);
+}
+
+// 세부항목(축) 하나에 속한 액션아이템들의 상태 분포로 그 축의 밴드를 판정한다.
+// 이슈가 하나라도 있으면 RED, (이슈 없이) 지연이 하나라도 있으면 YELLOW, 전부 종료면 GREEN, 그 외(식별/진행 혼재, 액션아이템 0건 포함)는 YELLOW/RED.
+export function actionItemAxisBand(statuses: ActionItemStatus[]): ManagementTaskBand {
+  if (statuses.length === 0) return "red";
+  if (statuses.some((status) => status === "ISSUE")) return "red";
+  if (statuses.some((status) => status === "DELAYED")) return "yellow";
+  if (statuses.every((status) => status === "CLOSED")) return "green";
+  return "yellow";
+}
+
+export function bandToAxisScore(band: ManagementTaskBand): number {
+  if (band === "green") return 20;
+  if (band === "yellow") return 10;
+  return 0;
+}
 
 // 등록된 관리업무항목 총점의 평균으로 프로젝트 전체 신호등 점수를 산출한다. 항목이 없으면 null.
 export function averageScore(scores: number[]): number | null {

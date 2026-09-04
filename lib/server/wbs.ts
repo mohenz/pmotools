@@ -84,6 +84,13 @@ async function assertWbsWorkGroupCode(projectId: string, codeId: string) {
   return code;
 }
 
+// 액션아이템 등 다른 도메인이 사람이 읽을 수 있는 WBS 표시ID로 항목을 지정할 때 실제 id로 해석·검증한다.
+export async function resolveWbsItemByDisplayId(projectId: string, displayId: string) {
+  const item = await getPrisma().wbsItem.findFirst({ where: { projectId, displayId, archivedAt: null }, select: { id: true, displayId: true } });
+  if (!item) throw new DomainError("INVALID_CODE", "입력한 WBS ID를 찾을 수 없습니다.");
+  return item;
+}
+
 // 엑셀 원본 A~AU 47개 컬럼 + 사용자ID(신규, R&R(실행) 바로 뒤) — 목록 화면과 엑셀 다운로드/업로드가 이 하나만 공유한다.
 // 사용자ID는 로그인 ID를 직접 지정해 담당자를 이름 매칭보다 확실하게 지정하기 위한 컬럼이다(비어 있으면 R&R(실행) 이름으로 매칭).
 export const WBS_EXCEL_HEADERS = [
