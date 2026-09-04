@@ -8,8 +8,8 @@ const args = process.argv.slice(2);
 const useProcessEnv = args.includes("--use-process-env");
 
 if (!useProcessEnv) {
-  config({ path: ".env" });
-  config({ path: ".env.local", override: true });
+  config({ path: ".env", quiet: true });
+  config({ path: ".env.local", override: true, quiet: true });
 }
 
 const PROJECT_ID = "20000000-0000-4000-8000-000000000001";

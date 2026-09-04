@@ -51,17 +51,6 @@ export async function listAnnouncements(projectId: string, userId: string, query
   return { announcements: rows.map(toRow), total, page: safePage, pageSize: safeSize, totalPages };
 }
 
-export async function listDashboardAnnouncements(projectId: string, userId: string) {
-  const role = await getMemberRole(projectId, userId);
-  const now = new Date();
-  const today = new Date(new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(now) + "T00:00:00+09:00");
-  const rows = await getPrisma().announcement.findMany({
-    where: { projectId, deletedAt: null, showOnDashboard: true, publishedAt: { lte: now }, OR: [{ dashboardVisibleTo: null }, { dashboardVisibleTo: { gte: today } }], ...(isManagerRole(role) ? {} : { audience: "ALL" }) },
-    select: { id: true, title: true, isImportant: true }, orderBy: [{ isImportant: "desc" }, { publishedAt: "desc" }], take: 5,
-  });
-  return rows;
-}
-
 export async function getAnnouncement(projectId: string, userId: string, id: string, incrementView = false): Promise<AnnouncementDetail | null> {
   const role = await getMemberRole(projectId, userId);
   const prisma = getPrisma();

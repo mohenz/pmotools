@@ -1,6 +1,6 @@
 import { config } from "dotenv";
-config({ path: ".env" });
-config({ path: ".env.local", override: false });
+config({ path: ".env", quiet: true });
+config({ path: ".env.local", override: false, quiet: true });
 
 import { hashSync } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -26,6 +26,8 @@ const GROUP_IDS = {
 
 const CATEGORY_GROUP_ID = "70000000-0000-4000-8000-000000000001";
 const ESCALATION_GROUP_ID = "70000000-0000-4000-8000-000000000003";
+const ISSUE_TYPE_GROUP_ID = "72000000-0000-4000-8000-000000000001";
+const REPORT_LINE_GROUP_ID = "72000000-0000-4000-8000-000000000002";
 
 const CATEGORY_CODE_IDS = {
   schedule: "50000000-0000-4000-8000-000000000001",
@@ -40,6 +42,23 @@ const ESCALATION_CODE_IDS = {
   pm: "60000000-0000-4000-8000-000000000001",
   departmentHead: "60000000-0000-4000-8000-000000000002",
   cLevel: "60000000-0000-4000-8000-000000000003",
+} as const;
+
+const ISSUE_TYPE_CODE_IDS = {
+  scope: "52000000-0000-4000-8000-000000000001",
+  schedule: "52000000-0000-4000-8000-000000000002",
+  resource: "52000000-0000-4000-8000-000000000003",
+  quality: "52000000-0000-4000-8000-000000000004",
+  communication: "52000000-0000-4000-8000-000000000005",
+} as const;
+
+const REPORT_LINE_CODE_IDS = {
+  teamLead: "62000000-0000-4000-8000-000000000001",
+  divisionHead: "62000000-0000-4000-8000-000000000002",
+  ceo: "62000000-0000-4000-8000-000000000003",
+  clientPmo: "62000000-0000-4000-8000-000000000004",
+  clientTeamLead: "62000000-0000-4000-8000-000000000005",
+  clientExecutive: "62000000-0000-4000-8000-000000000006",
 } as const;
 
 async function main() {
@@ -126,6 +145,12 @@ async function main() {
   await prisma.commonCodeGroup.create({
     data: { id: ESCALATION_GROUP_ID, projectId: PROJECT_ID, code: "escalation_level", label: "에스컬레이션 레벨", description: "확률×영향 점수별 보고 수준", sortOrder: 3, isSystem: true },
   });
+  await prisma.commonCodeGroup.create({
+    data: { id: ISSUE_TYPE_GROUP_ID, projectId: PROJECT_ID, code: "issue_type", label: "이슈구분", description: "이슈관리 이슈구분 공통코드", sortOrder: 4, isSystem: true },
+  });
+  await prisma.commonCodeGroup.create({
+    data: { id: REPORT_LINE_GROUP_ID, projectId: PROJECT_ID, code: "report_line", label: "보고라인", description: "이슈관리 에스컬레이션 보고라인 공통코드", sortOrder: 5, isSystem: true },
+  });
 
   await prisma.commonCode.createMany({
     data: [
@@ -138,29 +163,75 @@ async function main() {
       { id: ESCALATION_CODE_IDS.pm, projectId: PROJECT_ID, groupId: ESCALATION_GROUP_ID, groupCode: "escalation_level", code: "pm", label: "PM 레벨", sortOrder: 1, minScore: 1 },
       { id: ESCALATION_CODE_IDS.departmentHead, projectId: PROJECT_ID, groupId: ESCALATION_GROUP_ID, groupCode: "escalation_level", code: "department_head", label: "본부장 레벨", sortOrder: 2, minScore: 4 },
       { id: ESCALATION_CODE_IDS.cLevel, projectId: PROJECT_ID, groupId: ESCALATION_GROUP_ID, groupCode: "escalation_level", code: "c_level", label: "C-Level 레벨", sortOrder: 3, minScore: 7 },
+      { id: ISSUE_TYPE_CODE_IDS.scope, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "scope", label: "범위", sortOrder: 1 },
+      { id: ISSUE_TYPE_CODE_IDS.schedule, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "schedule", label: "일정", sortOrder: 2 },
+      { id: ISSUE_TYPE_CODE_IDS.resource, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "resource", label: "자원", sortOrder: 3 },
+      { id: ISSUE_TYPE_CODE_IDS.quality, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "quality", label: "품질", sortOrder: 4 },
+      { id: ISSUE_TYPE_CODE_IDS.communication, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "communication", label: "소통", sortOrder: 5 },
+      { id: REPORT_LINE_CODE_IDS.teamLead, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "team_lead", label: "팀장", sortOrder: 1 },
+      { id: REPORT_LINE_CODE_IDS.divisionHead, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "division_head", label: "사업부장", sortOrder: 2 },
+      { id: REPORT_LINE_CODE_IDS.ceo, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "ceo", label: "대표이사", sortOrder: 3 },
+      { id: REPORT_LINE_CODE_IDS.clientPmo, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "client_pmo", label: "고객사PMO", sortOrder: 4 },
+      { id: REPORT_LINE_CODE_IDS.clientTeamLead, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "client_team_lead", label: "고객사팀장", sortOrder: 5 },
+      { id: REPORT_LINE_CODE_IDS.clientExecutive, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "client_executive", label: "고객사임원", sortOrder: 6 },
     ],
   });
 
-  const itemSeeds = [
-    { id: "40000000-0000-4000-8000-000000000001", displayId: "IR-2026-000001", groupId: GROUP_IDS.trackA, kind: "issue" as const, categoryCodeId: CATEGORY_CODE_IDS.schedule, title: "핵심 인터페이스 일정 지연", description: "외부 연계 규격 확정 지연으로 통합 테스트 일정에 영향이 예상됩니다.", probability: "high" as const, impact: "high" as const, exposureText: "통합 테스트 2주 지연 가능", escalationCodeId: ESCALATION_CODE_IDS.cLevel, status: "in_progress" as const, updatedAt: "2026-07-28T09:00:00.000Z" },
-    { id: "40000000-0000-4000-8000-000000000002", displayId: "IR-2026-000002", groupId: GROUP_IDS.trackB, kind: "risk" as const, categoryCodeId: CATEGORY_CODE_IDS.cost, title: "추가 라이선스 비용 발생 가능성", description: "사용자 증가에 따라 상용 라이선스 구간 변경 가능성이 있습니다.", probability: "medium" as const, impact: "high" as const, exposureText: "연간 약 3천만원", escalationCodeId: ESCALATION_CODE_IDS.departmentHead, status: "registered" as const, updatedAt: "2026-07-31T09:00:00.000Z" },
-    { id: "40000000-0000-4000-8000-000000000003", displayId: "IR-2026-000003", groupId: GROUP_IDS.common, kind: "risk" as const, categoryCodeId: CATEGORY_CODE_IDS.organization, title: "의사결정 지연 가능성", description: "주요 의사결정권자 일정 중복으로 승인 리드타임 증가가 예상됩니다.", probability: "medium" as const, impact: "medium" as const, exposureText: "승인 일정 3영업일 지연 가능", escalationCodeId: ESCALATION_CODE_IDS.departmentHead, status: "on_hold" as const, updatedAt: "2026-08-01T09:00:00.000Z" },
+  const issueSeeds = [
+    {
+      id: "40000000-0000-4000-8000-000000000001", displayId: "ISU-0001", seq: 1, categoryCodeId: ISSUE_TYPE_CODE_IDS.schedule, title: "핵심 인터페이스 일정 지연", description: "외부 연계 규격 확정 지연으로 통합 테스트 일정에 영향이 예상됩니다.", importance: "high" as const, priority: "high" as const, occurredAt: "2026-07-28", dueAt: "2026-08-15", escalated: true, reportLineCodeIds: [REPORT_LINE_CODE_IDS.divisionHead, REPORT_LINE_CODE_IDS.clientPmo], remark: "",
+      progress: [
+        { entryDate: "2026-07-28", status: "OPEN" as const, responseContent: "외부 연계 규격 확정 지연 이슈를 등록했습니다." },
+        { entryDate: "2026-07-30", status: "IN_PROGRESS" as const, responseContent: "연계사 1차 협의를 진행했습니다." },
+        { entryDate: "2026-08-01", status: "IN_PROGRESS" as const, responseContent: "외부 연계사와 규격 확정 일정을 조율 중입니다. 8/15까지 확정 예정." },
+      ],
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000002", displayId: "ISU-0002", seq: 2, categoryCodeId: ISSUE_TYPE_CODE_IDS.resource, title: "추가 라이선스 비용 발생 가능성", description: "사용자 증가에 따라 상용 라이선스 구간 변경 가능성이 있습니다.", importance: "medium" as const, priority: "high" as const, occurredAt: "2026-07-31", dueAt: null, escalated: false, reportLineCodeIds: [] as string[], remark: "연간 약 3천만원 추가 소요 예상",
+      progress: [{ entryDate: "2026-07-31", status: "OPEN" as const, responseContent: "라이선스 비용 발생 가능성을 등록했습니다." }],
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000003", displayId: "ISU-0003", seq: 3, categoryCodeId: ISSUE_TYPE_CODE_IDS.communication, title: "의사결정 지연", description: "주요 의사결정권자 일정 중복으로 승인 리드타임 증가가 예상됩니다.", importance: "medium" as const, priority: "medium" as const, occurredAt: "2026-08-01", dueAt: "2026-08-10", escalated: false, reportLineCodeIds: [] as string[], remark: "",
+      progress: [
+        { entryDate: "2026-08-01", status: "OPEN" as const, responseContent: "의사결정 지연 이슈를 등록했습니다." },
+        { entryDate: "2026-08-05", status: "IN_PROGRESS" as const, responseContent: "주간 정기회의에서 우선 안건으로 상정했습니다." },
+        { entryDate: "2026-08-08", status: "CLOSED" as const, responseContent: "의사결정이 완료되어 종결했습니다." },
+      ],
+    },
   ];
-  for (const item of itemSeeds) {
-    await prisma.item.create({
+  for (const issue of issueSeeds) {
+    const latest = issue.progress[issue.progress.length - 1];
+    await prisma.issue.create({
       data: {
-        id: item.id, displayId: item.displayId, projectId: PROJECT_ID, groupId: item.groupId, kind: item.kind,
-        categoryCodeId: item.categoryCodeId, title: item.title, description: item.description,
-        probability: item.probability, impact: item.impact, exposureText: item.exposureText,
-        ownerText: "PMO 관리자", ownerUserId: ADMIN_USER_ID, escalationCodeId: item.escalationCodeId,
-        status: item.status, createdBy: ADMIN_USER_ID, createdAt: new Date(item.updatedAt), updatedAt: new Date(item.updatedAt),
+        id: issue.id, displayId: issue.displayId, seq: issue.seq, projectId: PROJECT_ID,
+        categoryCodeId: issue.categoryCodeId, title: issue.title, description: issue.description,
+        importance: issue.importance, priority: issue.priority, occurredAt: new Date(issue.occurredAt), dueAt: issue.dueAt ? new Date(issue.dueAt) : null,
+        ownerUserId: ADMIN_USER_ID, ownerName: "PMO 관리자", responseContent: latest.responseContent,
+        escalated: issue.escalated, remark: issue.remark,
+        status: latest.status, createdBy: ADMIN_USER_ID, lastModifiedBy: ADMIN_USER_ID, lastModifiedByName: "PMO 관리자",
+        createdAt: new Date(issue.occurredAt), updatedAt: new Date(latest.entryDate),
+        closedAt: latest.status === "CLOSED" ? new Date(latest.entryDate) : null,
       },
     });
-    await prisma.itemEvent.create({
-      data: { itemId: item.id, eventType: "created", actorId: ADMIN_USER_ID, actorName: "PMO 관리자", body: "초기 데이터 등록", createdAt: new Date(item.updatedAt) },
-    });
+    if (issue.reportLineCodeIds.length) {
+      await prisma.issueReportLine.createMany({ data: issue.reportLineCodeIds.map((reportLineCodeId) => ({ issueId: issue.id, reportLineCodeId })) });
+    }
+    for (const entry of issue.progress) {
+      const progress = await prisma.issueProgress.create({
+        data: {
+          issueId: issue.id, entryDate: new Date(entry.entryDate), status: entry.status,
+          categoryCodeId: issue.categoryCodeId, title: issue.title, description: issue.description,
+          importance: issue.importance, priority: issue.priority, dueAt: issue.dueAt ? new Date(issue.dueAt) : null,
+          ownerUserId: ADMIN_USER_ID, ownerName: "PMO 관리자", responseContent: entry.responseContent,
+          escalated: issue.escalated, remark: issue.remark, actorId: ADMIN_USER_ID, actorName: "PMO 관리자",
+        },
+      });
+      if (issue.reportLineCodeIds.length) {
+        await prisma.issueProgressReportLine.createMany({ data: issue.reportLineCodeIds.map((reportLineCodeId) => ({ progressId: progress.id, reportLineCodeId })) });
+      }
+    }
   }
-  await prisma.itemSequence.create({ data: { projectId: PROJECT_ID, value: itemSeeds.length } });
+  await prisma.issueSequence.create({ data: { projectId: PROJECT_ID, value: issueSeeds.length } });
 
   const week1 = await prisma.week.create({
     data: { id: "81000000-0000-4000-8000-000000000001", projectId: PROJECT_ID, weekKey: "2026-W31", label: "2026년 31주차", startDate: new Date("2026-07-27"), endDate: new Date("2026-08-02") },

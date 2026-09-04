@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { probabilities } from "@/lib/domain/items";
+import { probabilities } from "@/lib/domain/levels";
 import { acceptanceLabels } from "@/lib/domain/requirements";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import type { CommonCode } from "@/lib/server/common-codes";

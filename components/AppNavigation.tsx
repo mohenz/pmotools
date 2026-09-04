@@ -8,9 +8,9 @@ import { CalendarIcon, DashboardIcon, DocumentIcon, FileIcon, GanttIcon, IssueAl
 import { isMenuVisibleForRole, type MenuPreferenceRow } from "@/lib/domain/menu-preferences";
 import { hasPmPmoAccess } from "@/lib/domain/job-access";
 
-const TOOL_ICONS: Record<string, ElementType> = { portfolio: DashboardIcon, "management-tasks": PerformanceIcon, wbs: GanttIcon, "pmo-daily": TaskIcon, "work-logs": DocumentIcon, calendar: CalendarIcon, meetrooms: MeetingRoomIcon, items: IssueAlertIcon, requirements: RequestIcon, announcements: NotificationIcon, "weekly-reports": ReportIcon, "weekly-progress": ProgressIcon, "staff-changes": TeamIcon, messages: MessageIcon, manuals: FileIcon };
-const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks", wbs: "/wbs", "pmo-daily": "/pmo-daily", "work-logs": "/work-logs", calendar: "/calendar", meetrooms: "/meetrooms", items: "/items/dashboard", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
-const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", wbs: "WBS", "pmo-daily": "PMO Daily", "work-logs": "업무일지", calendar: "캘린더", meetrooms: "회의실", items: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "메뉴얼" };
+const TOOL_ICONS: Record<string, ElementType> = { portfolio: DashboardIcon, "management-tasks": PerformanceIcon, wbs: GanttIcon, "pmo-daily": TaskIcon, "work-logs": DocumentIcon, calendar: CalendarIcon, meetrooms: MeetingRoomIcon, issues: IssueAlertIcon, requirements: RequestIcon, announcements: NotificationIcon, "weekly-reports": ReportIcon, "weekly-progress": ProgressIcon, "staff-changes": TeamIcon, messages: MessageIcon, manuals: FileIcon };
+const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks", wbs: "/wbs", "pmo-daily": "/pmo-daily", "work-logs": "/work-logs", calendar: "/calendar", meetrooms: "/meetrooms", issues: "/issues", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
+const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", wbs: "WBS", "pmo-daily": "PMO Daily", "work-logs": "업무일지", calendar: "캘린더", meetrooms: "회의실", issues: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "메뉴얼" };
 
 export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[]; canManageWorkLogs?: boolean }) {
   const pathname = usePathname();
@@ -22,7 +22,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const isManager = isAdmin || role === "OPERATOR";
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   const toolActive = (key: string, href: string) => {
-    if (key === "items") return pathname.startsWith("/items");
+    if (key === "issues") return pathname.startsWith("/issues");
     if (key === "management-tasks") return pathname.startsWith("/management-tasks") || pathname.startsWith("/action-items");
     return pathname.startsWith(href);
   };
@@ -30,7 +30,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const tools = Object.keys(TOOL_HREF).map((key) => ({ key, href: TOOL_HREF[key], icon: TOOL_ICONS[key], label: menuLabels.get(key) ?? TOOL_LABEL[key], active: toolActive(key, TOOL_HREF[key]) }));
 
   if (area === "sidebar") {
-    const sidebarTools = menuPrefs.filter((m) => m.key !== "messages" && isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (!["items", "pmo-daily"].includes(m.key) || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, active: toolActive(m.key, TOOL_HREF[m.key]) }));
+    const sidebarTools = menuPrefs.filter((m) => m.key !== "messages" && isMenuVisibleForRole(m, role as "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER") && (!["issues", "pmo-daily"].includes(m.key) || hasRestrictedToolAccess)).map((m) => ({ key: m.key, href: TOOL_HREF[m.key], icon: TOOL_ICONS[m.key], label: m.label, active: toolActive(m.key, TOOL_HREF[m.key]) }));
     return <>
       <div className="sidebar-tools top-tools">
         <span className="sidebar-label">TOOLS</span>
@@ -67,7 +67,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   }
 
   const currentTool = tools.find((tool) => tool.active);
-  if (currentTool && currentTool.key !== "items") {
+  if (currentTool && currentTool.key !== "issues") {
     const moduleTabs: Record<string, {href:string;label:string}[]> = {
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks": [...(hasRestrictedToolAccess?[{href:"/management-tasks/dashboard",label:"대시보드"}]:[]),{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"},...(hasRestrictedToolAccess?[{href:"/action-items",label:"액션아이템목록조회"}]:[])],
@@ -87,16 +87,15 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }
 
-  if (currentTool?.key !== "items") return null;
+  if (currentTool?.key !== "issues") return null;
 
   const tabs = [
-    { href: "/items/dashboard", label: "대시보드", active: pathname === "/items/dashboard" },
-    { href: "/items/new", label: "이슈 등록", active: pathname === "/items/new" },
-    { href: "/items", label: "전체 목록", active: pathname === "/items" || (pathname.startsWith("/items/") && pathname !== "/items/new" && pathname !== "/items/dashboard") },
+    { href: "/issues/new", label: "이슈 등록", active: pathname === "/issues/new" },
+    { href: "/issues", label: "전체 목록", active: pathname === "/issues" || (pathname.startsWith("/issues/") && pathname !== "/issues/new") },
   ];
 
   return <div className="workspace-nav">
-    <strong className="workspace-tool-name">{menuLabels.get("items") ?? TOOL_LABEL.items}</strong>
+    <strong className="workspace-tool-name">{menuLabels.get("issues") ?? TOOL_LABEL.issues}</strong>
     <nav className="tool-tabs" aria-label="이슈관리 기능">
       {tabs.map((tab) => <Link className={tab.active ? "active" : ""} aria-current={tab.active ? "page" : undefined} href={tab.href} key={tab.href}>{tab.label}</Link>)}
     </nav>

@@ -1,6 +1,6 @@
 import { config } from "dotenv";
-config({ path: ".env" });
-config({ path: ".env.local", override: false });
+config({ path: ".env", quiet: true });
+config({ path: ".env.local", override: false, quiet: true });
 
 import { defineConfig } from "prisma/config";
 

@@ -171,7 +171,9 @@ export async function listWbsItems(projectId: string): Promise<WbsItemRow[]> {
 
 export type WbsListFilters = {
   page?: number; pageSize?: number | "all"; q?: string; assignee?: string;
-  startDate?: string; dueDate?: string; groupLabel?: string; delayed?: "" | "y" | "n";
+  startDateFrom?: string; startDateTo?: string; dueDateFrom?: string; dueDateTo?: string;
+  actualStartDateFrom?: string; actualStartDateTo?: string; actualDueDateFrom?: string; actualDueDateTo?: string;
+  groupLabel?: string; delayed?: "" | "y" | "n";
   plannedMin?: number; actualMin?: number; progressMin?: number;
 };
 
@@ -202,23 +204,27 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   });
   const q = filters.q?.trim().toLowerCase() ?? "";
   const assignee = filters.assignee?.trim().toLowerCase() ?? "";
-  const startDate = filters.startDate?.trim() ?? "";
-  const dueDate = filters.dueDate?.trim() ?? "";
+  const startDateFrom = filters.startDateFrom?.trim() ?? "", startDateTo = filters.startDateTo?.trim() ?? "";
+  const dueDateFrom = filters.dueDateFrom?.trim() ?? "", dueDateTo = filters.dueDateTo?.trim() ?? "";
+  const actualStartDateFrom = filters.actualStartDateFrom?.trim() ?? "", actualStartDateTo = filters.actualStartDateTo?.trim() ?? "";
+  const actualDueDateFrom = filters.actualDueDateFrom?.trim() ?? "", actualDueDateTo = filters.actualDueDateTo?.trim() ?? "";
   const groupLabel = filters.groupLabel?.trim().toLowerCase() ?? "";
   const delayed = filters.delayed ?? "";
   const { plannedMin, actualMin, progressMin } = filters;
+  const inRange = (value: string | null, from: string, to: string) => (!from && !to) || (value !== null && (!from || value >= from) && (!to || value <= to));
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
     const matchesAssignee = !assignee || (row.ownerName ?? "").toLowerCase().includes(assignee);
-    // 시작일·종료일 필터 = 조회 구간 경계 — Task 자신의 StartDate·DueDate가 모두 그 구간 안에 있어야 매치한다(일부만 겹치는 항목은 제외).
-    const matchesStartDate = !startDate || (row.startDate !== null && row.startDate >= startDate);
-    const matchesDueDate = !dueDate || (row.dueDate !== null && row.dueDate <= dueDate);
+    const matchesStartDate = inRange(row.startDate, startDateFrom, startDateTo);
+    const matchesDueDate = inRange(row.dueDate, dueDateFrom, dueDateTo);
+    const matchesActualStartDate = inRange(row.actualStartDate, actualStartDateFrom, actualStartDateTo);
+    const matchesActualDueDate = inRange(row.actualDueDate, actualDueDateFrom, actualDueDateTo);
     const matchesGroupLabel = !groupLabel || (row.groupLabel ?? "").toLowerCase().includes(groupLabel);
     const matchesDelayed = !delayed || (delayed === "y" ? row.isDelayed : !row.isDelayed);
     const matchesPlanned = plannedMin == null || (row.plannedProgress ?? 0) * 100 >= plannedMin;
     const matchesActual = actualMin == null || row.actualProgress * 100 >= actualMin;
     const matchesProgress = progressMin == null || (row.progressIndex ?? 0) * 100 >= progressMin;
-    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesGroupLabel && matchesDelayed && matchesPlanned && matchesActual && matchesProgress;
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesGroupLabel && matchesDelayed && matchesPlanned && matchesActual && matchesProgress;
   });
   const total = filteredRows.length;
   const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 10));
@@ -429,19 +435,28 @@ export function getWbsWeeklyStats(projectId: string, startDate: string, endDate:
 export type WbsDailyTaskCounts = { plannedTaskCount: number; actualTaskCount: number; totalTaskCount: number; completedTaskCount: number };
 
 // PMO Daily "1. 공정현황" 신규 작성 화면 자동 채움 — leaf 항목을 기준일(asOfDate) 시점으로 집계한다.
-// 계획 TASK 수 = DueDate가 기준일 이전(포함)인 leaf 항목(주간 통계의 계획(건)과 동일 기준을 기준일 하루로 적용),
-// 실적 TASK 수 = 그중 실적(actualProgress)이 100%인 항목, 완료 TASK = 기준일과 무관하게 실적이 100%인 전체 leaf 항목.
+// 계획 TASK 수 = DueDate가 기준일과 정확히 같은(=오늘종료예정) leaf 항목, 실적 TASK 수 = 그중 실적(actualProgress)이
+// 100%인(=종료된) 항목, 지연 TASK 수(공정현황의 자동계산 지표) = 계획 TASK 수 - 실적 TASK 수(=미종료 항목 수).
+// 완료 TASK = 기준일과 무관하게 실적이 100%인 전체 leaf 항목(전체 공정률 산정용, 기준일 범위와 무관).
 export async function getWbsDailyTaskCounts(projectId: string, asOfDate: string): Promise<WbsDailyTaskCounts> {
   const items = await listWbsItems(projectId);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  const plannedRows = leaves.filter((item) => item.dueDate !== null && item.dueDate <= asOfDate);
+  const dueTodayRows = leaves.filter((item) => item.dueDate === asOfDate);
   return {
-    plannedTaskCount: plannedRows.length,
-    actualTaskCount: plannedRows.filter((item) => item.actualProgress >= 1).length,
+    plannedTaskCount: dueTodayRows.length,
+    actualTaskCount: dueTodayRows.filter((item) => item.actualProgress >= 1).length,
     totalTaskCount: leaves.length,
     completedTaskCount: leaves.filter((item) => item.actualProgress >= 1).length,
   };
+}
+
+// PMO Daily "2. 지연 TASK" — 오늘종료예정(DueDate === asOfDate) leaf 항목 중 아직 종료되지 않은(actualProgress < 100%) 것만 나열한다.
+export async function getWbsDueTodayIncompleteTasks(projectId: string, asOfDate: string) {
+  const items = await listWbsItems(projectId);
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  const leaves = items.filter((item) => !parentIds.has(item.id));
+  return leaves.filter((item) => item.dueDate === asOfDate && item.actualProgress < 1);
 }
 
 // 업무그룹별 통계 화면의 업무그룹명·지연율 클릭 진입점 — 해당 업무그룹(담당자 기준) leaf 항목을 그대로 나열한다.

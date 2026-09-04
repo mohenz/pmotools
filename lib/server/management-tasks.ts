@@ -6,7 +6,7 @@ import { MANAGEMENT_TASK_AXES, averageScore, canManageManagementTask, scoreBand,
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager, getMemberRole, isManagerRole } from "@/lib/server/permissions";
 import { hasPmPmoAccess } from "@/lib/domain/job-access";
-import { assertWorkModuleGroup } from "@/lib/server/items";
+import { assertWorkModuleGroup } from "@/lib/server/groups";
 import { DomainError } from "@/lib/server/errors";
 import { managementTaskTag } from "@/lib/server/cache-tags";
 import type { Prisma } from "@/lib/generated/prisma/client";

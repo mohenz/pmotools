@@ -4,7 +4,7 @@ import type { InvitationSummary } from "@/lib/server/messages";
 import type { PortfolioPanelRow } from "@/lib/domain/portfolio-panels";
 import { WbsOwnerStatusChart, WbsProgressChart } from "@/components/PortfolioDomainCharts";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
-import { MessageIcon } from "@/components/icons/PmoIcons";
+import { CalendarIcon, MeetingRoomIcon, MessageIcon } from "@/components/icons/PmoIcons";
 
 const pct = (value: number) => Math.round(value * 100);
 const pctOrDash = (value: number | null) => (value === null ? "-" : `${Math.round(value * 100)}%`);
@@ -61,6 +61,7 @@ export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations
         <div className="invitation-list">
           {recentInvitations.map((invitation) => <Link href="/messages" className="invitation-row" key={invitation.id}>
             {!invitation.isRead && <span className="badge issue">미확인</span>}
+            {invitation.messageType === "CALENDAR_INVITATION" ? <CalendarIcon className="invitation-row-icon" aria-hidden="true" /> : <MeetingRoomIcon className="invitation-row-icon" aria-hidden="true" />}
             <span className="invitation-row-title">{invitationTitle(invitation)}</span>
             {invitationLocation(invitation) && <span className="invitation-row-location">{invitationLocation(invitation)}</span>}
             <time>{invitationDateFormat.format(new Date(invitationStartAt(invitation)))}</time>

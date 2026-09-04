@@ -50,9 +50,11 @@ model User {
   memberships                   ProjectMember[]
   groupMemberships              UserGroupMap[]
   ledWorkGroups                 Groups[]                      @relation("WorkGroupLeader")
-  createdItems                  Item[]                        @relation("ItemCreator")
-  ownedItems                    Item[]                        @relation("ItemOwner")
-  itemEvents                    ItemEvent[]
+  createdIssues                 Issue[]                       @relation("IssueCreator")
+  ownedIssues                   Issue[]                       @relation("IssueOwner")
+  lastModifiedIssues            Issue[]                       @relation("IssueLastModifier")
+  ownedIssueProgressEntries     IssueProgress[]               @relation("IssueProgressOwner")
+  actedIssueProgressEntries     IssueProgress[]               @relation("IssueProgressActor")
   assignedEvents                EventAssignee[]
   createdEvents                 CalendarEvent[]               @relation("CalendarEventCreator")
   updatedEvents                 CalendarEvent[]               @relation("CalendarEventUpdater")
@@ -175,11 +177,11 @@ model Project {
   groups                    Groups[]
   commonCodeGroups          CommonCodeGroup[]
   commonCodes               CommonCode[]
-  items                     Item[]
+  issues                    Issue[]
   weeks                     Week[]
   calendarEvents            CalendarEvent[]
   auditLogs                 AuditLog[]
-  itemSequence              ItemSequence?
+  issueSequence             IssueSequence?
   meetingRooms              MeetingRoom[]
   meetingReservations       MeetingReservation[]
   recurringMeetings         RecurringMeetingReservation[]
@@ -256,7 +258,6 @@ model Groups {
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   leader          User?            @relation("WorkGroupLeader", fields: [leaderId], references: [id], onDelete: SetNull)
   userMap         UserGroupMap[]
-  items           Item[]
   weeklyReports   WeeklyReport[]
   weeklyProgress  WeeklyProgress[]
   staffChanges    StaffChange[]
@@ -364,28 +365,25 @@ model CommonCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project                Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  group                  CommonCodeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  itemsByCategory        Item[]          @relation("ItemCategory")
-  itemsByEscalation      Item[]          @relation("ItemEscalation")
-  requirementsByDivision Requirement[]   @relation("RequirementDivision")
-  requirementsByCategory Requirement[]   @relation("RequirementCategory")
-  wbsItems               WbsItem[]
-  wbsAssignments         WbsAssignment[]
-  actionItemsByCategory  ActionItem[]    @relation("ActionItemCategory")
+  project                   Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group                     CommonCodeGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  issuesByCategory          Issue[]                   @relation("IssueCategory")
+  issuesByReportLine        IssueReportLine[]         @relation("IssueReportLine")
+  issueProgressByCategory   IssueProgress[]           @relation("IssueProgressCategory")
+  issueProgressByReportLine IssueProgressReportLine[] @relation("IssueProgressReportLine")
+  requirementsByDivision    Requirement[]             @relation("RequirementDivision")
+  requirementsByCategory    Requirement[]             @relation("RequirementCategory")
+  wbsItems                  WbsItem[]
+  wbsAssignments            WbsAssignment[]
+  actionItemsByCategory     ActionItem[]              @relation("ActionItemCategory")
 
   @@unique([groupId, code])
   @@map("common_codes")
 }
 
 // ---------------------------------------------------------------------------
-// 이슈 · 리스크
+// 이슈관리
 // ---------------------------------------------------------------------------
-
-enum ItemKind {
-  issue
-  risk
-}
 
 enum ProbabilityLevel {
   low
@@ -393,83 +391,118 @@ enum ProbabilityLevel {
   high
 }
 
-enum ItemStatus {
-  registered
-  in_progress
-  resolved
-  on_hold
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
 }
 
-enum ItemEventType {
-  created
-  comment
-  status_changed
-  level_changed
-  edited
-  archived
-}
+model Issue {
+  id                 String           @id @default(uuid())
+  displayId          String           @unique
+  seq                Int
+  projectId          String
+  categoryCodeId     String
+  title              String
+  description        String           @default("")
+  importance         ProbabilityLevel
+  priority           ProbabilityLevel
+  status             IssueStatus      @default(OPEN)
+  occurredAt         DateTime         @db.Date
+  dueAt              DateTime?        @db.Date
+  ownerUserId        String?
+  ownerName          String?
+  responseContent    String           @default("")
+  escalated          Boolean          @default(false)
+  remark             String           @default("")
+  createdBy          String
+  lastModifiedBy     String?
+  lastModifiedByName String?
+  version            Int              @default(1)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  closedAt           DateTime?
+  archivedAt         DateTime?
 
-model Item {
-  id               String           @id @default(uuid())
-  displayId        String           @unique
-  projectId        String
-  groupId          String // 기존 trackCodeId
-  kind             ItemKind
-  categoryCodeId   String
-  title            String
-  description      String           @default("")
-  probability      ProbabilityLevel
-  impact           ProbabilityLevel
-  exposureText     String?
-  ownerText        String?
-  ownerUserId      String?
-  escalationCodeId String
-  status           ItemStatus       @default(registered)
-  createdBy        String
-  version          Int              @default(1)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  resolvedAt       DateTime?
-  archivedAt       DateTime?
-
-  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  group      Groups      @relation(fields: [groupId], references: [id])
-  category   CommonCode  @relation("ItemCategory", fields: [categoryCodeId], references: [id])
-  escalation CommonCode  @relation("ItemEscalation", fields: [escalationCodeId], references: [id])
-  creator    User        @relation("ItemCreator", fields: [createdBy], references: [id])
-  owner      User?       @relation("ItemOwner", fields: [ownerUserId], references: [id])
-  events     ItemEvent[]
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category        CommonCode        @relation("IssueCategory", fields: [categoryCodeId], references: [id])
+  creator         User              @relation("IssueCreator", fields: [createdBy], references: [id])
+  owner           User?             @relation("IssueOwner", fields: [ownerUserId], references: [id])
+  lastModifier    User?             @relation("IssueLastModifier", fields: [lastModifiedBy], references: [id])
+  reportLines     IssueReportLine[]
+  progressEntries IssueProgress[]
 
   @@index([projectId, status])
   @@index([projectId, archivedAt])
-  @@map("items")
+  @@map("issues")
 }
 
-model ItemSequence {
+// 이슈진행정보(DETAIL) — 최초 등록(이슈관리정보)과 동일한 전체 필드를 갖춘 시점별 스냅샷.
+// 별도의 가벼운 로그가 아니라 등록 당시와 같은 정보 수준으로 관리되며, 가장 최근 스냅샷의
+// 내용이 그대로 이슈관리정보(MASTER)에 반영된다(자동 동기화) — 진행 이력을 남기는 것이
+// 곧 이슈 정보를 갱신하는 유일한 방법이다.
+model IssueProgress {
+  id              String           @id @default(uuid())
+  issueId         String
+  entryDate       DateTime         @db.Date
+  status          IssueStatus
+  categoryCodeId  String
+  title           String
+  description     String           @default("")
+  importance      ProbabilityLevel
+  priority        ProbabilityLevel
+  dueAt           DateTime?        @db.Date
+  ownerUserId     String?
+  ownerName       String?
+  responseContent String           @default("")
+  escalated       Boolean          @default(false)
+  remark          String           @default("")
+  actorId         String?
+  actorName       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  issue       Issue                     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  category    CommonCode                @relation("IssueProgressCategory", fields: [categoryCodeId], references: [id])
+  owner       User?                     @relation("IssueProgressOwner", fields: [ownerUserId], references: [id])
+  actor       User?                     @relation("IssueProgressActor", fields: [actorId], references: [id])
+  reportLines IssueProgressReportLine[]
+
+  @@index([issueId, entryDate])
+  @@map("issue_progress_entries")
+}
+
+model IssueProgressReportLine {
+  progressId       String
+  reportLineCodeId String
+
+  progress       IssueProgress @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  reportLineCode CommonCode    @relation("IssueProgressReportLine", fields: [reportLineCodeId], references: [id])
+
+  @@id([progressId, reportLineCodeId])
+  @@index([reportLineCodeId])
+  @@map("issue_progress_report_lines")
+}
+
+model IssueReportLine {
+  issueId          String
+  reportLineCodeId String
+
+  issue          Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  reportLineCode CommonCode @relation("IssueReportLine", fields: [reportLineCodeId], references: [id])
+
+  @@id([issueId, reportLineCodeId])
+  @@index([reportLineCodeId])
+  @@map("issue_report_lines")
+}
+
+model IssueSequence {
   projectId String @id
   value     Int    @default(0)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@map("item_sequences")
-}
-
-model ItemEvent {
-  id         String        @id @default(uuid())
-  itemId     String
-  eventType  ItemEventType
-  actorId    String?
-  actorName  String?
-  body       String?
-  beforeData Json?
-  afterData  Json?
-  createdAt  DateTime      @default(now())
-
-  item  Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  actor User? @relation(fields: [actorId], references: [id])
-
-  @@index([itemId, createdAt])
-  @@map("item_events")
+  @@map("issue_sequences")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
 import { acceptanceLabels, acceptanceLabel } from "@/lib/domain/requirements";
-import { probabilities, probabilityLabel } from "@/lib/domain/items";
+import { probabilities, probabilityLabel } from "@/lib/domain/levels";
 import type { RequirementRow } from "@/lib/server/requirements";
 import type { CommonCode } from "@/lib/server/common-codes";
 

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { AppNavigation } from "@/components/AppNavigation";
 import { InvitationPopup } from "@/components/InvitationPopup";
 import { UnreadMessageProvider } from "@/components/UnreadMessageProvider";
@@ -16,12 +15,10 @@ const AUTH_PATHS = new Set(["/login", "/signup", "/reset-password"]);
 export function AuthenticatedAppShell({
   children,
   menuPrefs,
-  announcements,
   canManageWorkLogs,
 }: {
   children: React.ReactNode;
   menuPrefs: MenuPreferenceRow[];
-  announcements: { id: string; title: string; isImportant: boolean }[];
   canManageWorkLogs: boolean;
 }) {
   const pathname = usePathname();
@@ -67,7 +64,7 @@ export function AuthenticatedAppShell({
         </header>
         <div className="app-body">
           <aside className="module-sidebar"><AppNavigation area="workspace" menuPrefs={menuPrefs} canManageWorkLogs={canManageWorkLogs} /></aside>
-          <main className="main" id="main-content" tabIndex={-1}><AnnouncementBanner announcements={announcements} />{children}</main>
+          <main className="main" id="main-content" tabIndex={-1}>{children}</main>
         </div>
       </div>
     </UnreadMessageProvider>

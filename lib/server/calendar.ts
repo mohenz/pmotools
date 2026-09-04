@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { getCodeOptions } from "@/lib/server/common-codes";
+import { listMeetingReservations } from "@/lib/server/meeting-rooms";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import { buildRecurrenceRule, describeRecurrence, expandOccurrences, type RecurrenceInput } from "@/lib/domain/recurrence";
@@ -12,7 +13,7 @@ import type { EventException, Prisma } from "@/lib/generated/prisma/client";
 
 export type EventPerson = { id: string; name: string };
 export type EventGroupTagEntry = { id: string; label: string };
-export type CalendarEvent = { id: string; masterId: string; source: "schedule" | "progress" | "next_plan" | "issue"; title: string; description: string; eventType: string; startAt: string; endAt: string; date: string; startTime: string; endTime: string; allDay: boolean; areaCodeId: string | null; areaLabel: string | null; location: string; priority: "HIGH" | "MEDIUM" | "LOW"; isMilestone: boolean; isRecurring: boolean; occurrenceDate: string | null; recurrenceSummary: string | null; assignees: EventPerson[]; groupTags: EventGroupTagEntry[]; editable: boolean; sourceUrl: string | null };
+export type CalendarEvent = { id: string; masterId: string; source: "schedule" | "progress" | "next_plan" | "issue" | "meeting"; title: string; description: string; eventType: string; startAt: string; endAt: string; date: string; startTime: string; endTime: string; allDay: boolean; areaCodeId: string | null; areaLabel: string | null; location: string; priority: "HIGH" | "MEDIUM" | "LOW"; isMilestone: boolean; isRecurring: boolean; occurrenceDate: string | null; recurrenceSummary: string | null; assignees: EventPerson[]; groupTags: EventGroupTagEntry[]; editable: boolean; sourceUrl: string | null };
 export type MilestoneEntry = { id: string; title: string; date: string; kind: "event" | "project"; daysUntil: number; sourceUrl: string | null };
 export type CalendarSearchFilters = { q?: string; priority?: string; groupId?: string; assigneeId?: string; from?: string; to?: string };
 
@@ -57,23 +58,29 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
   if (query) progressAnd.push({ OR: [{ taskName: like(query) }, { planDetail: like(query) }, { nextPlan: like(query) }] });
   if (groupId) progressAnd.push({ groupId });
   const skipProgress = Boolean(assigneeId) || priority === "HIGH";
-  const skipItems = Boolean(assigneeId) || (priority !== undefined && priority !== "LOW");
+  // 이슈는 담당 Track(groupId)이 없고 우선순위가 LOW로 고정이라, groupId/assigneeId/우선순위 필터가 걸리면 매칭 불가능해 조회 자체를 생략한다.
+  const skipIssues = Boolean(assigneeId) || Boolean(groupId) || (priority !== undefined && priority !== "LOW");
+  // 회의실 예약은 Track(groupId)도 우선순위도 없는 개념이라, 둘 중 하나라도 필터가 걸리면 매칭 불가능해 조회 자체를 생략한다.
+  const skipMeetings = Boolean(groupId) || priority !== undefined;
 
-  const [events, progress, items, options] = await Promise.all([
+  const [events, progress, issues, meetingReservations, options] = await Promise.all([
     prisma.calendarEvent.findMany({
       where: { projectId, OR: [{ recurrenceRule: { not: null } }, { AND: eventAnd }] },
       include: { assignees: { include: { user: true } }, groupTags: { include: { group: true } } },
     }),
     skipProgress ? [] : prisma.weeklyProgress.findMany({ where: { week: { projectId }, AND: progressAnd } }),
-    skipItems ? [] : prisma.item.findMany({
+    skipIssues ? [] : prisma.issue.findMany({
       where: {
         projectId, archivedAt: null, createdAt: { gte: paddedFrom, lte: paddedTo },
-        ...(groupId ? { groupId } : {}),
         ...(query ? { OR: [{ title: like(query) }, { description: like(query) }] } : {}),
       },
     }),
+    skipMeetings ? [] : listMeetingReservations(projectId, paddedFrom, paddedTo),
     getCodeOptions(projectId),
   ]);
+  const meetings = meetingReservations.filter((m) =>
+    (!query || m.purpose.toLowerCase().includes(query.toLowerCase()) || m.roomName.toLowerCase().includes(query.toLowerCase())) &&
+    (!assigneeId || m.userId === assigneeId || m.attendees.some((a) => a.id === assigneeId)));
   const labels = new Map(options.tracks.map((code) => [code.id, code.label]));
   const toAssignees = (event: (typeof events)[number]): EventPerson[] => event.assignees.map((a) => (a.user ? { id: a.user.id, name: a.user.name } : { id: a.id, name: a.guestName! }));
   const toGroupTags = (event: (typeof events)[number]): EventGroupTagEntry[] => event.groupTags.map((t) => ({ id: t.group.id, label: t.group.label }));
@@ -109,9 +116,15 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
     if (planTargetDate && inRange(planTargetDate, from, to)) rows.push({ id: row.id, masterId: row.id, source: "progress", title: row.taskName, description: row.planDetail, eventType: "milestone", startAt: `${planTargetDate}T00:00:00.000Z`, endAt: `${planTargetDate}T00:00:00.000Z`, date: planTargetDate, startTime: "", endTime: "", allDay: true, areaCodeId: row.groupId, areaLabel: labels.get(row.groupId) ?? null, location: "", priority: "MEDIUM", isMilestone: true, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/weekly-progress?edit=${row.id}` });
     if (nextTargetDate && inRange(nextTargetDate, from, to)) rows.push({ id: row.id, masterId: row.id, source: "next_plan", title: row.taskName, description: row.nextPlan, eventType: "work", startAt: `${nextTargetDate}T00:00:00.000Z`, endAt: `${nextTargetDate}T00:00:00.000Z`, date: nextTargetDate, startTime: "", endTime: "", allDay: true, areaCodeId: row.groupId, areaLabel: labels.get(row.groupId) ?? null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/weekly-progress?edit=${row.id}` });
   }
-  for (const item of items) {
-    const date = parts(item.createdAt.toISOString());
-    if (inRange(date.date, from, to)) rows.push({ id: item.id, masterId: item.id, source: "issue", title: item.title, description: item.description, eventType: "other", startAt: item.createdAt.toISOString(), endAt: item.createdAt.toISOString(), date: date.date, startTime: date.time, endTime: date.time, allDay: false, areaCodeId: item.groupId, areaLabel: labels.get(item.groupId) ?? null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/items/${item.id}` });
+  for (const issue of issues) {
+    const date = parts(issue.createdAt.toISOString());
+    if (inRange(date.date, from, to)) rows.push({ id: issue.id, masterId: issue.id, source: "issue", title: issue.title, description: issue.description, eventType: "other", startAt: issue.createdAt.toISOString(), endAt: issue.createdAt.toISOString(), date: date.date, startTime: date.time, endTime: date.time, allDay: false, areaCodeId: null, areaLabel: null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/issues/${issue.id}` });
+  }
+  for (const meeting of meetings) {
+    const start = parts(meeting.startAt), end = parts(meeting.endAt);
+    const attendeePeople: EventPerson[] = [{ id: meeting.userId, name: meeting.userName }, ...meeting.attendees.map((a) => ({ id: a.id, name: a.name }))];
+    const uniqueAttendees = [...new Map(attendeePeople.map((p) => [p.id, p])).values()];
+    if (start.date <= to && end.date >= from) rows.push({ id: meeting.id, masterId: meeting.id, source: "meeting", title: meeting.purpose, description: meeting.purpose, eventType: "meeting", startAt: meeting.startAt, endAt: meeting.endAt, date: start.date, startTime: start.time, endTime: end.time, allDay: false, areaCodeId: null, areaLabel: meeting.roomName, location: meeting.roomName, priority: "MEDIUM", isMilestone: false, isRecurring: meeting.recurring, occurrenceDate: null, recurrenceSummary: null, assignees: uniqueAttendees, groupTags: [], editable: false, sourceUrl: "/meetrooms" });
   }
   return rows.sort((a, b) => a.startAt.localeCompare(b.startAt));
 }

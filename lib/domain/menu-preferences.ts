@@ -6,7 +6,7 @@ export const DEFAULT_MENU_ITEMS = [
   { key: "work-logs", label: "업무일지" },
   { key: "calendar", label: "캘린더" },
   { key: "meetrooms", label: "회의실" },
-  { key: "items", label: "이슈 관리" },
+  { key: "issues", label: "이슈 관리" },
   { key: "requirements", label: "요구사항관리" },
   { key: "announcements", label: "공지사항" },
   { key: "weekly-reports", label: "위클리리포트" },

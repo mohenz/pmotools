@@ -7,7 +7,7 @@ import { MANAGEMENT_TASK_AXES, actionItemAxisBand, bandToAxisScore, scoreBand, t
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { getMemberRole, isManagerRole } from "@/lib/server/permissions";
 import { hasPmPmoAccess } from "@/lib/domain/job-access";
-import { assertWorkModuleGroup } from "@/lib/server/items";
+import { assertWorkModuleGroup } from "@/lib/server/groups";
 import { resolveWbsItemByDisplayId } from "@/lib/server/wbs";
 import { listCommonCodes } from "@/lib/server/common-codes";
 import { DomainError } from "@/lib/server/errors";

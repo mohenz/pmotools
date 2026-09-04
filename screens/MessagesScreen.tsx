@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { InvitationSummary } from "@/lib/server/messages";
 import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
 
@@ -20,44 +20,41 @@ function invitationPeriod(startAt: string, endAt: string, allDay: boolean) {
 
 function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
   const { refresh: refreshUnreadCount } = useUnreadMessageCount();
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
   const [read, setRead] = useState(invitation.isRead);
 
-  async function markRead() {
-    setPending(true); setError("");
-    const response = await fetch(`/api/v1/messages/${invitation.id}/view`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-    setPending(false);
-    if (!response.ok) { const payload = await response.json().catch(() => null); setError(payload?.error?.message ?? "초청을 확인하지 못했습니다."); return; }
-    setRead(true); refreshUnreadCount();
-  }
-
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && !read) void markRead();
-  }
+  useEffect(() => {
+    if (read) return;
+    let cancelled = false;
+    (async () => {
+      const response = await fetch(`/api/v1/messages/${invitation.id}/view`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (cancelled) return;
+      if (!response.ok) { const payload = await response.json().catch(() => null); setError(payload?.error?.message ?? "초청을 확인하지 못했습니다."); return; }
+      setRead(true); refreshUnreadCount();
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invitation.id]);
 
   return <div className={`message-row ${read ? "" : "unread"}`}>
-    <div className="message-row-head" onClick={toggle}>
+    <div className="message-row-head">
       <span className="message-row-sender"><b>{invitation.messageType === "CALENDAR_INVITATION" ? "일정 초청" : "회의실 예약 초청"} · </b>보낸 사람: {invitation.senderName} ({invitation.senderUserId})</span>
       {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation && <span className="message-row-schedule">
         <strong>{invitation.calendarInvitation.title}{invitation.calendarInvitation.isRecurring && " · 반복 일정"}</strong>
         <span>{invitationPeriod(invitation.calendarInvitation.startAt, invitation.calendarInvitation.endAt, invitation.calendarInvitation.allDay)}</span>
+      </span>}
+      {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation && (invitation.calendarInvitation.location || invitation.calendarEventId) && <span className="message-row-location-link">
+        {invitation.calendarInvitation.location && <span>장소: {invitation.calendarInvitation.location}</span>}
+        {invitation.calendarEventId && <Link className="button secondary small" href={`/calendar?view=day&date=${invitationDateKey(invitation.calendarInvitation.startAt)}&edit=${encodeURIComponent(invitation.calendarEventId)}`}>일정 보기</Link>}
       </span>}
       <span className="message-row-meta">
         <span className="mono">{new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short" }).format(new Date(invitation.createdAt))}</span>
         {!read && <span className="badge issue">미확인</span>}
       </span>
     </div>
-    {open && <div className="message-row-body">
+    {(invitation.messageType === "MEETING_INVITATION" || Boolean(invitation.calendarInvitation?.description) || Boolean(error)) && <div className="message-row-body">
       {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation ? <div className="message-invitation-detail">
-        <strong>{invitation.calendarInvitation.title}{invitation.calendarInvitation.isRecurring && " · 반복 일정"}</strong>
-        <p>{invitationPeriod(invitation.calendarInvitation.startAt, invitation.calendarInvitation.endAt, invitation.calendarInvitation.allDay)}</p>
-        {invitation.calendarInvitation.location && <p>장소: {invitation.calendarInvitation.location}</p>}
         {invitation.calendarInvitation.description && <p>{invitation.calendarInvitation.description}</p>}
-        {invitation.calendarEventId && <Link className="button secondary small" href={`/calendar?view=day&date=${invitationDateKey(invitation.calendarInvitation.startAt)}&edit=${encodeURIComponent(invitation.calendarEventId)}`}>일정 보기</Link>}
         {error && <p className="form-error">{error}</p>}
       </div> : invitation.messageType === "MEETING_INVITATION" && invitation.meetingInvitation ? <div className="message-invitation-detail">
         <strong>{invitation.meetingInvitation.roomName}</strong>
