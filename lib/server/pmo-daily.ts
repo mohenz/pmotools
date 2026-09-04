@@ -4,7 +4,7 @@ import { z } from "zod";
 import { delayedTaskCount, delayedTaskRate, overallProgress, scheduleProgress } from "@/lib/domain/pmo-daily";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
-import { assertWorkModuleGroup } from "@/lib/server/items";
+import { assertWorkModuleGroup } from "@/lib/server/groups";
 import { getWbsDailyTaskCounts, getWbsGroupTasks } from "@/lib/server/wbs";
 import { DomainError } from "@/lib/server/errors";
 
@@ -75,7 +75,7 @@ export async function getPmoDailyDashboard(projectId: string, reportDate: string
   const date = dateValue(reportDate);
   const [snapshot, issues, managementTasks, wbsDelayed] = await Promise.all([
     prisma.pmoDailySnapshot.findUnique({ where: { projectId_reportDate: { projectId, reportDate: date } } }),
-    prisma.item.findMany({ where: { projectId, archivedAt: null, status: { in: ["registered", "in_progress", "on_hold"] } }, include: { group: true }, orderBy: { updatedAt: "desc" }, take: 8 }),
+    prisma.issue.findMany({ where: { projectId, archivedAt: null, status: { in: ["OPEN", "IN_PROGRESS"] } }, include: { category: true }, orderBy: { updatedAt: "desc" }, take: 8 }),
     prisma.managementTask.findMany({ where: { projectId, archivedAt: null }, include: { group: true, assignees: { include: { user: true } } }, orderBy: { updatedAt: "desc" }, take: 8 }),
     getWbsGroupTasks(projectId, "", true),
   ]);
@@ -92,7 +92,7 @@ export async function getPmoDailyDashboard(projectId: string, reportDate: string
     metrics: { scheduleProgress: scheduleProgress(plannedTaskCount, actualTaskCount), delayedTaskCount: delayedCount, delayedRate: delayedTaskRate(delayedCount, plannedTaskCount), overallProgress: overallProgress(completedTaskCount, totalTaskCount, 0) },
     delayedTasks: wbsDelayedTop.map((item) => ({ id: item.id, code: item.code, name: item.name, stage: item.stage, ownerName: item.ownerName, groupLabel: item.groupLabel, dueDate: item.dueDate, actualDueDate: item.actualDueDate, delayDays: item.delayDays, delayRate: item.delayRate })),
     delayedTaskTotal: wbsDelayed.items.length,
-    issues: issues.map((item) => ({ id: item.id, displayId: item.displayId, title: item.title, groupLabel: item.group.label, ownerName: item.ownerText || "-", status: item.status, updatedAt: isoDate(item.updatedAt) })),
+    issues: issues.map((issue) => ({ id: issue.id, displayId: issue.displayId, title: issue.title, categoryLabel: issue.category.label, ownerName: issue.ownerName || "-", status: issue.status, updatedAt: isoDate(issue.updatedAt) })),
     managementTasks: managementTasks.map((task) => ({ id: task.id, displayId: task.displayId, name: task.name, groupLabel: task.group.label, assignees: task.assignees.map(({ user }) => user.name), status: task.status, totalScore: task.totalScore, band: task.band.toLowerCase() })),
   };
 }

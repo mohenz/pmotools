@@ -5,7 +5,7 @@ import { revalidateTag, unstable_cache } from "next/cache";
 import { averageScore, scoreBand, totalScore, wouldCreateCycle, type ManagementTaskEdge, type ManagementTaskPercents } from "@/lib/domain/management-tasks";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
-import { assertWorkModuleGroup } from "@/lib/server/items";
+import { assertWorkModuleGroup } from "@/lib/server/groups";
 import { DomainError } from "@/lib/server/errors";
 import { managementTaskTag } from "@/lib/server/cache-tags";
 import type { Prisma } from "@/lib/generated/prisma/client";

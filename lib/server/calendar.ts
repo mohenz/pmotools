@@ -57,18 +57,18 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
   if (query) progressAnd.push({ OR: [{ taskName: like(query) }, { planDetail: like(query) }, { nextPlan: like(query) }] });
   if (groupId) progressAnd.push({ groupId });
   const skipProgress = Boolean(assigneeId) || priority === "HIGH";
-  const skipItems = Boolean(assigneeId) || (priority !== undefined && priority !== "LOW");
+  // 이슈는 담당 Track(groupId)이 없고 우선순위가 LOW로 고정이라, groupId/assigneeId/우선순위 필터가 걸리면 매칭 불가능해 조회 자체를 생략한다.
+  const skipIssues = Boolean(assigneeId) || Boolean(groupId) || (priority !== undefined && priority !== "LOW");
 
-  const [events, progress, items, options] = await Promise.all([
+  const [events, progress, issues, options] = await Promise.all([
     prisma.calendarEvent.findMany({
       where: { projectId, OR: [{ recurrenceRule: { not: null } }, { AND: eventAnd }] },
       include: { assignees: { include: { user: true } }, groupTags: { include: { group: true } } },
     }),
     skipProgress ? [] : prisma.weeklyProgress.findMany({ where: { week: { projectId }, AND: progressAnd } }),
-    skipItems ? [] : prisma.item.findMany({
+    skipIssues ? [] : prisma.issue.findMany({
       where: {
         projectId, archivedAt: null, createdAt: { gte: paddedFrom, lte: paddedTo },
-        ...(groupId ? { groupId } : {}),
         ...(query ? { OR: [{ title: like(query) }, { description: like(query) }] } : {}),
       },
     }),
@@ -109,9 +109,9 @@ export async function listCalendarEvents(projectId: string, from: string, to: st
     if (planTargetDate && inRange(planTargetDate, from, to)) rows.push({ id: row.id, masterId: row.id, source: "progress", title: row.taskName, description: row.planDetail, eventType: "milestone", startAt: `${planTargetDate}T00:00:00.000Z`, endAt: `${planTargetDate}T00:00:00.000Z`, date: planTargetDate, startTime: "", endTime: "", allDay: true, areaCodeId: row.groupId, areaLabel: labels.get(row.groupId) ?? null, location: "", priority: "MEDIUM", isMilestone: true, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/weekly-progress?edit=${row.id}` });
     if (nextTargetDate && inRange(nextTargetDate, from, to)) rows.push({ id: row.id, masterId: row.id, source: "next_plan", title: row.taskName, description: row.nextPlan, eventType: "work", startAt: `${nextTargetDate}T00:00:00.000Z`, endAt: `${nextTargetDate}T00:00:00.000Z`, date: nextTargetDate, startTime: "", endTime: "", allDay: true, areaCodeId: row.groupId, areaLabel: labels.get(row.groupId) ?? null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/weekly-progress?edit=${row.id}` });
   }
-  for (const item of items) {
-    const date = parts(item.createdAt.toISOString());
-    if (inRange(date.date, from, to)) rows.push({ id: item.id, masterId: item.id, source: "issue", title: item.title, description: item.description, eventType: "other", startAt: item.createdAt.toISOString(), endAt: item.createdAt.toISOString(), date: date.date, startTime: date.time, endTime: date.time, allDay: false, areaCodeId: item.groupId, areaLabel: labels.get(item.groupId) ?? null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/items/${item.id}` });
+  for (const issue of issues) {
+    const date = parts(issue.createdAt.toISOString());
+    if (inRange(date.date, from, to)) rows.push({ id: issue.id, masterId: issue.id, source: "issue", title: issue.title, description: issue.description, eventType: "other", startAt: issue.createdAt.toISOString(), endAt: issue.createdAt.toISOString(), date: date.date, startTime: date.time, endTime: date.time, allDay: false, areaCodeId: null, areaLabel: null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/issues/${issue.id}` });
   }
   return rows.sort((a, b) => a.startAt.localeCompare(b.startAt));
 }

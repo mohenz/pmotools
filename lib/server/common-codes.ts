@@ -3,7 +3,7 @@ import { z } from "zod";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { getMemberRole } from "@/lib/server/permissions";
-import { DomainError } from "@/lib/server/items";
+import { DomainError } from "@/lib/server/errors";
 
 const codeOptionsTag = (projectId: string) => `common-codes:${projectId}`;
 
@@ -56,6 +56,8 @@ async function loadCodeOptions(projectId: string) {
     categories: codes.filter((code) => code.groupCode === "category"),
     tracks: tracks.sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko")),
     escalations: codes.filter((code) => code.groupCode === "escalation_level"),
+    issueTypes: codes.filter((code) => code.groupCode === "issue_type"),
+    reportLines: codes.filter((code) => code.groupCode === "report_line"),
   };
 }
 

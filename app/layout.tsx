@@ -3,7 +3,6 @@ import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { AuthenticatedAppShell } from "@/components/AuthenticatedAppShell";
 import { auth } from "@/lib/server/auth";
 import { listMenuPreferences } from "@/lib/server/menu-preferences";
-import { listDashboardAnnouncements } from "@/lib/server/announcements";
 import { hasWorkLogManagementAccess } from "@/lib/server/work-logs";
 import "./globals.css";
 
@@ -14,11 +13,10 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
-  const [menuPrefs, announcements, canManageWorkLogs] = session?.user ? await Promise.all([
+  const [menuPrefs, canManageWorkLogs] = session?.user ? await Promise.all([
     listMenuPreferences(session.user.projectId),
-    listDashboardAnnouncements(session.user.projectId, session.user.id),
     hasWorkLogManagementAccess(session.user.projectId, session.user.id),
-  ]) : [[], [], false];
+  ]) : [[], false];
   const themeScript = `(function(){try{var p=localStorage.getItem('pmo-control-theme')||'light';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.style.colorScheme=d}catch(e){}})()`;
   if (!session?.user) {
     return (
@@ -37,7 +35,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <AuthSessionProvider session={session}>
-          <AuthenticatedAppShell menuPrefs={menuPrefs} announcements={announcements} canManageWorkLogs={canManageWorkLogs}>
+          <AuthenticatedAppShell menuPrefs={menuPrefs} canManageWorkLogs={canManageWorkLogs}>
             {children}
           </AuthenticatedAppShell>
         </AuthSessionProvider>

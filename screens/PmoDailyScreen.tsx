@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { PmoDailyDashboard } from "@/lib/server/pmo-daily";
 
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "-");
-const ITEM_STATUS: Record<string, string> = { registered: "등록", in_progress: "대응중", resolved: "해결", on_hold: "보류" };
+const ISSUE_STATUS: Record<string, string> = { OPEN: "발생", IN_PROGRESS: "진행", CLOSED: "종결" };
 const MANAGEMENT_STATUS: Record<string, string> = { IDENTIFIED: "식별", IN_PROGRESS: "진행", ISSUE_TRANSFERRED: "이슈이관", RISK_TRANSFERRED: "리스크이관", CLOSED: "종료" };
 
 async function api(path: string, init: RequestInit) {
@@ -55,7 +55,7 @@ export function PmoDailyScreen({ data, mode }: { data: PmoDailyDashboard; mode: 
         </table>{!data.delayedTasks.length && <p className="empty">지연된 WBS TASK가 없습니다.</p>}</div>
       </section>
 
-      <section className="panel" id="issues"><div className="panel-head"><h2>3. 이슈관리</h2><Link className="button secondary" href="/items">전체 보기</Link></div><div className="table-wrap"><table><thead><tr><th>ID</th><th>이슈명</th><th>업무그룹</th><th>담당자</th><th>상태</th><th>최종수정일</th></tr></thead><tbody>{data.issues.map((item) => <tr key={item.id}><td className="mono"><Link className="table-link" href={`/items/${item.id}`}>{item.displayId}</Link></td><td>{item.title}</td><td>{item.groupLabel}</td><td>{item.ownerName}</td><td>{ITEM_STATUS[item.status]}</td><td>{item.updatedAt}</td></tr>)}</tbody></table>{!data.issues.length && <p className="empty">진행 중인 이슈가 없습니다.</p>}</div></section>
+      <section className="panel" id="issues"><div className="panel-head"><h2>3. 이슈관리</h2><Link className="button secondary" href="/issues">전체 보기</Link></div><div className="table-wrap"><table><thead><tr><th>ID</th><th>이슈명</th><th>이슈구분</th><th>담당자</th><th>상태</th><th>최종수정일</th></tr></thead><tbody>{data.issues.map((item) => <tr key={item.id}><td className="mono"><Link className="table-link" href={`/issues/${item.id}`}>{item.displayId}</Link></td><td>{item.title}</td><td>{item.categoryLabel}</td><td>{item.ownerName}</td><td>{ISSUE_STATUS[item.status]}</td><td>{item.updatedAt}</td></tr>)}</tbody></table>{!data.issues.length && <p className="empty">진행 중인 이슈가 없습니다.</p>}</div></section>
 
       <section className="panel" id="management"><div className="panel-head"><h2>4. 관리업무현황</h2><Link className="button secondary" href="/management-tasks">전체 보기</Link></div><div className="table-wrap"><table><thead><tr><th>ID</th><th>관리업무항목명</th><th>업무그룹</th><th>담당자</th><th>현황</th><th>총점</th><th>평가상태</th></tr></thead><tbody>{data.managementTasks.map((task) => <tr key={task.id}><td className="mono"><Link className="table-link" href={`/management-tasks/${task.id}`}>{task.displayId}</Link></td><td>{task.name}</td><td>{task.groupLabel}</td><td>{task.assignees.join(", ") || "-"}</td><td>{MANAGEMENT_STATUS[task.status]}</td><td className="mono management-task-score">{task.totalScore}점</td><td><span className={`badge band-${task.band}`}>{task.band === "red" ? "위험" : task.band === "yellow" ? "주의" : "양호"}</span></td></tr>)}</tbody></table>{!data.managementTasks.length && <p className="empty">등록된 관리업무가 없습니다.</p>}</div></section>
       {message && <p className="action-message pmo-message" role="status">{message}</p>}

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { probabilities, probabilityLabel } from "@/lib/domain/items";
+import { probabilities, probabilityLabel } from "@/lib/domain/levels";
 import { acceptanceLabel, acceptanceLabels } from "@/lib/domain/requirements";
 import type { RequirementRow } from "@/lib/server/requirements";
 import type { ProjectMemberOption } from "@/lib/server/users";

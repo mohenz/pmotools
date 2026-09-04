@@ -332,7 +332,7 @@ async function loadPortfolioDashboard(projectId: string) {
     prisma.weeklyProgress.aggregate({ where: scope, _avg: { progress: true } }),
     prisma.weeklyProgress.count({ where: { ...scope, progress: { lt: 100 }, planTargetDate: { lt: today } } }),
     prisma.staffChange.groupBy({ by: ["changeType"], where: scope, _sum: { currentCount: true, nextCount: true } }),
-    prisma.item.count({ where: { projectId, archivedAt: null, status: { in: ["registered", "in_progress"] } } }),
+    prisma.issue.count({ where: { projectId, archivedAt: null, status: { in: ["OPEN", "IN_PROGRESS"] } } }),
   ]);
   const signedSum = (field: "currentCount" | "nextCount") =>
     staffTotals.reduce((sum, row) => sum + (row.changeType === "join" ? 1 : -1) * (row._sum[field] ?? 0), 0);
