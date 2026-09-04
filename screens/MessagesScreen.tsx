@@ -50,8 +50,6 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
     </div>
     <div className="message-row-body">
       {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation ? <div className="message-invitation-detail">
-        <strong>{invitation.calendarInvitation.title}{invitation.calendarInvitation.isRecurring && " · 반복 일정"}</strong>
-        <p>{invitationPeriod(invitation.calendarInvitation.startAt, invitation.calendarInvitation.endAt, invitation.calendarInvitation.allDay)}</p>
         {invitation.calendarInvitation.location && <p>장소: {invitation.calendarInvitation.location}</p>}
         {invitation.calendarInvitation.description && <p>{invitation.calendarInvitation.description}</p>}
         {invitation.calendarEventId && <Link className="button secondary small" href={`/calendar?view=day&date=${invitationDateKey(invitation.calendarInvitation.startAt)}&edit=${encodeURIComponent(invitation.calendarEventId)}`}>일정 보기</Link>}
