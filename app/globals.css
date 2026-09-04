@@ -282,6 +282,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .panel-head-icon:hover { background: var(--accent); color: var(--foreground); }
 .invitation-list { display: flex; flex-direction: column; }
 .invitation-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--foreground); }
+.invitation-row-icon { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-foreground); }
 .invitation-row:last-child { border-bottom: 0; }
 .invitation-row:hover { background: var(--accent); }
 .invitation-row-title { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
