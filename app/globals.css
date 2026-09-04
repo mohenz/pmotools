@@ -288,7 +288,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .invitation-row-title { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .invitation-row-location { flex-shrink: 1; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; }
 .invitation-row-sender { flex-shrink: 0; color: var(--muted-foreground); font-size: 12px; }
-.invitation-row time { flex-shrink: 0; margin-left: auto; color: var(--muted-foreground); font-size: 11px; }
+.invitation-row time { flex-shrink: 0; color: var(--muted-foreground); font-size: 11px; }
 
 .matrix-layout { display: flex; align-items: center; gap: 24px; }
 .matrix { display: grid; width: min(100%, 510px); grid-template-columns: 68px repeat(3, 1fr); gap: 6px; }
