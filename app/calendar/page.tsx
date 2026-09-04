@@ -77,7 +77,7 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
         </section>})}</div>}
         {view==="agenda"&&<div className="calendar-agenda">{r.cells.map(d=>{const key=iso(d);const dayEvents=byDate[key]??[];if(!dayEvents.length)return null;return <div className="calendar-agenda-day" key={key}><header>{new Intl.DateTimeFormat("ko-KR",{month:"long",day:"numeric",weekday:"short",timeZone:"UTC"}).format(d)}</header><div>{dayEvents.map(e=><EventLink event={e} base={base} canNavigate={canWrite} key={`${e.source}-${e.id}`}/>)}</div></div>})}{!events.length&&<p className="empty">이 달에는 일정이 없습니다.</p>}</div>}
       </section>
-      <div className="calendar-legend"><span><i className="priority-high"/>우선순위 상</span><span><i className="priority-medium"/>우선순위 중</span><span><i className="priority-low"/>우선순위 하</span><span><i className="progress"/>목표일</span><span><i className="next_plan"/>차주 계획</span><span><i className="issue"/>이슈</span><span>★ 마일스톤</span><span>↻ 반복 일정</span></div>
+      <div className="calendar-legend"><span><i className="priority-high"/>우선순위 상</span><span><i className="priority-medium"/>우선순위 중</span><span><i className="priority-low"/>우선순위 하</span><span><i className="progress"/>목표일</span><span><i className="next_plan"/>차주 계획</span><span><i className="issue"/>이슈</span><span><i className="meeting"/>회의실 예약</span><span>★ 마일스톤</span><span>↻ 반복 일정</span></div>
     </div>
     {((newDate&&canWrite)||edit)&&<CalendarModal title={edit?(canModifyEvent?"일정 수정":"일정 보기"):"일정 등록"} returnUrl={base}><CalendarEventForm areas={codes.tracks} members={members} event={edit} selectedDate={newDate??edit?.date??iso(selected)} selectedTime={newTime} returnUrl={base} canWrite={edit?canModifyEvent:canWrite}/></CalendarModal>}
   </>;

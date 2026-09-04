@@ -422,19 +422,28 @@ export function getWbsWeeklyStats(projectId: string, startDate: string, endDate:
 export type WbsDailyTaskCounts = { plannedTaskCount: number; actualTaskCount: number; totalTaskCount: number; completedTaskCount: number };
 
 // PMO Daily "1. 공정현황" 신규 작성 화면 자동 채움 — leaf 항목을 기준일(asOfDate) 시점으로 집계한다.
-// 계획 TASK 수 = DueDate가 기준일 이전(포함)인 leaf 항목(주간 통계의 계획(건)과 동일 기준을 기준일 하루로 적용),
-// 실적 TASK 수 = 그중 실적(actualProgress)이 100%인 항목, 완료 TASK = 기준일과 무관하게 실적이 100%인 전체 leaf 항목.
+// 계획 TASK 수 = DueDate가 기준일과 정확히 같은(=오늘종료예정) leaf 항목, 실적 TASK 수 = 그중 실적(actualProgress)이
+// 100%인(=종료된) 항목, 지연 TASK 수(공정현황의 자동계산 지표) = 계획 TASK 수 - 실적 TASK 수(=미종료 항목 수).
+// 완료 TASK = 기준일과 무관하게 실적이 100%인 전체 leaf 항목(전체 공정률 산정용, 기준일 범위와 무관).
 export async function getWbsDailyTaskCounts(projectId: string, asOfDate: string): Promise<WbsDailyTaskCounts> {
   const items = await listWbsItems(projectId);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  const plannedRows = leaves.filter((item) => item.dueDate !== null && item.dueDate <= asOfDate);
+  const dueTodayRows = leaves.filter((item) => item.dueDate === asOfDate);
   return {
-    plannedTaskCount: plannedRows.length,
-    actualTaskCount: plannedRows.filter((item) => item.actualProgress >= 1).length,
+    plannedTaskCount: dueTodayRows.length,
+    actualTaskCount: dueTodayRows.filter((item) => item.actualProgress >= 1).length,
     totalTaskCount: leaves.length,
     completedTaskCount: leaves.filter((item) => item.actualProgress >= 1).length,
   };
+}
+
+// PMO Daily "2. 지연 TASK" — 오늘종료예정(DueDate === asOfDate) leaf 항목 중 아직 종료되지 않은(actualProgress < 100%) 것만 나열한다.
+export async function getWbsDueTodayIncompleteTasks(projectId: string, asOfDate: string) {
+  const items = await listWbsItems(projectId);
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  const leaves = items.filter((item) => !parentIds.has(item.id));
+  return leaves.filter((item) => item.dueDate === asOfDate && item.actualProgress < 1);
 }
 
 // 업무그룹별 통계 화면의 업무그룹명·지연율 클릭 진입점 — 해당 업무그룹(담당자 기준) leaf 항목을 그대로 나열한다.

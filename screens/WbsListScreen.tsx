@@ -1,8 +1,19 @@
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
 import { sortKeyFromCode } from "@/lib/domain/wbs";
-import { WBS_EXCEL_HEADERS as HEADERS } from "@/lib/server/wbs";
+import { WBS_EXCEL_HEADERS as HEADERS, WBS_EXCEL_ROLE_NAMES } from "@/lib/server/wbs";
 import type { WbsExcelListResult } from "@/lib/server/wbs";
+
+// 목록 화면에서는 숨기되(엑셀 다운로드/업로드용 HEADERS 원본은 그대로 유지) — 입력 불필요 항목·역할별 권한/진도율 매트릭스는
+// 목록을 지나치게 넓게 만들어 화면에서 뺀다(2026-09-04 사용자 요청).
+const HIDDEN_HEADERS = new Set<string>([
+  "사용자ID", "StartDate", "DueDate", "Deliverables(이슈 및 사유)",
+  "공식여부(입력불필요)", "파일위치(입력불필요)", "트랜젝션코드(정렬SEQ)",
+  "산출물템플릿(입력불필요)", "검수자(입력불필요)", "검수실행일(입력불필요)",
+  "계산 가중치(입력불필요)", "가중치(입력불필요)", "Sort(Working Day)",
+  ...WBS_EXCEL_ROLE_NAMES.map((role) => `${role}(진척등록권한)`),
+  ...WBS_EXCEL_ROLE_NAMES.map((role) => `${role}(진도율)`),
+]);
 
 type Filters = {
   page: number; pageSize: number | "all"; q: string; assignee: string;
@@ -41,7 +52,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
         </form>
       </section>
       <section className="panel compact">
-        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => h !== "사용자ID").map((h) => <th key={h}>{displayHeader(h)}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th><th>지연여부</th></tr></thead>
+        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => !HIDDEN_HEADERS.has(h)).map((h) => <th key={h}>{displayHeader(h)}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th><th>지연여부</th></tr></thead>
           <tbody>{result.rows.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} className={item.isDelayed ? "high-risk-row" : undefined} key={item.id}>
             <td>{item.level}</td>
             <td className="mono">{sortKeyFromCode(item.code)}</td>
@@ -54,21 +65,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
             <td>{item.isLeaf ? 1 : ""}</td>
             <td>{item.ownerUserId && item.ownerLoginId ? <Link className="table-link" href={`/wbs/by-owner/${item.ownerLoginId}`}>{item.ownerName}</Link> : (item.ownerName ?? "")}</td>
             <td>{item.groupLabel ?? ""}</td>
-            <td>{dot(item.startDate)}</td>
-            <td>{dot(item.dueDate)}</td>
-            <td>{item.deliverable?.note ?? ""}</td>
-            <td>{item.deliverable?.isOfficial ? "Y" : ""}</td>
-            <td>{item.deliverable?.fileUrl ?? ""}</td>
-            <td className="mono">{item.sequenceNo}</td>
-            <td>{item.deliverable?.templateUrl ?? ""}</td>
-            <td>{item.deliverable?.reviewerName ?? ""}</td>
-            <td>{dot(item.deliverable?.reviewedAt ?? null)}</td>
-            <td>{item.workingDays ?? ""}</td>
-            <td>{item.weight ?? item.workingDays ?? ""}</td>
-            <td>{item.workingDays ?? ""}</td>
             <td>{Math.round(item.actualProgress * 100)}</td>
-            {item.roles.map((role) => <td key={`perm-${role.role}`}>{role.hasPermission ? 1 : ""}</td>)}
-            {item.roles.map((role) => <td key={`pct-${role.role}`}>{role.progressPercent}</td>)}
             <td>{pct(item.plannedProgress)}</td>
             <td>{pct(item.actualProgress)}</td>
             <td>{pct(item.progressIndex)}</td>

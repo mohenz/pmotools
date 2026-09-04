@@ -707,6 +707,7 @@ a.history-item:hover { background: var(--accent); }
 .calendar-event.event-progress { border-color: var(--warning); background: var(--warning-bg); }
 .calendar-event.event-next_plan { border-color: var(--success); background: var(--success-bg); }
 .calendar-event.event-issue { border-color: var(--destructive); background: var(--destructive-bg); }
+.calendar-event.event-meeting { border-color: var(--info); background: var(--info-bg); }
 .calendar-event.event-schedule.priority-high { border-color: var(--destructive); background: var(--destructive-bg); }
 .calendar-event.event-schedule.priority-medium { border-color: var(--warning); background: var(--warning-bg); }
 .calendar-event.event-schedule.priority-low { border-color: var(--success); background: var(--success-bg); }
@@ -733,7 +734,7 @@ a.history-item:hover { background: var(--accent); }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted-foreground); font-size: 11px; }
 .calendar-legend span { display: flex; align-items: center; gap: 5px; }
 .calendar-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--primary); }
-.calendar-legend i.progress { background: var(--warning); }.calendar-legend i.next_plan { background: var(--success); }.calendar-legend i.issue { background: var(--destructive); }
+.calendar-legend i.progress { background: var(--warning); }.calendar-legend i.next_plan { background: var(--success); }.calendar-legend i.issue { background: var(--destructive); }.calendar-legend i.meeting { background: var(--info); }
 .calendar-legend i.priority-high { background: var(--destructive); }.calendar-legend i.priority-medium { background: var(--warning); }.calendar-legend i.priority-low { background: var(--success); }
 .milestone-list { display: grid; gap: 8px; }
 .milestone-row { display: grid; grid-template-columns: 90px 1fr 80px; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
