@@ -43,16 +43,18 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
         <strong>{invitation.calendarInvitation.title}{invitation.calendarInvitation.isRecurring && " · 반복 일정"}</strong>
         <span>{invitationPeriod(invitation.calendarInvitation.startAt, invitation.calendarInvitation.endAt, invitation.calendarInvitation.allDay)}</span>
       </span>}
+      {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation && (invitation.calendarInvitation.location || invitation.calendarEventId) && <span className="message-row-location-link">
+        {invitation.calendarInvitation.location && <span>장소: {invitation.calendarInvitation.location}</span>}
+        {invitation.calendarEventId && <Link className="button secondary small" href={`/calendar?view=day&date=${invitationDateKey(invitation.calendarInvitation.startAt)}&edit=${encodeURIComponent(invitation.calendarEventId)}`}>일정 보기</Link>}
+      </span>}
       <span className="message-row-meta">
         <span className="mono">{new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short" }).format(new Date(invitation.createdAt))}</span>
         {!read && <span className="badge issue">미확인</span>}
       </span>
     </div>
-    <div className="message-row-body">
+    {(invitation.messageType === "MEETING_INVITATION" || Boolean(invitation.calendarInvitation?.description) || Boolean(error)) && <div className="message-row-body">
       {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation ? <div className="message-invitation-detail">
-        {invitation.calendarInvitation.location && <p>장소: {invitation.calendarInvitation.location}</p>}
         {invitation.calendarInvitation.description && <p>{invitation.calendarInvitation.description}</p>}
-        {invitation.calendarEventId && <Link className="button secondary small" href={`/calendar?view=day&date=${invitationDateKey(invitation.calendarInvitation.startAt)}&edit=${encodeURIComponent(invitation.calendarEventId)}`}>일정 보기</Link>}
         {error && <p className="form-error">{error}</p>}
       </div> : invitation.messageType === "MEETING_INVITATION" && invitation.meetingInvitation ? <div className="message-invitation-detail">
         <strong>{invitation.meetingInvitation.roomName}</strong>
@@ -62,7 +64,7 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
         <Link className="button secondary small" href="/meetrooms">예약 보기</Link>
         {error && <p className="form-error">{error}</p>}
       </div> : null}
-    </div>
+    </div>}
   </div>;
 }
 

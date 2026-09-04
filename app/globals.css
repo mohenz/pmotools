@@ -756,12 +756,13 @@ a.history-item:hover { background: var(--accent); }
 .change-actions input { flex: 1; min-width: 160px; }
 .message-row { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); overflow: hidden; }
 .message-row.unread { border-color: var(--primary); }
-.message-row-head { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) auto; align-items: center; gap: 10px 18px; padding: 10px 14px; font-size: 13px; }
-.message-row-sender { min-width: 0; }
-.message-row-schedule { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.message-row-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; font-size: 13px; }
+.message-row-sender { flex: 1 1 200px; min-width: 0; }
+.message-row-schedule { display: flex; flex: 1 1 220px; align-items: baseline; gap: 8px; min-width: 0; }
 .message-row-schedule strong { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .message-row-schedule > span { flex-shrink: 0; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; }
-.message-row-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; }
+.message-row-location-link { display: flex; flex: 0 1 auto; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; }
+.message-row-meta { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; white-space: nowrap; }
 .message-row-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
 .message-invitation-detail { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding-top: 12px; }
 .message-invitation-detail strong { font-size: 14px; }
@@ -1025,8 +1026,9 @@ a.history-item:hover { background: var(--accent); }
   .settings-nav span { display: block; }
   .topbar { padding: 12px 16px; }
   .content { padding: 16px; }
-  .message-row-head { grid-template-columns: 1fr; gap: 8px; }
-  .message-row-meta { justify-content: space-between; }
+  .message-row-head { gap: 6px 12px; }
+  .message-row-sender, .message-row-schedule, .message-row-location-link { flex-basis: 100%; }
+  .message-row-meta { flex-basis: 100%; justify-content: space-between; margin-left: 0; }
   .kpi-grid, .form-grid, .action-grid, .detail-summary dl { grid-template-columns: 1fr; }
   .kpi-grid.kpi-grid-5 { grid-template-columns: 1fr; }
   .detail-summary dl > div:first-child { grid-column: auto; }
