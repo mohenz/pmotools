@@ -420,6 +420,9 @@ td.mono, td[data-numeric] { text-align: right; }
 .filters.inline-filter { display: flex; flex-wrap: nowrap; align-items: center; overflow-x: auto; }
 .filters.inline-filter label { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; white-space: nowrap; }
 .filters.inline-filter input,.filters.inline-filter select { width: auto; min-width: 0; }
+.wbs-date-range { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; white-space: nowrap; }
+.wbs-date-range legend { padding: 0; color: var(--foreground); font-size: 13px; }
+.wbs-date-range span { color: var(--muted-foreground); }
 .filters.inline-filter button,.filters.inline-filter .button { flex: 0 0 auto; }
 .filters .filter-primary-action { margin-left: auto; }
 .announcement-search > input { flex: 1 1 260px; }

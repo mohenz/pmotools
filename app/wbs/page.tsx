@@ -11,7 +11,11 @@ export default async function WbsPage({ searchParams }: { searchParams: Promise<
   const pageSize = value("pageSize") === "all" ? "all" as const : [10, 20, 40, 60, 80, 100].includes(Number(value("pageSize"))) ? Number(value("pageSize")) : 10;
   const filters = {
     page: Number(value("page")) || 1, pageSize, q: value("q"), assignee: value("assignee"),
-    startDate: value("startDate"), dueDate: value("dueDate"), groupLabel: value("groupLabel"),
+    startDateFrom: value("startDateFrom"), startDateTo: value("startDateTo"),
+    dueDateFrom: value("dueDateFrom"), dueDateTo: value("dueDateTo"),
+    actualStartDateFrom: value("actualStartDateFrom"), actualStartDateTo: value("actualStartDateTo"),
+    actualDueDateFrom: value("actualDueDateFrom"), actualDueDateTo: value("actualDueDateTo"),
+    groupLabel: value("groupLabel"),
     delayed: (value("delayed") === "y" || value("delayed") === "n" ? value("delayed") : "") as "" | "y" | "n",
     plannedMin: numberOrUndefined("plannedMin"), actualMin: numberOrUndefined("actualMin"), progressMin: numberOrUndefined("progressMin"),
   };

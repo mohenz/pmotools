@@ -164,7 +164,9 @@ export async function listWbsItems(projectId: string): Promise<WbsItemRow[]> {
 
 export type WbsListFilters = {
   page?: number; pageSize?: number | "all"; q?: string; assignee?: string;
-  startDate?: string; dueDate?: string; groupLabel?: string; delayed?: "" | "y" | "n";
+  startDateFrom?: string; startDateTo?: string; dueDateFrom?: string; dueDateTo?: string;
+  actualStartDateFrom?: string; actualStartDateTo?: string; actualDueDateFrom?: string; actualDueDateTo?: string;
+  groupLabel?: string; delayed?: "" | "y" | "n";
   plannedMin?: number; actualMin?: number; progressMin?: number;
 };
 
@@ -195,23 +197,27 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   });
   const q = filters.q?.trim().toLowerCase() ?? "";
   const assignee = filters.assignee?.trim().toLowerCase() ?? "";
-  const startDate = filters.startDate?.trim() ?? "";
-  const dueDate = filters.dueDate?.trim() ?? "";
+  const startDateFrom = filters.startDateFrom?.trim() ?? "", startDateTo = filters.startDateTo?.trim() ?? "";
+  const dueDateFrom = filters.dueDateFrom?.trim() ?? "", dueDateTo = filters.dueDateTo?.trim() ?? "";
+  const actualStartDateFrom = filters.actualStartDateFrom?.trim() ?? "", actualStartDateTo = filters.actualStartDateTo?.trim() ?? "";
+  const actualDueDateFrom = filters.actualDueDateFrom?.trim() ?? "", actualDueDateTo = filters.actualDueDateTo?.trim() ?? "";
   const groupLabel = filters.groupLabel?.trim().toLowerCase() ?? "";
   const delayed = filters.delayed ?? "";
   const { plannedMin, actualMin, progressMin } = filters;
+  const inRange = (value: string | null, from: string, to: string) => (!from && !to) || (value !== null && (!from || value >= from) && (!to || value <= to));
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
     const matchesAssignee = !assignee || (row.ownerName ?? "").toLowerCase().includes(assignee);
-    // 시작일·종료일 필터 = 조회 구간 경계 — Task 자신의 StartDate·DueDate가 모두 그 구간 안에 있어야 매치한다(일부만 겹치는 항목은 제외).
-    const matchesStartDate = !startDate || (row.startDate !== null && row.startDate >= startDate);
-    const matchesDueDate = !dueDate || (row.dueDate !== null && row.dueDate <= dueDate);
+    const matchesStartDate = inRange(row.startDate, startDateFrom, startDateTo);
+    const matchesDueDate = inRange(row.dueDate, dueDateFrom, dueDateTo);
+    const matchesActualStartDate = inRange(row.actualStartDate, actualStartDateFrom, actualStartDateTo);
+    const matchesActualDueDate = inRange(row.actualDueDate, actualDueDateFrom, actualDueDateTo);
     const matchesGroupLabel = !groupLabel || (row.groupLabel ?? "").toLowerCase().includes(groupLabel);
     const matchesDelayed = !delayed || (delayed === "y" ? row.isDelayed : !row.isDelayed);
     const matchesPlanned = plannedMin == null || (row.plannedProgress ?? 0) * 100 >= plannedMin;
     const matchesActual = actualMin == null || row.actualProgress * 100 >= actualMin;
     const matchesProgress = progressMin == null || (row.progressIndex ?? 0) * 100 >= progressMin;
-    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesGroupLabel && matchesDelayed && matchesPlanned && matchesActual && matchesProgress;
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesGroupLabel && matchesDelayed && matchesPlanned && matchesActual && matchesProgress;
   });
   const total = filteredRows.length;
   const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 10));
