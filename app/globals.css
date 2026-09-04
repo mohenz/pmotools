@@ -477,6 +477,9 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .action-item-axis .panel-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 600 var(--text-md) var(--font-sans); }
 .action-item-table td, .action-item-table th { vertical-align: top; }
 .action-item-add-form { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--muted); }
+.action-item-fields label { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; color: var(--foreground); font-size: 14px; font-weight: 500; }
+.action-item-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 10px; }
+.action-item-edit-form { margin: 4px 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--muted); }
 
 .prewrap { white-space: pre-wrap; }
 .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

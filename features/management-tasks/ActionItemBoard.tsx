@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { ACTION_ITEM_STATUSES } from "@/lib/domain/action-items";
 import { BAND_LABEL } from "@/lib/domain/management-tasks";
 import type { ActionItemRow, ManagementTaskAxisActionItems } from "@/lib/server/action-items";
@@ -55,17 +54,6 @@ function AxisPanel({ taskId, axis, groups, members, categories }: { taskId: stri
     setEditingId(null); router.refresh();
   }
 
-  async function archive(item: ActionItemRow) {
-    setPending(true); setMessage("");
-    const response = await fetch(`/api/v1/management-tasks/${taskId}/action-items/${item.id}`, {
-      method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: item.version }),
-    });
-    const payload = await response.json().catch(() => null);
-    setPending(false);
-    if (!response.ok) { setMessage(payload?.error?.message ?? "보관하지 못했습니다."); return; }
-    router.refresh();
-  }
-
   return <article className="panel-section action-item-axis">
     <div className="panel-head">
       <h3>{axis.label} <span className={`badge band-${axis.band}`}>{BAND_LABEL[axis.band]}</span></h3>
@@ -76,7 +64,7 @@ function AxisPanel({ taskId, axis, groups, members, categories }: { taskId: stri
         <th>번호</th><th>구분</th><th>액션아이템명</th><th>우선순위</th><th>중요도</th><th>업무그룹</th><th>담당자</th><th>기한</th><th>상태</th><th>WBS ID</th><th>비고</th><th></th>
       </tr></thead><tbody>
         {axis.actionItems.map((item) => editingId === item.id
-          ? <tr key={item.id}><td colSpan={12}><form onSubmit={(e) => submitUpdate(e, item)}><ActionItemFields defaults={item} groups={groups} members={members} categories={categories} />
+          ? <tr key={item.id}><td colSpan={12}><form onSubmit={(e) => submitUpdate(e, item)} className="action-item-edit-form"><ActionItemFields defaults={item} groups={groups} members={members} categories={categories} />
               <div className="form-actions"><button type="submit" className="button primary" disabled={pending}>저장</button><button type="button" className="button secondary" onClick={() => setEditingId(null)}>취소</button></div>
             </form></td></tr>
           : <tr key={item.id}>
@@ -84,20 +72,7 @@ function AxisPanel({ taskId, axis, groups, members, categories }: { taskId: stri
               <td>{PRIORITY_OPTIONS.find((p) => p.value === item.priority)?.label}</td><td>{PRIORITY_OPTIONS.find((p) => p.value === item.importance)?.label}</td>
               <td>{item.groupLabel}</td><td>{item.assigneeName}</td><td>{item.dueDate ?? "-"}</td>
               <td>{ACTION_ITEM_STATUSES.find((s) => s.value === item.status)?.label}</td><td>{item.wbsItemDisplayId ?? "-"}</td><td className="prewrap">{item.note || "-"}</td>
-              <td><button type="button" className="button secondary" disabled={pending} onClick={() => { setEditingId(item.id); setAdding(false); }}>수정</button> <AlertDialog.Root>
-                <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={pending}>보관</button></AlertDialog.Trigger>
-                <AlertDialog.Portal>
-                  <AlertDialog.Overlay className="calendar-modal-backdrop" />
-                  <AlertDialog.Content className="alert-dialog">
-                    <AlertDialog.Title asChild><h2>&quot;{item.name}&quot; 액션아이템을 보관 처리하시겠습니까?</h2></AlertDialog.Title>
-                    <AlertDialog.Description asChild><p>보관하면 목록·세부항목 밴드 계산에서 제외됩니다.</p></AlertDialog.Description>
-                    <div className="alert-dialog-actions">
-                      <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
-                      <AlertDialog.Action asChild><button className="button danger" type="button" onClick={() => archive(item)}>보관 처리</button></AlertDialog.Action>
-                    </div>
-                  </AlertDialog.Content>
-                </AlertDialog.Portal>
-              </AlertDialog.Root></td>
+              <td><button type="button" className="button secondary" disabled={pending} onClick={() => { setEditingId(item.id); setAdding(false); }}>수정</button></td>
             </tr>)}
       </tbody></table></div>
     )}
