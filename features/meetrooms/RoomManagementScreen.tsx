@@ -13,10 +13,8 @@ export function RoomManagementScreen({ initialRooms }: { initialRooms: Room[] })
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: "", roomType: "SMALL" as "LARGE" | "SMALL", capacity: 6, floor: "", equipment: "", isActive: true });
 
-  async function refresh() { setRooms(await api("/api/v1/meeting-rooms?archived=1")); router.refresh(); }
+  async function refresh() { setRooms(await api("/api/v1/meeting-rooms")); router.refresh(); }
   async function create(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = e.currentTarget; const f = new FormData(form); try { await api("/api/v1/meeting-rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: f.get("name"), roomType: f.get("roomType"), capacity: Number(f.get("capacity")), floor: f.get("floor") || null, equipment: String(f.get("equipment") || "").split(",").map((x) => x.trim()).filter(Boolean) }) }); form.reset(); await refresh(); setMessage("회의실을 추가했습니다."); } catch (err) { setMessage((err as Error).message); } }
-  async function remove(r: Room) { if (!confirm(`${r.name}을 삭제하시겠습니까?`)) return; try { const result = await api(`/api/v1/meeting-rooms/${r.id}`, { method: "DELETE" }); await refresh(); setMessage(result.mode === "archived" ? "보관 처리했습니다." : "삭제했습니다."); } catch (err) { setMessage((err as Error).message); } }
-  async function restore(id: string) { await api(`/api/v1/meeting-rooms/${id}/restore`, { method: "POST" }); await refresh(); }
   function startEdit(r: Room) { setEditingId(r.id); setDraft({ name: r.name, roomType: r.roomType, capacity: r.capacity, floor: r.floor ?? "", equipment: r.equipment.join(", "), isActive: r.isActive }); }
   async function saveEdit(e: FormEvent<HTMLFormElement>, id: string) { e.preventDefault(); try { await api(`/api/v1/meeting-rooms/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: draft.name, roomType: draft.roomType, capacity: draft.capacity, floor: draft.floor || null, equipment: draft.equipment.split(",").map((x) => x.trim()).filter(Boolean), isActive: draft.isActive }) }); setEditingId(null); await refresh(); setMessage("회의실 정보를 저장했습니다."); } catch (err) { setMessage((err as Error).message); } }
 
@@ -42,7 +40,7 @@ export function RoomManagementScreen({ initialRooms }: { initialRooms: Room[] })
             <label className="toggle"><input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })} /> 사용 가능</label>
             <div className="topbar-actions"><button className="button primary" type="submit">저장</button><button className="button secondary" type="button" onClick={() => setEditingId(null)}>취소</button></div>
           </form>
-          : <article className={r.deletedAt ? "archived" : ""} key={r.id}><div><strong>{r.name}</strong><p>{r.roomType === "LARGE" ? "대회의실" : "소회의실"} · {r.capacity}명 · {r.floor ?? "-"}{!r.isActive && !r.deletedAt ? " · 사용중지" : ""}</p></div><div className="topbar-actions">{!r.deletedAt && <button className="button secondary" onClick={() => startEdit(r)}>수정</button>}{r.deletedAt ? <button className="button secondary" onClick={() => restore(r.id)}>복원</button> : <button className="button danger" onClick={() => remove(r)}>삭제</button>}</div></article>
+          : <article key={r.id}><div><strong>{r.name}</strong><p>{r.roomType === "LARGE" ? "대회의실" : "소회의실"} · {r.capacity}명 · {r.floor ?? "-"}{!r.isActive ? " · 사용중지" : ""}</p></div><div className="topbar-actions"><button className="button secondary" onClick={() => startEdit(r)}>수정</button></div></article>
         )}</div></section>
       </div>
     </div>

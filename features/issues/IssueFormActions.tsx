@@ -118,9 +118,6 @@ export function IssueFormActions({ issue, options, members }: { issue: IssueRow;
   async function deleteEntry(entryId: string) {
     await mutate(`/api/v1/issues/${issue.id}/progress/${entryId}`, "DELETE", null, `delete-${entryId}`);
   }
-  async function archive() {
-    if (await mutate(`/api/v1/issues/${issue.id}/archive`, "POST", {}, "archive")) router.push("/issues");
-  }
 
   return <>
     <section className="panel action-panel">
@@ -173,23 +170,6 @@ export function IssueFormActions({ issue, options, members }: { issue: IssueRow;
         </div>
       ) : <button className="button primary" type="button" onClick={() => setShowAddForm(true)}>+ 진행 이력 추가</button>}
       {message && <p className="form-error action-message" role="alert">{message}</p>}
-    </section>
-
-    <section className="danger-zone"><div><strong>이슈 보관</strong><p>{issue.status === "CLOSED" ? "보관된 이슈는 목록에서 제외됩니다." : "이슈가 종결되기 전까지는 일련번호가 계속 관리되어야 하므로, 진행 이력의 상태를 먼저 종결로 남겨야 보관할 수 있습니다."}</p></div>
-      <AlertDialog.Root>
-        <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={!!pending || issue.status !== "CLOSED"}>{pending === "archive" ? "처리 중…" : "보관 처리"}</button></AlertDialog.Trigger>
-        <AlertDialog.Portal>
-          <AlertDialog.Overlay className="calendar-modal-backdrop" />
-          <AlertDialog.Content className="alert-dialog">
-            <AlertDialog.Title asChild><h2>이 이슈를 보관 처리하시겠습니까?</h2></AlertDialog.Title>
-            <AlertDialog.Description asChild><p>보관하면 목록에서 제외됩니다. 이후 필요 시 관리자가 복원할 수 있습니다.</p></AlertDialog.Description>
-            <div className="alert-dialog-actions">
-              <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
-              <AlertDialog.Action asChild><button className="button danger" type="button" onClick={archive}>보관 처리</button></AlertDialog.Action>
-            </div>
-          </AlertDialog.Content>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
     </section>
   </>;
 }

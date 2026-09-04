@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { WBS_ITEM_STATUSES, isSameOrDescendantPath, sortKeyFromCode } from "@/lib/domain/wbs";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ProjectMemberOption } from "@/lib/server/users";
@@ -46,10 +45,6 @@ export function WbsDetailActions({ item, items, groups, members, assignments, de
       configStatus: form.get("configStatus"), weight: form.get("weight") ? Number(form.get("weight")) : null,
     }, "details");
     if (saved) { router.push(`/wbs/${item.id}`); router.refresh(); }
-  }
-
-  async function archive() {
-    if (await mutate(`/api/v1/wbs-items/${item.id}/archive`, "POST", {}, "archive")) { router.push("/wbs"); router.refresh(); }
   }
 
   async function saveAssignments(event: FormEvent<HTMLFormElement>) {
@@ -143,21 +138,5 @@ export function WbsDetailActions({ item, items, groups, members, assignments, de
     </form></section>
 
     {message && <p className="form-error action-message" role="alert">{message}</p>}
-    <section className="danger-zone"><div><strong>항목 보관</strong><p>보관하면 하위 항목을 포함해 목록·조회에서 제외됩니다.</p></div>
-      <AlertDialog.Root>
-        <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={!!pending}>{pending === "archive" ? "처리 중…" : "보관 처리"}</button></AlertDialog.Trigger>
-        <AlertDialog.Portal>
-          <AlertDialog.Overlay className="calendar-modal-backdrop" />
-          <AlertDialog.Content className="alert-dialog">
-            <AlertDialog.Title asChild><h2>이 항목을 보관 처리하시겠습니까?</h2></AlertDialog.Title>
-            <AlertDialog.Description asChild><p>하위 항목을 포함해 목록·조회에서 제외됩니다.</p></AlertDialog.Description>
-            <div className="alert-dialog-actions">
-              <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
-              <AlertDialog.Action asChild><button className="button danger" type="button" onClick={archive}>보관 처리</button></AlertDialog.Action>
-            </div>
-          </AlertDialog.Content>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
-    </section>
   </>;
 }
