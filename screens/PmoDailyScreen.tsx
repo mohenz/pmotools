@@ -50,8 +50,8 @@ export function PmoDailyScreen({ data, mode }: { data: PmoDailyDashboard; mode: 
       </section>
 
       <section className="panel" id="delayed"><div className="panel-head"><h2>2. 지연 TASK</h2><span>오늘종료예정 미종료 {data.delayedTaskTotal}건</span></div>
-        <div className="table-wrap"><table><thead><tr><th>Task</th><th>Task명</th><th>업무그룹</th><th>담당자</th><th>계획종료일</th><th>지연일수</th></tr></thead>
-          <tbody>{data.delayedTasks.map((task) => <tr key={task.id}><td className="mono"><Link className="table-link" href={`/wbs/${task.id}`}>{task.code}</Link></td><td>{task.name}</td><td>{task.groupLabel ?? "-"}</td><td>{task.ownerName ?? "-"}</td><td>{dot(task.dueDate)}</td><td data-numeric className={task.delayDays ? "critical" : undefined}>{task.delayDays === null ? "-" : `${task.delayDays}일`}</td></tr>)}</tbody>
+        <div className="table-wrap"><table><thead><tr><th>Task</th><th>Task명</th><th>업무그룹</th><th>담당자</th><th>계획시작일</th><th>계획종료일</th><th>실적시작일</th><th>실적종료일</th><th>지연일수</th></tr></thead>
+          <tbody>{data.delayedTasks.map((task) => <tr key={task.id}><td className="mono"><Link className="table-link" href={`/wbs/${task.id}`}>{task.code}</Link></td><td>{task.name}</td><td>{task.groupLabel ?? "-"}</td><td>{task.ownerName ?? "-"}</td><td>{dot(task.startDate)}</td><td>{dot(task.dueDate)}</td><td>{dot(task.actualStartDate)}</td><td>{dot(task.actualDueDate)}</td><td data-numeric className={task.delayDays ? "critical" : undefined}>{task.delayDays === null ? "-" : `${task.delayDays}일`}</td></tr>)}</tbody>
         </table>{!data.delayedTasks.length && <p className="empty">오늘종료예정 TASK가 모두 종료되었습니다.</p>}</div>
       </section>
 

@@ -88,7 +88,7 @@ export async function getPmoDailyDashboard(projectId: string, reportDate: string
     exists: Boolean(snapshot),
     snapshot: { plannedTaskCount, actualTaskCount, totalTaskCount, completedTaskCount, version: snapshot?.version ?? 0 },
     metrics: { scheduleProgress: scheduleProgress(plannedTaskCount, actualTaskCount), delayedTaskCount: delayedCount, delayedRate: delayedTaskRate(delayedCount, plannedTaskCount), overallProgress: overallProgress(completedTaskCount, totalTaskCount, 0) },
-    delayedTasks: dueTodayIncomplete.map((item) => ({ id: item.id, code: item.code, name: item.name, stage: item.stage, ownerName: item.ownerName, groupLabel: item.groupLabel, dueDate: item.dueDate, actualDueDate: item.actualDueDate, delayDays: item.delayDays, delayRate: item.delayRate })),
+    delayedTasks: dueTodayIncomplete.map((item) => ({ id: item.id, code: item.code, name: item.name, stage: item.stage, ownerName: item.ownerName, groupLabel: item.groupLabel, startDate: item.startDate, dueDate: item.dueDate, actualStartDate: item.actualStartDate, actualDueDate: item.actualDueDate, delayDays: item.delayDays, delayRate: item.delayRate })),
     delayedTaskTotal: dueTodayIncomplete.length,
     issues: issues.map((issue) => ({ id: issue.id, displayId: issue.displayId, title: issue.title, categoryLabel: issue.category.label, occurredAt: isoDate(issue.occurredAt), status: issue.status })),
     managementTasks: managementTasks.map((task) => ({ id: task.id, displayId: task.displayId, name: task.name, groupLabel: task.group.label, assignees: task.assignees.map(({ user }) => user.name), status: task.status, totalScore: task.totalScore, band: task.band.toLowerCase() })),
