@@ -142,7 +142,7 @@ export async function listProjectActionItems(projectId: string, filters: Project
   if (filters.status && statusValues.includes(filters.status)) and.push({ status: filters.status as ActionItemStatus });
   const q = filters.q?.trim();
   if (q) and.push({ OR: [{ name: { contains: q, mode: "insensitive" } }, { note: { contains: q, mode: "insensitive" } }] });
-  const where: Prisma.ActionItemWhereInput = { projectId, archivedAt: null, ...(and.length ? { AND: and } : {}) };
+  const where: Prisma.ActionItemWhereInput = { projectId, archivedAt: null, detailItem: { task: { archivedAt: null } }, ...(and.length ? { AND: and } : {}) };
   const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 30));
   const total = await prisma.actionItem.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));

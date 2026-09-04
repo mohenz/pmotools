@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { ACTION_ITEM_STATUSES } from "@/lib/domain/action-items";
 import { BAND_LABEL } from "@/lib/domain/management-tasks";
 import type { ActionItemRow, ManagementTaskAxisActionItems } from "@/lib/server/action-items";
@@ -55,7 +56,6 @@ function AxisPanel({ taskId, axis, groups, members, categories }: { taskId: stri
   }
 
   async function archive(item: ActionItemRow) {
-    if (!confirm(`"${item.name}" 액션아이템을 보관 처리하시겠습니까?`)) return;
     setPending(true); setMessage("");
     const response = await fetch(`/api/v1/management-tasks/${taskId}/action-items/${item.id}`, {
       method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: item.version }),
@@ -84,7 +84,20 @@ function AxisPanel({ taskId, axis, groups, members, categories }: { taskId: stri
               <td>{PRIORITY_OPTIONS.find((p) => p.value === item.priority)?.label}</td><td>{PRIORITY_OPTIONS.find((p) => p.value === item.importance)?.label}</td>
               <td>{item.groupLabel}</td><td>{item.assigneeName}</td><td>{item.dueDate ?? "-"}</td>
               <td>{ACTION_ITEM_STATUSES.find((s) => s.value === item.status)?.label}</td><td>{item.wbsItemDisplayId ?? "-"}</td><td className="prewrap">{item.note || "-"}</td>
-              <td><button type="button" className="button secondary" disabled={pending} onClick={() => { setEditingId(item.id); setAdding(false); }}>수정</button> <button type="button" className="button danger" disabled={pending} onClick={() => archive(item)}>보관</button></td>
+              <td><button type="button" className="button secondary" disabled={pending} onClick={() => { setEditingId(item.id); setAdding(false); }}>수정</button> <AlertDialog.Root>
+                <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={pending}>보관</button></AlertDialog.Trigger>
+                <AlertDialog.Portal>
+                  <AlertDialog.Overlay className="calendar-modal-backdrop" />
+                  <AlertDialog.Content className="alert-dialog">
+                    <AlertDialog.Title asChild><h2>&quot;{item.name}&quot; 액션아이템을 보관 처리하시겠습니까?</h2></AlertDialog.Title>
+                    <AlertDialog.Description asChild><p>보관하면 목록·세부항목 밴드 계산에서 제외됩니다.</p></AlertDialog.Description>
+                    <div className="alert-dialog-actions">
+                      <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                      <AlertDialog.Action asChild><button className="button danger" type="button" onClick={() => archive(item)}>보관 처리</button></AlertDialog.Action>
+                    </div>
+                  </AlertDialog.Content>
+                </AlertDialog.Portal>
+              </AlertDialog.Root></td>
             </tr>)}
       </tbody></table></div>
     )}
