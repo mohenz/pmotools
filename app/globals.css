@@ -763,8 +763,10 @@ a.history-item:hover { background: var(--accent); }
 .message-row-schedule > span { color: var(--muted-foreground); font-size: 12px; }
 .message-row-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; }
 .message-row-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
-.message-invitation-detail { display: grid; gap: 4px; padding-top: 12px; }
+.message-invitation-detail { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding-top: 12px; }
 .message-invitation-detail strong { font-size: 14px; }
+.message-invitation-detail p { margin: 0; }
+.message-invitation-detail .form-error { flex-basis: 100%; }
 .message-invitation-detail p { margin: 0; color: var(--muted-foreground); font-size: 12px; white-space: pre-wrap; }
 .message-invitation-detail .button { justify-self: start; margin-top: 6px; }
 .message-content { margin: 10px 0 0; padding: 10px; border-radius: var(--radius-sm); background: var(--muted); white-space: pre-wrap; font-size: 13px; }
