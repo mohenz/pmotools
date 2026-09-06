@@ -11,9 +11,11 @@ export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
     <div className="content">
       <section className="panel compact">
         <form className="filters inline-filter" method="get">
-          <label>시작일<input type="date" name="startDate" defaultValue={startDate} /></label>
-          <label>종료일<input type="date" name="endDate" defaultValue={endDate} /></label>
-          <button className="button secondary" type="submit">조회</button>
+          <div className="filter-row">
+            <label>시작일<input type="date" name="startDate" defaultValue={startDate} /></label>
+            <label>종료일<input type="date" name="endDate" defaultValue={endDate} /></label>
+            <button className="button secondary" type="submit">조회</button>
+          </div>
         </form>
       </section>
       <section className="panel">
