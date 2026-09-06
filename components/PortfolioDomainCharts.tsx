@@ -92,9 +92,9 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
             labels: {
               color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
               generateLabels: () => [
-                { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, pointStyle: "rect", index: 0 },
-                { text: "완료", fillStyle: actualColor, strokeStyle: actualColor, pointStyle: "rect", index: 1 },
-                { text: "지연", fillStyle: destructiveColor, strokeStyle: destructiveColor, pointStyle: "rect", index: 2 },
+                { text: "계획", fillStyle: plannedColor, strokeStyle: plannedColor, fontColor: foreground, pointStyle: "rect", index: 0 },
+                { text: "완료", fillStyle: actualColor, strokeStyle: actualColor, fontColor: foreground, pointStyle: "rect", index: 1 },
+                { text: "지연", fillStyle: destructiveColor, strokeStyle: destructiveColor, fontColor: foreground, pointStyle: "rect", index: 2 },
               ],
             },
           },
@@ -137,9 +137,9 @@ export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { comple
             labels: {
               color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
               generateLabels: () => [
-                { text: `완료 ${completed}건`, fillStyle: success, strokeStyle: success, pointStyle: "rect", index: 0 },
-                { text: `진행중 ${inProgress}건`, fillStyle: plannedColor, strokeStyle: plannedColor, pointStyle: "rect", index: 1 },
-                { text: `지연 ${delayed}건`, fillStyle: destructive, strokeStyle: destructive, pointStyle: "rect", index: 2 },
+                { text: `완료 ${completed}건`, fillStyle: success, strokeStyle: success, fontColor: foreground, pointStyle: "rect", index: 0 },
+                { text: `진행중 ${inProgress}건`, fillStyle: plannedColor, strokeStyle: plannedColor, fontColor: foreground, pointStyle: "rect", index: 1 },
+                { text: `지연 ${delayed}건`, fillStyle: destructive, strokeStyle: destructive, fontColor: foreground, pointStyle: "rect", index: 2 },
               ],
             },
           },
