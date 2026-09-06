@@ -221,6 +221,13 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .auth-submit { display: flex; height: 44px; width: 100%; align-items: center; justify-content: center; margin-top: 4px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: var(--primary-foreground); font: 700 15px var(--font-sans); cursor: pointer; }
 .auth-submit:hover { background: color-mix(in oklch, var(--primary), black 8%); }
 .auth-submit:disabled { cursor: wait; opacity: .6; }
+/* 로그인 처리 중 표시하는 3점 로딩바 — 버튼 글자색(currentColor)을 그대로 물려받아 라이트/다크 모두 대응(2026-09-06 사용자 요청). */
+.loader { width: 48px; aspect-ratio: 4; --_g: no-repeat radial-gradient(circle closest-side, currentColor 90%, #0000); background: var(--_g) 0% 50%, var(--_g) 50% 50%, var(--_g) 100% 50%; background-size: calc(100%/3) 100%; animation: wbs-loader-dots 1s infinite linear; }
+@keyframes wbs-loader-dots {
+  33% { background-size: calc(100%/3) 0%, calc(100%/3) 100%, calc(100%/3) 100%; }
+  50% { background-size: calc(100%/3) 100%, calc(100%/3) 0%, calc(100%/3) 100%; }
+  66% { background-size: calc(100%/3) 100%, calc(100%/3) 100%, calc(100%/3) 0%; }
+}
 .auth-footer-links { display: flex; width: 100%; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
 .auth-footer-links.center { justify-content: center; }
 .auth-footer-links a { color: var(--muted-foreground); font-size: 13px; }
@@ -344,7 +351,7 @@ td.mono, td[data-numeric] { text-align: right; }
 .wbs-table-wrap th:nth-child(4), .wbs-table-wrap td:nth-child(4) { left: 220px; width: 84px; min-width: 84px; }
 .wbs-table-wrap th:nth-child(5), .wbs-table-wrap td:nth-child(5) { left: 304px; width: 64px; min-width: 64px; }
 .wbs-table-wrap th:nth-child(6), .wbs-table-wrap td:nth-child(6) { left: 368px; width: 64px; min-width: 64px; }
-.wbs-table-wrap th:nth-child(7), .wbs-table-wrap td:nth-child(7) { left: 432px; width: 220px; min-width: 220px; max-width: 220px; box-shadow: 2px 0 4px -2px rgb(0 0 0 / 30%); }
+.wbs-table-wrap th:nth-child(7), .wbs-table-wrap td:nth-child(7) { left: 432px; width: 132px; min-width: 132px; max-width: 132px; box-shadow: 2px 0 4px -2px rgb(0 0 0 / 30%); }
 .table-link:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
 .management-task-id { width: 1%; }
 .management-task-score { font-weight: 700; }
@@ -353,7 +360,7 @@ td.mono, td[data-numeric] { text-align: right; }
 .pmo-date-filter.panel { justify-content: flex-end; padding: 12px 16px; }
 .pmo-list-filters label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 12px; }
 .pmo-daily-list-table th,.pmo-daily-list-table td { white-space: nowrap; }
-.work-log-filters { align-items: flex-end; grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(140px, .8fr)) repeat(3, minmax(140px, 1fr)) auto auto; }
+.filters.inline-filter.work-log-filters { flex-direction: row; flex-wrap: wrap; align-items: flex-end; }
 .work-log-filters label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 12px; }
 .work-log-filters > input,.work-log-filters > select,.work-log-filters > button,.work-log-filters > .button,.work-log-filters label input { height: 36px; min-height: 36px; box-sizing: border-box; }
 .work-log-list-table th,.work-log-list-table td { white-space: nowrap; }
@@ -418,14 +425,26 @@ td.mono, td[data-numeric] { text-align: right; }
 
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .filters input { min-width: 260px; }
-.filters.inline-filter { display: flex; flex-wrap: nowrap; align-items: center; overflow-x: auto; }
-.filters.inline-filter label { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; white-space: nowrap; }
+/* WBS 검색패널 — 3줄(단순조건/계획일자/실적일자)로 고정 배치하고, <details>로 감추기·펼치기를 지원한다
+   (2026-09-05 사용자 요청 — 사용자가 제공한 배치 시안 기준). */
+.wbs-filter-panel summary { cursor: pointer; color: var(--foreground); font-size: 14px; font-weight: 600; list-style: revert; }
+.wbs-filter-panel summary::marker { color: var(--muted-foreground); }
+.wbs-filter-panel[open] summary { margin-bottom: 12px; }
+.filters.inline-filter { display: flex; flex-direction: column; gap: 8px; }
+.filters.inline-filter .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filters.inline-filter label { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; white-space: nowrap; }
 .filters.inline-filter input,.filters.inline-filter select { width: auto; min-width: 0; }
-.wbs-date-range { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; white-space: nowrap; }
+.filters.inline-filter input[type="text"],.filters.inline-filter input:not([type]) { width: 160px; }
+.filters.inline-filter select { width: 140px; }
+.wbs-date-range { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; margin: 0; padding: 0; border: 0; white-space: nowrap; }
+.wbs-date-range input[type="date"] { width: 140px; }
 .wbs-date-range legend { padding: 0; color: var(--foreground); font-size: 13px; }
 .wbs-date-range span { color: var(--muted-foreground); }
-.filters.inline-filter button,.filters.inline-filter .button { flex: 0 0 auto; }
+.filters.inline-filter button,.filters.inline-filter .button { flex: 0 0 auto; white-space: nowrap; }
 .filters .filter-primary-action { margin-left: auto; }
+.filters.inline-filter .filter-row-action { margin-left: auto; }
+.filters.inline-filter .filter-row-action { margin-left: auto; }
+.filters.inline-filter .filter-row-dates { flex-wrap: nowrap; overflow-x: auto; width: 100%; min-width: 0; max-width: 100%; }
 .announcement-search > input { flex: 1 1 260px; }
 input, select, textarea { width: 100%; min-height: 36px; padding: 8px 10px; border: 1px solid var(--input); border-radius: var(--radius-sm); background: var(--card); color: var(--foreground); font-size: 14px; outline: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring), transparent 78%); }
@@ -461,6 +480,10 @@ fieldset small { color: var(--muted-foreground); font-weight: 400; }
 .detail-summary dl > div:first-child { grid-column: 1 / -1; }
 .detail-summary dl.wbs-field-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px 14px; }
 .detail-summary dl.wbs-field-grid > div:first-child { grid-column: auto; }
+/* 담당·일정 패널 — 라벨/값을 위아래로 쌓지 않고 한 줄로 보여준다(2026-09-05 사용자 요청). */
+.detail-summary dl.wbs-field-grid.inline-fields > div { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.detail-summary dl.wbs-field-grid.inline-fields dt { margin-bottom: 0; flex-shrink: 0; }
+.detail-summary dl.wbs-field-grid.inline-fields dd { overflow: hidden; text-overflow: ellipsis; }
 .wbs-detail-actions { flex-wrap: wrap; }
 .wbs-detail-main { gap: 12px; }
 .wbs-detail-main .panel-head { margin-bottom: 10px; }
@@ -585,6 +608,9 @@ a.history-item:hover { background: var(--accent); }
 
 /* 사용자 등록 폼(.inline-create)과 같은 "라벨 위 + 입력칸 한 줄 정렬" 형태 — 필드 수가 화면마다 달라 고정 폭 대신 flex-wrap으로 감싼다. */
 .wbs-inline-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; margin-bottom: 12px; }
+/* 계획·실적 시작/종료일 4개를 항상 한 줄로 묶어 보여준다(2026-09-06 사용자 요청). */
+.wbs-inline-form-row { display: flex; flex-wrap: nowrap; align-items: end; gap: 10px 14px; overflow-x: auto; }
+.party-popper-effect { flex: 0 0 auto; color: var(--success); }
 .wbs-inline-form label { display: grid; flex: 1 1 130px; gap: 5px; min-width: 110px; color: var(--foreground); font-size: 12px; font-weight: 500; }
 .wbs-inline-form label.wide { flex-basis: 100%; }
 .wbs-inline-form .button { flex: 0 0 auto; align-self: end; }
@@ -593,6 +619,15 @@ a.history-item:hover { background: var(--accent); }
 .wbs-track-controls input[type="checkbox"] { width: 15px; min-height: 15px; flex: 0 0 auto; }
 .wbs-track-controls input[type="number"] { width: 100%; min-width: 0; }
 .wbs-inline-form.nowrap label { flex: 0 0 auto; min-width: 150px; }
+/* 역할별 진척등록권한·진도율 — Track 10개가 줄바꿈되지 않고 한 줄에 다 보이도록 폭을 좁히되(2026-09-06 사용자 요청),
+   숫자입력값 폰트가 입력칸보다 커서 잘려 보이던 문제를 고쳐 가독성을 확보한다(같은 날 후속 요청). 폭이 부족하면
+   가로 스크롤로 대신하고 글자 크기는 더 줄이지 않는다. */
+.wbs-track-form { flex-wrap: nowrap; gap: 6px; overflow-x: auto; }
+.wbs-track-form label { flex: 0 0 auto; min-width: 0; font-size: 12px; white-space: nowrap; }
+.wbs-track-form .wbs-track-controls { gap: 3px; }
+.wbs-track-form .wbs-track-controls input[type="number"] { width: 46px; padding: 4px 3px; font-size: 12px; -moz-appearance: textfield; }
+.wbs-track-form .wbs-track-controls input[type="number"]::-webkit-outer-spin-button,
+.wbs-track-form .wbs-track-controls input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .work-form { display: grid; gap: 12px; }
 .work-form > label, .work-form .form-grid > label { display: grid; gap: 6px; color: var(--foreground); font-size: 14px; font-weight: 500; }
 .work-form .button { justify-self: start; }

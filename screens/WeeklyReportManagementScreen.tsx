@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { WeeklyReportListResult, WeeklyReportSummary } from "@/lib/server/work-management";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function date(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(value));
@@ -44,7 +45,7 @@ export function WeeklyReportManagementScreen({ result, q }: { result: WeeklyRepo
     </form>
     <section className="panel">
       <div className="panel-head"><h2>위클리리포트 목록</h2><span>{result.total}건</span></div>
-      {error && <p className="form-error weekly-report-admin-error" role="alert">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       {result.rows.length ? <div className="table-wrap"><table className="dense-table"><thead><tr><th>리포트명</th><th>금주 실적 기간</th><th>차주 계획 기간</th><th>작성 현황</th><th>상태</th><th>생성일</th><th>관리</th></tr></thead><tbody>
         {result.rows.map((report) => <tr key={report.id}>
           <td><strong>{report.reportName}</strong></td>

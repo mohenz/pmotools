@@ -9,6 +9,7 @@ import type { ManagementTaskLinkSummary, ManagementTaskRow } from "@/lib/server/
 import { TaskLinkPicker } from "@/features/management-tasks/TaskLinkPicker";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function ManagementTaskDetailActions({ task, predecessors, successors, groups, members }: { task: ManagementTaskRow; predecessors: ManagementTaskLinkSummary[]; successors: ManagementTaskLinkSummary[]; groups: CommonCode[]; members: ProjectMemberOption[] }) {
   const router = useRouter();
@@ -102,7 +103,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
       </div>
     </section>
 
-    {message && <p className="form-error action-message" role="alert">{message}</p>}
+    <WarningDialog message={message} onClose={() => setMessage("")} />
     <section className="danger-zone"><div><strong>항목 보관</strong><p>보관된 항목은 목록·대시보드·선후행 검색에서 제외됩니다.</p></div>
       <AlertDialog.Root>
         <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={!!pending}>{pending === "archive" ? "처리 중…" : "보관 처리"}</button></AlertDialog.Trigger>

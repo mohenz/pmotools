@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { AdminUserListResult, AdminUserRow, GroupRow } from "@/lib/server/admin";
 import type { PasswordResetRequestRow } from "@/lib/server/password-reset-requests";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "슈퍼관리자", ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
@@ -131,7 +132,7 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
   return <>
     <header className="topbar"><div><h1>사용자 관리</h1><p>사용자 등록, 정보 수정, 업무그룹 배정, 권한 변경, 계정 잠금, 비밀번호 강제 초기화를 관리합니다.</p></div></header>
     <div className="content settings-content user-management-content">
-      {message && <p className="form-error action-message" role="alert">{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
       {tempPassword && <p className="form-success action-message" role="status">{tempPassword.userId} 임시 비밀번호: <strong className="mono">{tempPassword.value}</strong> (다시 표시되지 않습니다. 사용자에게 안전하게 전달하세요.)</p>}
       {resetRequests.length > 0 && (
         <section className="panel">

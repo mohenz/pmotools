@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CommonCode, CommonCodeGroup } from "@/lib/server/common-codes";
+import { WarningDialog } from "@/components/WarningDialog";
 
 type Props = { groups: CommonCodeGroup[]; selectedGroup: CommonCodeGroup | null; codes: CommonCode[] };
 
@@ -59,7 +60,7 @@ export function CommonCodeSettingsScreen({ groups, selectedGroup, codes }: Props
   return <>
     <header className="topbar"><div><h1>공통코드 설정</h1><p>코드 그룹을 선택한 후 그룹에 속한 코드를 관리합니다.</p></div></header>
     <div className="content settings-content">
-      {message && <p className="form-error action-message" role="alert">{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
       <div className="group-settings-layout">
         <aside className="panel group-list-panel">
           <div className="panel-head"><h2>코드 그룹</h2><span>{groups.length}개</span></div>

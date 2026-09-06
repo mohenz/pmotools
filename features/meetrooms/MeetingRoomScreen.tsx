@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PersonPicker } from "@/components/PersonPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 type Room = { id:string; name:string; roomType:"LARGE"|"SMALL"; capacity:number; floor:string|null; equipment:string[]; isActive:boolean; deletedAt:string|null };
 type Member = { id:string; userId:string; name:string };
@@ -74,7 +75,7 @@ function DetailModal({reservation,members,canEdit,onClose,onCancel,onSave}:{rese
     <div className="form-grid two"><label>시작<input type="time" min="09:00" max="19:00" step="1800" value={form.start} onChange={e=>setForm({...form,start:e.target.value})}/></label><label>종료<input type="time" min="09:00" max="19:00" step="1800" value={form.end} onChange={e=>setForm({...form,end:e.target.value})}/></label></div>
     <label>사용 목적<input required maxLength={500} value={form.purpose} onChange={e=>setForm({...form,purpose:e.target.value})}/></label>
     <fieldset className="attendee-picker"><legend>참석자 선택 ({form.attendeeIds.length+form.attendeeNames.length}명)</legend><PersonPicker people={members.filter(m=>m.id!==reservation.userId)} selectedIds={form.attendeeIds} selectedNames={form.attendeeNames} onChange={(attendeeIds,attendeeNames)=>setForm({...form,attendeeIds,attendeeNames})}/></fieldset>
-    {message&&<p className="form-error">{message}</p>}
+    <WarningDialog message={message} onClose={()=>setMessage("")} />
     <div className="modal-actions"><button type="button" className="button secondary" onClick={()=>setEditing(false)} disabled={pending}>취소</button><button className="button primary" disabled={pending}>{pending?"저장 중…":"저장"}</button></div>
   </form></div>;
   return <div className="modal-backdrop"><section className="modal-card reservation-detail"><h2>예약 상세</h2><dl><dt>회의실</dt><dd>{reservation.roomName}</dd><dt>일시</dt><dd>{dayKey(reservation.startAt)} {time(reservation.startAt)}–{time(reservation.endAt)}</dd><dt>예약자</dt><dd>{reservation.userName}{reservation.department?` · ${reservation.department}`:""}</dd><dt>사용 목적</dt><dd>{reservation.purpose}</dd><dt>예약 유형</dt><dd>{reservation.recurring?"정기예약":"일반예약"}</dd><dt>참석자</dt><dd>{reservation.attendees.length?reservation.attendees.map(a=>`${a.name}${a.department?`(${a.department})`:""}`).join(", "):"등록된 참석자 없음"}</dd></dl><div className="modal-actions">{canEdit&&<><button className="button secondary" onClick={startEdit}>예약 정보 수정</button><button className="button danger" onClick={onCancel}>예약 취소</button></>}<button className="button primary" onClick={onClose}>닫기</button></div></section></div>;

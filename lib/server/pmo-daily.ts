@@ -20,30 +20,29 @@ export const archiveDelayedTaskSchema = z.object({ version: z.number().int().pos
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const dateValue = (date: string) => new Date(`${date}T00:00:00.000Z`);
 
-export type PmoDailyListFilters = { dateFrom?: string; dateTo?: string; page?: number };
+export type PmoDailyListFilters = { dateFrom?: string; dateTo?: string; page?: number; pageSize?: number | "all" };
 
 export async function listPmoDailySnapshots(projectId: string, filters: PmoDailyListFilters = {}) {
-  const pageSize = 20;
-  const page = Math.max(1, filters.page || 1);
   const reportDate = {
     ...(filters.dateFrom ? { gte: dateValue(filters.dateFrom) } : {}),
     ...(filters.dateTo ? { lte: dateValue(filters.dateTo) } : {}),
   };
   const where = { projectId, ...(Object.keys(reportDate).length ? { reportDate } : {}) };
   const prisma = getPrisma();
-  const [rows, total] = await Promise.all([
-    prisma.pmoDailySnapshot.findMany({
-      where,
-      select: {
-        reportDate: true, plannedTaskCount: true, actualTaskCount: true,
-        totalTaskCount: true, completedTaskCount: true, updatedAt: true,
-        creator: { select: { name: true } },
-        _count: { select: { delayedTasks: { where: { archivedAt: null } } } },
-      },
-      orderBy: { reportDate: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
-    }),
-    prisma.pmoDailySnapshot.count({ where }),
-  ]);
+  const total = await prisma.pmoDailySnapshot.count({ where });
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+  const rows = await prisma.pmoDailySnapshot.findMany({
+    where,
+    select: {
+      reportDate: true, plannedTaskCount: true, actualTaskCount: true,
+      totalTaskCount: true, completedTaskCount: true, updatedAt: true,
+      creator: { select: { name: true } },
+      _count: { select: { delayedTasks: { where: { archivedAt: null } } } },
+    },
+    orderBy: { reportDate: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
+  });
   return {
     rows: rows.map((row) => {
       const delayedCount = delayedTaskCount(row.plannedTaskCount, row.actualTaskCount);
@@ -57,7 +56,7 @@ export async function listPmoDailySnapshots(projectId: string, filters: PmoDaily
         updatedAt: row.updatedAt.toISOString(),
       };
     }),
-    total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    total, page, pageSize, totalPages,
   };
 }
 

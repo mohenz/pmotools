@@ -35,7 +35,7 @@ export type IssueRow = {
   reportLineCodeIds: string[]; reportLineLabels: string[]; remark: string; lastModifiedByName: string | null;
   createdAt: string; updatedAt: string; closedAt: string | null; version: number; progressEntries: IssueProgressRow[];
 };
-export type IssueFilters = { q?: string; categoryCodeId?: string; status?: string; importance?: string; priority?: string; escalated?: boolean; ownerUserId?: string; page?: number; pageSize?: number };
+export type IssueFilters = { q?: string; categoryCodeId?: string; status?: string; importance?: string; priority?: string; escalated?: boolean; ownerUserId?: string; page?: number; pageSize?: number | "all" };
 
 const issueInclude = {
   category: true, reportLines: { include: { reportLineCode: true } },
@@ -87,8 +87,8 @@ export function issueWhere(projectId: string, filters: IssueFilters): Prisma.Iss
 export async function listIssues(projectId: string, filters: IssueFilters = {}) {
   const prisma = getPrisma();
   const where = issueWhere(projectId, filters);
-  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 30));
   const total = await prisma.issue.count({ where });
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
   const rows = await prisma.issue.findMany({ where, include: issueInclude, orderBy: { updatedAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize });

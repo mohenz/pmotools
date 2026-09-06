@@ -4,6 +4,7 @@ import { DragEvent, FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { ImportReport } from "@/lib/server/requirements-excel";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function RequirementExcelClient() {
   const [file, setFile] = useState<File | null>(null);
@@ -95,7 +96,8 @@ export function RequirementExcelClient() {
             </AlertDialog.Root>}
           </div>
         </form>
-        {message && <p className={message.includes("반영했습니다") ? "form-success" : "form-error"} role="status">{message}</p>}
+        {message && message.includes("반영했습니다") && <p className="form-success" role="status">{message}</p>}
+        <WarningDialog message={message && !message.includes("반영했습니다") ? message : ""} onClose={() => setMessage("")} />
         {report && <>
           {report.willDeleteCount > 0 && <p className="form-error" role="alert">이 파일에 없는 기존 요구사항 {report.willDeleteCount}건이 삭제됩니다.</p>}
           <div className="table-wrap">

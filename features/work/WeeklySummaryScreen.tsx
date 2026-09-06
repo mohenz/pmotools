@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { parseSummarySections } from "@/lib/domain/weekly-report-summary";
 import type { WeeklySummaryRecord } from "@/lib/server/weekly-report-summary";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function WeeklySummaryScreen({ weekId, initialSummary, canGenerate }: { weekId: string; initialSummary: WeeklySummaryRecord | null; canGenerate: boolean }) {
   const [summary, setSummary] = useState(initialSummary);
@@ -32,7 +33,7 @@ export function WeeklySummaryScreen({ weekId, initialSummary, canGenerate }: { w
           {canGenerate && <button className="button primary small" type="button" disabled={pending} onClick={generate}>{pending ? "생성 중…" : summary ? "다시요약" : "요약하기"}</button>}
         </div>
       </div>
-      {error && <p className="form-error">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       {summary
         ? <>
           {summary.stale && <p className="weekly-summary-stale">리포트가 수정되어 요약이 최신이 아닙니다. 다시요약을 권장합니다.</p>}

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { WeeklyReportDetail } from "@/lib/server/work-management";
+import { WarningDialog } from "@/components/WarningDialog";
 
 type Report = WeeklyReportDetail["reports"][number];
 
@@ -52,7 +53,7 @@ export function WeeklyReportFormScreen({ reportName, report }: { reportName: str
           <label className="weekly-report-field"><span>실적</span><textarea name="achievements" rows={10} maxLength={2000} defaultValue={report.achievements} readOnly={!report.canEdit} /></label>
           <label className="weekly-report-field"><span>계획</span><textarea name="nextPlan" rows={10} maxLength={2000} defaultValue={report.nextPlan} readOnly={!report.canEdit} /></label>
           <label className="weekly-report-field weekly-report-field-wide"><span>이슈 및 요청사항</span><textarea name="issues" rows={7} maxLength={2000} defaultValue={report.issues} readOnly={!report.canEdit} /></label>
-          {message && <p className="form-error" role="alert">{message}</p>}
+          <WarningDialog message={message} onClose={() => setMessage("")} />
           <div className="form-actions"><Link className="button secondary" href={detailHref}>{report.canEdit ? "취소" : "돌아가기"}</Link>{report.canEdit && <button className="button primary" type="submit" disabled={pending}>{pending ? "저장 중…" : "저장"}</button>}</div>
         </form>
       </section>

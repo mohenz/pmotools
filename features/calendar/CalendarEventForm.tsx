@@ -6,6 +6,7 @@ import type { CalendarEvent } from "@/lib/server/calendar";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function localInput(value: string | undefined, fallback: string) { if (!value) return fallback; const d = new Date(value), pad = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function shifted(value: string, milliseconds: number) { const date = new Date(value); if (Number.isNaN(date.getTime())) return value; date.setTime(date.getTime() + milliseconds); const pad = (n: number) => String(n).padStart(2, "0"); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; }
@@ -82,7 +83,7 @@ export function CalendarEventForm({ areas, members, event, selectedDate, selecte
     <label className="toggle calendar-all-day"><input name="allDay" type="checkbox" defaultChecked={event?.allDay} /> 종일 일정</label>
     <label>설명<textarea name="description" rows={2} defaultValue={event?.description} /></label>
     </fieldset>
-    {message && <p className="form-error">{message}</p>}
+    <WarningDialog message={message} onClose={() => setMessage("")} />
     <div className="topbar-actions">
       {canWrite && <button className="button primary" disabled={pending}>{pending ? "저장 중…" : event ? "일정 수정" : "일정 등록"}</button>}
       {event && <button className="button secondary" type="button" onClick={() => router.push(returnUrl)}>{canWrite ? "수정 취소" : "닫기"}</button>}

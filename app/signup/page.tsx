@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function SignupPage() {
             비밀번호<input name="password" type="password" autoComplete="new-password" placeholder="••••••••" required minLength={8} maxLength={100} />
           </label>
           <p className="auth-hint">영문/숫자 조합 8자 이상</p>
-          {message && <p className="form-error">{message}</p>}
+          <WarningDialog message={message} onClose={() => setMessage("")} />
           <button className="auth-submit" disabled={pending}>{pending ? "가입 중…" : "가입하기"}</button>
         </form>
         <div className="auth-footer-links center">

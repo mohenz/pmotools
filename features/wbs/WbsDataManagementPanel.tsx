@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { WbsImportReport } from "@/lib/server/wbs-excel";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function WbsDataManagementPanel({ children }: { children?: React.ReactNode } = {}) {
   const router = useRouter();
@@ -63,7 +64,8 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
         <button className="button secondary" type="button" onClick={validate} disabled={!file || !!pending}>{pending === "validate" ? "검증 중…" : "검증(Dry-run)"}</button>
         {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건, 기존 데이터 삭제됨)`}</button>}
       </div>
-      {uploadMessage && <p className={uploadMessage.includes("반영") ? "form-success" : "form-error"} role="status">{uploadMessage}</p>}
+      {uploadMessage && uploadMessage.includes("반영") && <p className="form-success" role="status">{uploadMessage}</p>}
+      <WarningDialog message={uploadMessage && !uploadMessage.includes("반영") ? uploadMessage : ""} onClose={() => setUploadMessage("")} />
       {report && (() => {
         const issueRows = report.rows.filter((row) => row.errors.length || row.warnings.length);
         return <div className="table-wrap">
@@ -86,7 +88,7 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
     {children}
 
     <section className="danger-zone">
-      <div><strong>데이터 초기화</strong><p>프로젝트의 모든 WBS 항목이 보관 처리됩니다(목록·조회에서 제외, 복구 가능).</p>{resetMessage && <p className={resetMessage.includes("보관 처리") ? "form-success" : "form-error"} role="status">{resetMessage}</p>}</div>
+      <div><strong>데이터 초기화</strong><p>프로젝트의 모든 WBS 항목이 보관 처리됩니다(목록·조회에서 제외, 복구 가능).</p>{resetMessage && resetMessage.includes("보관 처리") && <p className="form-success" role="status">{resetMessage}</p>}<WarningDialog message={resetMessage && !resetMessage.includes("보관 처리") ? resetMessage : ""} onClose={() => setResetMessage("")} /></div>
       <AlertDialog.Root>
         <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={!!pending}>{pending === "reset" ? "처리 중…" : "초기화"}</button></AlertDialog.Trigger>
         <AlertDialog.Portal>

@@ -8,6 +8,7 @@ import type { CommonCode } from "@/lib/server/common-codes";
 import type { WorkLogDetail } from "@/lib/server/work-logs";
 import type { WbsOwnerTaskOption } from "@/lib/server/wbs";
 import { WbsTaskPicker } from "@/components/WbsTaskPicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function todayInKorea() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 
@@ -28,7 +29,7 @@ export function WorkLogFormScreen({ mode, groups, assigneeName, detail, wbsOptio
     <label>업무내용<textarea name="workContent" rows={6} defaultValue={detail?.workContent} maxLength={5000} required placeholder="수행한 업무내용을 입력하세요." /></label>
     <label>참고내용<textarea name="referenceContent" rows={4} defaultValue={detail?.referenceContent} maxLength={5000} placeholder="산출물, 작업문서, 참고 링크 등의 내용을 입력하세요." /></label>
     <label>비고<textarea name="notes" rows={3} defaultValue={detail?.notes} maxLength={2000} /></label>
-    {error && <p className="form-error" role="alert">{error}</p>}
+    <WarningDialog message={error} onClose={() => setError("")} />
     <div className="form-actions"><Link className="button secondary" href="/work-logs">목록으로</Link><button className="button primary" disabled={saving || !groups.length}>{saving ? "저장 중…" : mode === "create" ? "등록하기" : "수정 저장"}</button></div>
   </form></section></div></>;
 }

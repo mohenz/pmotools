@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GroupRow } from "@/lib/server/admin";
 import type { ProjectMemberOption } from "@/lib/server/users";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function GroupManagementScreen({ groups, groupType, members }: { groups: GroupRow[]; groupType: "WORK_MODULE" | "COMPANY"; members: ProjectMemberOption[] }) {
   const router = useRouter();
@@ -35,7 +36,7 @@ export function GroupManagementScreen({ groups, groupType, members }: { groups: 
   return <>
     <header className="topbar"><div><h1>그룹 관리</h1><p>업무그룹(Track)과 조직 그룹을 관리합니다.</p></div></header>
     <div className="content settings-content">
-      {message && <p className="form-error action-message" role="alert">{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
       <section className="panel compact">
         <nav className="tool-tabs" aria-label="그룹 구분">
           <Link className={groupType === "WORK_MODULE" ? "active" : ""} href="/settings/groups?type=WORK_MODULE">업무그룹</Link>

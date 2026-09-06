@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
+import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayCompletion, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
 
 describe("nextSegment", () => {
   it("starts a fresh sibling group at 0001", () => {
@@ -131,6 +131,20 @@ describe("wbsDelayRate", () => {
   it("is 0 when there is no delay or no planned duration", () => {
     expect(wbsDelayRate(0, 10)).toBe(0);
     expect(wbsDelayRate(2, 0)).toBe(0);
+  });
+});
+
+describe("wbsDelayCompletion", () => {
+  it("flags delay and counts business days after the planned due date", () => {
+    expect(wbsDelayCompletion(FRI, NEXT_MON)).toEqual({ isDelayedCompletion: true, delayDays: 1 });
+  });
+  it("is not delayed for on-time or early completion", () => {
+    expect(wbsDelayCompletion(FRI, FRI)).toEqual({ isDelayedCompletion: false, delayDays: 0 });
+    expect(wbsDelayCompletion(FRI, WED)).toEqual({ isDelayedCompletion: false, delayDays: 0 });
+  });
+  it("excludes holidays from the delay day count", () => {
+    expect(wbsDelayCompletion(WED, FRI)).toEqual({ isDelayedCompletion: true, delayDays: 2 });
+    expect(wbsDelayCompletion(WED, FRI, new Set(["2026-07-23"]))).toEqual({ isDelayedCompletion: true, delayDays: 1 });
   });
 });
 

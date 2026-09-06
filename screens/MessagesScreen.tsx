@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { InvitationSummary } from "@/lib/server/messages";
 import { useUnreadMessageCount } from "@/components/UnreadMessageProvider";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function invitationDateKey(value: string) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
@@ -55,16 +56,15 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
     {(invitation.messageType === "MEETING_INVITATION" || Boolean(invitation.calendarInvitation?.description) || Boolean(error)) && <div className="message-row-body">
       {invitation.messageType === "CALENDAR_INVITATION" && invitation.calendarInvitation ? <div className="message-invitation-detail">
         {invitation.calendarInvitation.description && <p>{invitation.calendarInvitation.description}</p>}
-        {error && <p className="form-error">{error}</p>}
       </div> : invitation.messageType === "MEETING_INVITATION" && invitation.meetingInvitation ? <div className="message-invitation-detail">
         <strong>{invitation.meetingInvitation.roomName}</strong>
         <p>{invitationPeriod(invitation.meetingInvitation.startAt, invitation.meetingInvitation.endAt, false)}</p>
         <p>주최자: {invitation.meetingInvitation.organizerName}</p>
         {invitation.meetingInvitation.purpose && <p>{invitation.meetingInvitation.purpose}</p>}
         <Link className="button secondary small" href="/meetrooms">예약 보기</Link>
-        {error && <p className="form-error">{error}</p>}
       </div> : null}
     </div>}
+    <WarningDialog message={error} onClose={() => setError("")} />
   </div>;
 }
 

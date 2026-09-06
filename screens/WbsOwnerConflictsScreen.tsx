@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import type { WbsOwnerConflict } from "@/lib/server/wbs";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function WbsOwnerConflictsScreen({ conflicts }: { conflicts: WbsOwnerConflict[] }) {
   const router = useRouter();
@@ -25,7 +26,7 @@ export function WbsOwnerConflictsScreen({ conflicts }: { conflicts: WbsOwnerConf
   return <>
     <header className="topbar"><div><h1>동명이인 담당자 정리</h1><p>이름이 여러 사용자와 겹쳐 미지정으로 남은 WBS 항목의 담당자를 확정합니다.</p></div><div className="topbar-actions"><Link className="button secondary" href="/wbs/manage">데이터 관리로</Link></div></header>
     <div className="content">
-      {message && <p className="form-error action-message" role="alert">{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
       <section className="panel">
         <div className="panel-head"><h2>동명이인 대상</h2><span>{conflicts.length}건</span></div>
         {conflicts.length ? <div className="table-wrap"><table>

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import type { ImportReport } from "@/lib/server/calendar-excel";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function currentMonth() { return new Date().toISOString().slice(0, 7); }
 
@@ -55,7 +56,8 @@ export function CalendarExcelClient() {
           <button className="button secondary" type="submit" disabled={!file || !!pending}>{pending === "validate" ? "검증 중…" : "검증(Dry-run)"}</button>
           {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건)`}</button>}
         </form>
-        {message && <p className={message.includes("반영했습니다") ? "form-success" : "form-error"} role="status">{message}</p>}
+        {message && message.includes("반영했습니다") && <p className="form-success" role="status">{message}</p>}
+        <WarningDialog message={message && !message.includes("반영했습니다") ? message : ""} onClose={() => setMessage("")} />
         {report && <div className="table-wrap">
           <table>
             <thead><tr><th>행</th><th>구분</th><th>제목</th><th>오류</th></tr></thead>

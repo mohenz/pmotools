@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { WeeklyReportDetail } from "@/lib/server/work-management";
+import { WarningDialog } from "@/components/WarningDialog";
 
 async function jsonRequest(url: string, method: string, body?: unknown) {
   const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
@@ -47,7 +48,7 @@ export function WeeklyReportDetailClient({ detail }: { detail: WeeklyReportDetai
           </tr>)}</tbody>
         </table>
       </div>
-      {message && <p className="form-error">{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
       <div className="weekly-detail-actions">
         <button className="button secondary" type="button" onClick={() => router.push("/weekly-reports")}>목록으로</button>
         {detail.canManage && (detail.status === "open"

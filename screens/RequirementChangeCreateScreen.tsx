@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { acceptanceLabels } from "@/lib/domain/requirements";
 import type { RequirementRow } from "@/lib/server/requirements";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function RequirementChangeCreateScreen({ requirement }: { requirement: RequirementRow }) {
   const router = useRouter();
@@ -49,7 +50,7 @@ export function RequirementChangeCreateScreen({ requirement }: { requirement: Re
             <label>요구사항해결방안(제안)<textarea name="proposedResolution" rows={2} maxLength={5000} defaultValue={requirement.resolution} /></label>
             <label>요구사항수용여부(제안)<select name="proposedAcceptance" defaultValue={requirement.acceptanceStatus}>{Object.entries(acceptanceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
           </details>
-          {message && <p className="form-error">{message}</p>}
+          <WarningDialog message={message} onClose={() => setMessage("")} />
           <button className="button primary" type="submit" disabled={saving}>{saving ? "제출 중…" : "변경요청 제출"}</button>
         </form>
       </section>

@@ -6,6 +6,7 @@ import { probabilities, type Probability } from "@/lib/domain/levels";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -76,7 +77,7 @@ export function IssueCreateScreen({ options, members }: { options: Options; memb
         </div></fieldset>
       </div>
       <label>비고<textarea name="remark" rows={2} maxLength={2000} /></label>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       <button className="button primary" type="submit" disabled={saving || !ready}>{saving ? "등록 중…" : "등록하기"}</button>
     </form></section></div>
   </>;

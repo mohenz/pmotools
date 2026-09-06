@@ -9,6 +9,7 @@ import type { CommonCode } from "@/lib/server/common-codes";
 import type { IssueProgressRow, IssueRow } from "@/lib/server/issues";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 type Options = { issueTypes: CommonCode[]; reportLines: CommonCode[] };
 type IssueStatusValue = "OPEN" | "IN_PROGRESS" | "CLOSED";
@@ -172,7 +173,7 @@ export function IssueFormActions({ issue, options, members }: { issue: IssueRow;
           <ProgressEntryForm initial={issueToInitial(issue)} options={options} members={members} submitLabel="추가" pending={pending === "add-entry"} onCancel={() => setShowAddForm(false)} onSubmit={addEntry} />
         </div>
       ) : <button className="button primary" type="button" onClick={() => setShowAddForm(true)}>+ 진행 이력 추가</button>}
-      {message && <p className="form-error action-message" role="alert">{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
     </section>
 
     <section className="danger-zone"><div><strong>이슈 보관</strong><p>{issue.status === "CLOSED" ? "보관된 이슈는 목록에서 제외됩니다." : "이슈가 종결되기 전까지는 일련번호가 계속 관리되어야 하므로, 진행 이력의 상태를 먼저 종결로 남겨야 보관할 수 있습니다."}</p></div>

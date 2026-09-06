@@ -14,6 +14,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
     importance: typeof params.importance === "string" ? params.importance : "",
     priority: typeof params.priority === "string" ? params.priority : "",
     escalated: params.escalated === "true" ? true : params.escalated === "false" ? false : undefined,
+    pageSize: params.pageSize === "all" ? "all" as const : typeof params.pageSize === "string" && [20, 40, 60, 80, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20,
     page: typeof params.page === "string" ? Number(params.page) || 1 : 1,
   };
   const { projectId } = await requirePmPmoContext();

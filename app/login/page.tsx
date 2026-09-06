@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PublicReadOnlyModal } from "@/components/PublicReadOnlyModal";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const SAVED_USER_ID_KEY = "pmotools:savedUserId";
 
@@ -51,8 +52,8 @@ function LoginForm() {
       <label>아이디<input name="userId" autoComplete="username" placeholder="아이디 입력" required maxLength={50} value={userId} onChange={(event) => setUserId(event.target.value)} /></label>
       <label>비밀번호<input name="password" type="password" autoComplete="current-password" placeholder="••••••••" required maxLength={100} /></label>
       <label className="toggle auth-remember"><input type="checkbox" checked={rememberUserId} onChange={(event) => setRememberUserId(event.target.checked)} /> 아이디 저장</label>
-      {message && <p className="form-error">{message}</p>}
-      <button className="auth-submit" disabled={pending}>{pending ? "로그인 중…" : "로그인"}</button>
+      <WarningDialog message={message} onClose={() => setMessage("")} />
+      <button className="auth-submit" disabled={pending}>{pending ? <span className="loader" role="status" aria-label="로그인 중" /> : "로그인"}</button>
     </form>
   );
 }

@@ -6,6 +6,7 @@ import { BAND_LABEL, MANAGEMENT_TASK_AXES, MANAGEMENT_TASK_STATUSES, scoreBand, 
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { PersonPicker } from "@/components/PersonPicker";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -68,7 +69,7 @@ export function ManagementTaskCreateScreen({ groups, members }: { groups: Common
       </fieldset>)}
 
       <div className="suggest"><span className={`badge band-${band}`}>{BAND_LABEL[band]} · 총점 {score}점</span><p>5개 축의 평가점수 합산 결과입니다.</p></div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       <p className="auth-hint">저장 후 선후행 관계를 등록할 수 있습니다.</p>
       <button className="button primary" type="submit" disabled={saving || !ready}>{saving ? "등록 중…" : "등록하기"}</button>
     </form></section></div>

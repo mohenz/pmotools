@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function WorkLogDetailActions({ id, version, backHref, editable, deletable }: { id: string; version: number; backHref: string; editable: boolean; deletable: boolean }) {
   const router = useRouter();
@@ -18,5 +19,5 @@ export function WorkLogDetailActions({ id, version, backHref, editable, deletabl
     router.push(backHref); router.refresh();
   }
 
-  return <><div className="work-log-detail-actions"><Link className="button secondary" href={backHref}>목록으로</Link>{editable && <Link className="button primary" href={`/work-logs/${id}/edit`}>수정</Link>}{deletable && <button className="button danger" type="button" disabled={pending} onClick={remove}>{pending ? "삭제 중…" : "삭제하기"}</button>}</div>{error && <p className="form-error action-message" role="alert">{error}</p>}</>;
+  return <><div className="work-log-detail-actions"><Link className="button secondary" href={backHref}>목록으로</Link>{editable && <Link className="button primary" href={`/work-logs/${id}/edit`}>수정</Link>}{deletable && <button className="button danger" type="button" disabled={pending} onClick={remove}>{pending ? "삭제 중…" : "삭제하기"}</button>}</div><WarningDialog message={error} onClose={() => setError("")} /></>;
 }

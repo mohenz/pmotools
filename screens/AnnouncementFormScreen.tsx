@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AnnouncementDetail } from "@/lib/server/announcements";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function inputDate(value: string | null | undefined) { if (!value) return ""; return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date(value)); }
 
@@ -29,7 +30,7 @@ export function AnnouncementFormScreen({ announcement }: { announcement?: Announ
       <div className="form-grid"><label>공지 대상<select name="audience" defaultValue={announcement?.audience ?? "ALL"}><option value="ALL">전체 사용자</option><option value="MANAGERS">관리자·운영자</option></select></label><label>게시 시작일<input type="date" name="publishedAt" defaultValue={inputDate(announcement?.publishedAt)} /></label></div>
       <div className="form-grid"><label>게시 종료일<input type="date" name="expiresAt" defaultValue={inputDate(announcement?.expiresAt)} /></label><label>메인 노출 종료일<input type="date" name="dashboardVisibleTo" disabled={!showOnDashboard} defaultValue={inputDate(announcement?.dashboardVisibleTo)} /></label></div>
       <div className="announcement-options"><label><input type="checkbox" name="isImportant" defaultChecked={announcement?.isImportant} /> 중요 공지로 상단 고정</label><label><input type="checkbox" name="showOnDashboard" checked={showOnDashboard} onChange={(event) => setShowOnDashboard(event.target.checked)} /> 메인 화면 노출</label></div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       <div className="form-actions"><Link className="button secondary" href={announcement ? `/announcements/${announcement.id}` : "/announcements"}>취소</Link><button className="button primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button></div>
     </form></section></div>
   </>;

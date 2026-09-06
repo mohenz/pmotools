@@ -199,6 +199,7 @@ model Project {
   workLogSequence           WorkLogSequence?
   wbsItems                  WbsItem[]
   wbsItemSequence           WbsItemSequence?
+  wbsDelayedTasks           WbsDelayedTask[]
   holidays                  Holiday[]
 
   @@map("projects")
@@ -1317,40 +1318,44 @@ enum WbsItemEventType {
 }
 
 model WbsItem {
-  id              String        @id @default(uuid())
-  displayId       String        @unique
-  projectId       String
-  parentId        String?
-  path            String // 레벨당 4자리 고정폭 세그먼트("0001.0002.0007") — 문자열 정렬이 곧 트리 순서
-  level           Int // path 세그먼트 수(1부터 시작). path로부터 산출해 저장한다.
-  name            String
-  description     String        @default("")
-  ownerUserId     String?
-  ownerNameRaw    String        @default("") // 엑셀 R&R(실행) 원본 텍스트 — 시스템 사용자와 매칭 안 돼도 표시·검색은 되도록 항상 보존
-  ownerLoginId    String        @default("") // 엑셀 사용자ID 원본 텍스트 — 로그인 ID로 담당자를 확정 지정할 때 쓰며, 매칭 안 돼도 항상 보존
-  groupId         String?
-  startDate       DateTime?     @db.Date // 계획시작일 — 엑셀 StartDate 컬럼과 매핑되는 원본 필드명은 유지한다.
-  dueDate         DateTime?     @db.Date // 계획종료일 — 엑셀 DueDate 컬럼과 매핑되는 원본 필드명은 유지한다.
-  actualStartDate DateTime?     @db.Date // 실적시작일 — 엑셀 47개 컬럼 서식에는 없는 웹 화면 전용 커스텀 컬럼(사용자ID와 동일 패턴).
-  actualDueDate   DateTime?     @db.Date // 실적종료일 — 위와 동일.
-  status          WbsItemStatus @default(not_started)
-  configStatus    String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
-  weight          Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.
-  createdBy       String
-  version         Int           @default(1)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  archivedAt      DateTime?
+  id                    String        @id @default(uuid())
+  displayId             String        @unique
+  projectId             String
+  parentId              String?
+  path                  String // 레벨당 4자리 고정폭 세그먼트("0001.0002.0007") — 문자열 정렬이 곧 트리 순서
+  level                 Int // path 세그먼트 수(1부터 시작). path로부터 산출해 저장한다.
+  name                  String
+  description           String        @default("")
+  ownerUserId           String?
+  ownerNameRaw          String        @default("") // 엑셀 R&R(실행) 원본 텍스트 — 시스템 사용자와 매칭 안 돼도 표시·검색은 되도록 항상 보존
+  ownerLoginId          String        @default("") // 엑셀 사용자ID 원본 텍스트 — 로그인 ID로 담당자를 확정 지정할 때 쓰며, 매칭 안 돼도 항상 보존
+  groupId               String?
+  startDate             DateTime?     @db.Date // 계획시작일 — 엑셀 StartDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  dueDate               DateTime?     @db.Date // 계획종료일 — 엑셀 DueDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  actualStartDate       DateTime?     @db.Date // 실적시작일 — 엑셀 47개 컬럼 서식에는 없는 웹 화면 전용 커스텀 컬럼(사용자ID와 동일 패턴).
+  actualDueDate         DateTime?     @db.Date // 실적종료일 — 위와 동일.
+  isDelayedCompletion   Boolean       @default(false) // 지연완료 — 실적종료일이 계획종료일보다 늦게 저장되면 true(1), 아니면 false(0).
+  delayedCompletionDate DateTime?     @db.Date // 지연완료일자 — 지연완료 판정 시점의 실적종료일.
+  delayDays             Int? // 지연일자 — 계획종료일 다음날부터 실적종료일까지의 영업일수(주말·공휴일 제외). 지연완료가 아니면 null.
+  status                WbsItemStatus @default(not_started)
+  configStatus          String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
+  weight                Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.
+  createdBy             String
+  version               Int           @default(1)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  archivedAt            DateTime?
 
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent      WbsItem?        @relation("WbsTree", fields: [parentId], references: [id])
-  children    WbsItem[]       @relation("WbsTree")
-  owner       User?           @relation("WbsItemOwner", fields: [ownerUserId], references: [id])
-  group       CommonCode?     @relation(fields: [groupId], references: [id])
-  creator     User            @relation("WbsItemCreator", fields: [createdBy], references: [id])
-  events      WbsItemEvent[]
-  assignments WbsAssignment[]
-  deliverable WbsDeliverable?
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       WbsItem?         @relation("WbsTree", fields: [parentId], references: [id])
+  children     WbsItem[]        @relation("WbsTree")
+  owner        User?            @relation("WbsItemOwner", fields: [ownerUserId], references: [id])
+  group        CommonCode?      @relation(fields: [groupId], references: [id])
+  creator      User             @relation("WbsItemCreator", fields: [createdBy], references: [id])
+  events       WbsItemEvent[]
+  assignments  WbsAssignment[]
+  deliverable  WbsDeliverable?
+  delayedTasks WbsDelayedTask[]
 
   @@index([projectId, archivedAt])
   @@index([projectId, path])
@@ -1420,6 +1425,32 @@ model WbsDeliverable {
   reviewer User?   @relation("WbsDeliverableReviewer", fields: [reviewerUserId], references: [id])
 
   @@map("wbs_deliverables")
+}
+
+// 실적종료일 저장 시 지연일자(영업일)가 1 이상이면 자동으로 한 건 남기는 지연 이력 로그(2026-09-05 사용자 요청).
+// 현재 상태를 대표하는 단일 레코드가 아니라 "실적종료일이 갱신될 때마다" 쌓이는 이력이라, 조회 시점 조인 대신
+// 테스크명·업무그룹·담당자를 등록 시점 값으로 스냅샷 보존한다(이후 WBS 항목이 바뀌어도 로그는 그대로 남는다).
+model WbsDelayedTask {
+  id                    String    @id @default(uuid())
+  projectId             String
+  wbsItemId             String
+  name                  String // 테스크명(등록 시점 스냅샷)
+  plannedStartDate      DateTime? @db.Date // 계획시작일
+  plannedDueDate        DateTime? @db.Date // 계획종료일
+  actualStartDate       DateTime? @db.Date // 실적시작일
+  actualDueDate         DateTime  @db.Date // 실적종료일
+  delayedCompletionDate DateTime  @db.Date // 지연종료일(실적종료일과 동일 — 지연 확정 시점 값)
+  delayDays             Int // 지연일(영업일)
+  groupLabel            String? // 업무그룹(등록 시점 스냅샷)
+  ownerName             String? // 담당자(등록 시점 스냅샷)
+  createdAt             DateTime  @default(now()) // 등록일자
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsItem WbsItem @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([wbsItemId])
+  @@map("wbs_delayed_tasks")
 }
 
 // 엑셀 W열(Sort/Working Day = NETWORKDAYS)이 참조하던 외부 [1]공휴일 워크북 링크를 대체한다.

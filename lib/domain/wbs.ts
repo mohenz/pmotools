@@ -111,6 +111,14 @@ export function wbsDelayRate(delayDays: number, plannedWorkingDays: number): num
   return plannedWorkingDays > 0 ? Math.round((delayDays / plannedWorkingDays) * 100) : 0;
 }
 
+/** 지연완료 판정(2026-09-05 사용자 확정) — 실적종료일이 계획종료일보다 늦을 때만 지연완료(true)이며, 지연일자는
+ * 계획종료일 다음날부터 실적종료일까지의 영업일수(주말·공휴일 제외)다. 조기·정시 완료는 지연완료가 아니다. */
+export function wbsDelayCompletion(dueDate: Date, actualDueDate: Date, holidays: Set<string> = new Set()): { isDelayedCompletion: boolean; delayDays: number } {
+  if (actualDueDate <= dueDate) return { isDelayedCompletion: false, delayDays: 0 };
+  const delayStart = new Date(dueDate.getTime() + 86_400_000);
+  return { isDelayedCompletion: true, delayDays: workingDays(delayStart, actualDueDate, holidays) };
+}
+
 // ---------------------------------------------------------------------------
 // 지연업무 기준(2026-09-01 사용자 확정, 2026-09-01 예외 보정) — 날짜만 비교하므로 "YYYY-MM-DD" 문자열 그대로 비교한다(시각 오차 방지).
 // 1) 계획시작일이 오늘 이전인데 실적시작일이 공백이거나, 2) 계획종료일이 오늘 이전인데 실적종료일이 공백이면 지연.

@@ -7,6 +7,7 @@ import { acceptanceLabel, acceptanceLabels } from "@/lib/domain/requirements";
 import type { RequirementRow } from "@/lib/server/requirements";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import type { CommonCode } from "@/lib/server/common-codes";
+import { WarningDialog } from "@/components/WarningDialog";
 
 type Options = { members: ProjectMemberOption[]; divisions: CommonCode[]; categories: CommonCode[] };
 
@@ -83,7 +84,7 @@ export function RequirementInfoPanel({ requirement, options, editing, onEditingC
         <label>확정후추가<select name="addedAfterConfirmation" defaultValue={requirement.addedAfterConfirmation === null ? "" : String(requirement.addedAfterConfirmation)}><option value="">미입력</option><option value="true">예</option><option value="false">아니요</option></select></label>
         <label>비고<textarea name="notes" rows={3} maxLength={5000} defaultValue={requirement.notes} /></label>
         <label>검수기준<textarea name="inspectionCriteria" rows={3} maxLength={5000} defaultValue={requirement.inspectionCriteria} /></label>
-        {message && <p className="form-error">{message}</p>}
+        <WarningDialog message={message} onClose={() => setMessage("")} />
         <button className="button primary" type="submit" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
       </form>
     </section>

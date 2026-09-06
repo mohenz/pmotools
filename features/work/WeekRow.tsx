@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { ProjectWeek } from "@/lib/server/work-management";
 import { WeekStatusButton } from "@/features/work/WeekStatusButton";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function WeekRow({ week }: { week: ProjectWeek }) {
   const router = useRouter();
@@ -63,7 +64,7 @@ export function WeekRow({ week }: { week: ProjectWeek }) {
           </AlertDialog.Portal>
         </AlertDialog.Root>
       </>}
-      {message && <p className="form-error" style={{ width: "100%", marginTop: 4 }}>{message}</p>}
+      <WarningDialog message={message} onClose={() => setMessage("")} />
     </td>
   </tr>;
 }

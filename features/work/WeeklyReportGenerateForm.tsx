@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculateWeeklyReportPeriod } from "@/lib/domain/weekly-reports";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const messageOf = (payload: unknown) => {
   if (payload && typeof payload === "object" && "error" in payload) {
@@ -45,6 +46,6 @@ export function WeeklyReportGenerateForm({ defaultYear, defaultMonth, defaultWee
       <button className="button primary" disabled={pending || !period}>{pending ? "생성 중…" : "위클리 리포트 생성"}</button>
     </div>
     {period ? <div className="weekly-period-preview"><span><b>실적 기간</b>{period.actualStart} ~ {period.actualEnd}</span><span><b>계획 기간</b>{period.planStart} ~ {period.planEnd}</span></div> : <p className="form-error">선택한 월에는 해당 주차가 없습니다.</p>}
-    {message && <p className="form-error">{message}</p>}
+    <WarningDialog message={message} onClose={() => setMessage("")} />
   </form>;
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PortfolioPanelRow } from "@/lib/domain/portfolio-panels";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function PortfolioPanelPreferencesScreen({ initial }: { initial: PortfolioPanelRow[] }) {
   const router = useRouter();
@@ -28,7 +29,8 @@ export function PortfolioPanelPreferencesScreen({ initial }: { initial: Portfoli
   return <>
     <header className="topbar"><div><h1>포트폴리오 패널 설정</h1><p>통합 현황(포트폴리오) 화면에 노출할 패널을 선택합니다.</p></div></header>
     <div className="content settings-content">
-      {message && <p className={message.type === "error" ? "form-error action-message" : "form-success action-message"} role={message.type === "error" ? "alert" : "status"}>{message.text}</p>}
+      {message && message.type !== "error" && <p className="form-success action-message" role="status">{message.text}</p>}
+      <WarningDialog message={message && message.type === "error" ? message.text : ""} onClose={() => setMessage(null)} />
       <section className="panel">
         <div className="panel-head"><h2>패널 목록</h2><span>{items.length}개</span></div>
         <div className="meeting-list">

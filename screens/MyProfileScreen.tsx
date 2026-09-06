@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { MyProfile } from "@/lib/server/users";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "슈퍼관리자", ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
@@ -98,7 +99,8 @@ export function MyProfileScreen({ profile }: { profile: MyProfile }) {
             <label>이메일<input type="email" value={form.email} onChange={(event) => setForm((f) => ({ ...f, email: event.target.value }))} maxLength={100} /></label>
             <label>회사명<input value={form.department} onChange={(event) => setForm((f) => ({ ...f, department: event.target.value }))} maxLength={100} /></label>
             <label>직책<input value={form.jobTitle} onChange={(event) => setForm((f) => ({ ...f, jobTitle: event.target.value }))} maxLength={100} /></label>
-            {profileMessage && <p className={profileMessage.type === "error" ? "form-error" : "form-success"} role={profileMessage.type === "error" ? "alert" : "status"}>{profileMessage.text}</p>}
+            {profileMessage && profileMessage.type !== "error" && <p className="form-success" role="status">{profileMessage.text}</p>}
+            <WarningDialog message={profileMessage && profileMessage.type === "error" ? profileMessage.text : ""} onClose={() => setProfileMessage(null)} />
             <div className="modal-actions"><Dialog.Close asChild><button className="button secondary" type="button" disabled={profilePending}>닫기</button></Dialog.Close><button className="button primary" type="submit" disabled={profilePending}>{profilePending ? "저장 중…" : "저장"}</button></div>
           </form>
         </Dialog.Content>
@@ -117,7 +119,8 @@ export function MyProfileScreen({ profile }: { profile: MyProfile }) {
             <label>현재 비밀번호<input type="password" autoComplete="current-password" value={pwForm.currentPassword} onChange={(event) => setPwForm((f) => ({ ...f, currentPassword: event.target.value }))} required /></label>
             <label>새 비밀번호<input type="password" autoComplete="new-password" value={pwForm.newPassword} onChange={(event) => setPwForm((f) => ({ ...f, newPassword: event.target.value }))} required minLength={8} maxLength={100} /></label>
             <label>새 비밀번호 확인<input type="password" autoComplete="new-password" value={pwForm.newPasswordConfirm} onChange={(event) => setPwForm((f) => ({ ...f, newPasswordConfirm: event.target.value }))} required minLength={8} maxLength={100} /></label>
-            {pwMessage && <p className={pwMessage.type === "error" ? "form-error" : "form-success"} role={pwMessage.type === "error" ? "alert" : "status"}>{pwMessage.text}</p>}
+            {pwMessage && pwMessage.type !== "error" && <p className="form-success" role="status">{pwMessage.text}</p>}
+            <WarningDialog message={pwMessage && pwMessage.type === "error" ? pwMessage.text : ""} onClose={() => setPwMessage(null)} />
             <div className="modal-actions"><Dialog.Close asChild><button className="button secondary" type="button" disabled={pwPending}>닫기</button></Dialog.Close><button className="button primary" type="submit" disabled={pwPending}>{pwPending ? "변경 중…" : "비밀번호 변경"}</button></div>
           </form>
         </Dialog.Content>

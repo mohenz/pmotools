@@ -6,6 +6,7 @@ import { probabilities } from "@/lib/domain/levels";
 import { acceptanceLabels } from "@/lib/domain/requirements";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import type { CommonCode } from "@/lib/server/common-codes";
+import { WarningDialog } from "@/components/WarningDialog";
 
 type Options = { members: ProjectMemberOption[]; divisions: CommonCode[]; categories: CommonCode[] };
 
@@ -74,7 +75,7 @@ export function RequirementCreateScreen({ options }: { options: Options }) {
       <label>확정후추가<select name="addedAfterConfirmation" defaultValue=""><option value="">미입력</option><option value="true">예</option><option value="false">아니요</option></select></label>
       <label>비고<textarea name="notes" rows={3} maxLength={5000} /></label>
       <label>검수기준<textarea name="inspectionCriteria" rows={3} maxLength={5000} placeholder="인수 기준" /></label>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       <button className="button primary" type="submit" disabled={saving}>{saving ? "등록 중…" : "등록하기"}</button>
     </form></section></div>
   </>;

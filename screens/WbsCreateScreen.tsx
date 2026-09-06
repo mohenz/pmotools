@@ -6,6 +6,7 @@ import { WBS_ITEM_STATUSES } from "@/lib/domain/wbs";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import type { WbsItemRow } from "@/lib/server/wbs";
+import { WarningDialog } from "@/components/WarningDialog";
 
 function parentLabel(item: WbsItemRow) {
   return `${"— ".repeat(item.level - 1)}${item.code} ${item.name}`;
@@ -85,10 +86,13 @@ export function WbsCreateScreen({ items, groups, members }: { items: WbsItemRow[
 
       <section className="panel compact form-panel">
         <div className="panel-head"><h2>역할별 진척등록권한·진도율</h2></div>
-        {groups.length ? <div className="wbs-inline-form">
+        {groups.length ? <div className="wbs-inline-form wbs-track-form">
           {groups.map((group) => <label key={group.id}>{group.label}
             <span className="wbs-track-controls">
-              <input type="checkbox" name={`perm-${group.id}`} title="등록권한" />
+              <input type="checkbox" name={`perm-${group.id}`} title="등록권한" onChange={(event) => {
+                const percentInput = event.currentTarget.nextElementSibling as HTMLInputElement | null;
+                if (percentInput) percentInput.value = event.currentTarget.checked ? "100" : "0";
+              }} />
               <input type="number" name={`pct-${group.id}`} min={0} max={100} defaultValue={0} />%
             </span>
           </label>)}
@@ -107,7 +111,7 @@ export function WbsCreateScreen({ items, groups, members }: { items: WbsItemRow[
         <label>이슈 및 사유<textarea name="note" rows={3} maxLength={5000} /></label>
       </section>
 
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <WarningDialog message={error} onClose={() => setError("")} />
       <button className="button primary" type="submit" disabled={saving}>{saving ? "등록 중…" : "등록하기"}</button>
     </form></div>
   </>;

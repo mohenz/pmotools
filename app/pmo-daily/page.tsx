@@ -10,6 +10,7 @@ export default async function PmoDailyPage({ searchParams }: { searchParams: Pro
   const dateFrom = typeof params.dateFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.dateFrom) ? params.dateFrom : "";
   const dateTo = typeof params.dateTo === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.dateTo) ? params.dateTo : "";
   const page = typeof params.page === "string" ? Number(params.page) || 1 : 1;
-  const result = await listPmoDailySnapshots(projectId, { dateFrom, dateTo, page });
-  return <PmoDailyListScreen result={result} filters={{ dateFrom, dateTo }} />;
+  const pageSize = params.pageSize === "all" ? "all" as const : typeof params.pageSize === "string" && [20, 40, 60, 80, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20;
+  const result = await listPmoDailySnapshots(projectId, { dateFrom, dateTo, page, pageSize });
+  return <PmoDailyListScreen result={result} filters={{ dateFrom, dateTo, pageSize }} />;
 }

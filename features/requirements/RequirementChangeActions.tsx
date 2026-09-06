@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { WarningDialog } from "@/components/WarningDialog";
 
 export function RequirementChangeActions({ changeId }: { changeId: string }) {
   const router = useRouter();
@@ -27,6 +28,6 @@ export function RequirementChangeActions({ changeId }: { changeId: string }) {
       <button className="button primary" type="button" disabled={!!pending} onClick={() => decide("approved")}>{pending === "approved" ? "처리 중…" : "승인"}</button>
       <button className="button danger" type="button" disabled={!!pending} onClick={() => decide("rejected")}>{pending === "rejected" ? "처리 중…" : "반려"}</button>
     </div>
-    {message && <p className="form-error">{message}</p>}
+    <WarningDialog message={message} onClose={() => setMessage("")} />
   </div>;
 }

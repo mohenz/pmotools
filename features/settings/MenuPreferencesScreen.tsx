@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MenuPreferenceRow } from "@/lib/domain/menu-preferences";
+import { WarningDialog } from "@/components/WarningDialog";
 
 const ROLE_FIELDS = [
   { field: "visibleAdmin", label: "관리자" },
@@ -46,7 +47,8 @@ export function MenuPreferencesScreen({ initial }: { initial: MenuPreferenceRow[
   return <>
     <header className="topbar"><div><h1>메뉴 설정</h1><p>메뉴명과 역할별 노출 여부, 왼쪽 사이드바의 순서를 조정합니다.</p></div></header>
     <div className="content settings-content">
-      {message && <p className={message.type === "error" ? "form-error action-message" : "form-success action-message"} role={message.type === "error" ? "alert" : "status"}>{message.text}</p>}
+      {message && message.type !== "error" && <p className="form-success action-message" role="status">{message.text}</p>}
+      <WarningDialog message={message && message.type === "error" ? message.text : ""} onClose={() => setMessage(null)} />
       <section className="panel">
         <div className="panel-head"><h2>메뉴 목록</h2><span>{items.length}개</span></div>
         <div className="meeting-list">

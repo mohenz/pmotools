@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayDays, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
+import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { scheduleProgress } from "@/lib/domain/pmo-daily";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
@@ -57,6 +57,7 @@ export type WbsItemRow = {
   weight: number | null;
   workingDays: number | null; actualWorkingDays: number | null; plannedProgress: number | null; actualProgress: number; progressIndex: number | null;
   delayDays: number | null; delayRate: number | null; isDelayed: boolean;
+  isDelayedCompletion: boolean; delayedCompletionDate: string | null;
   createdAt: string; updatedAt: string; version: number;
 };
 export type WbsItemEventRow = { id: string; eventType: string; actorName: string; body: string | null; beforeData: Record<string, unknown> | null; afterData: Record<string, unknown> | null; createdAt: string };
@@ -112,21 +113,33 @@ async function loadHolidaySet(projectId: string): Promise<Set<string>> {
   return new Set(rows.map((row) => dateStr(row.date)!));
 }
 
+// 실적종료일 저장 시(생성·수정) 지연완료 여부를 매번 다시 확정한다 — 조기 완료로 정정되면 지연완료도 함께 풀린다.
+function delayCompletionFields(dueDateStr: string | null, actualDueDateStr: string | null, holidays: Set<string>) {
+  if (!dueDateStr || !actualDueDateStr) return { isDelayedCompletion: false, delayedCompletionDate: null as Date | null, delayDays: null as number | null };
+  const { isDelayedCompletion, delayDays } = wbsDelayCompletion(new Date(`${dueDateStr}T00:00:00.000Z`), new Date(`${actualDueDateStr}T00:00:00.000Z`), holidays);
+  return { isDelayedCompletion, delayedCompletionDate: isDelayedCompletion ? new Date(`${actualDueDateStr}T00:00:00.000Z`) : null, delayDays: isDelayedCompletion ? delayDays : null };
+}
+
 // isLeaf(진도관리대상) 항목만 지연 판정 대상이다 — Stage 헤더 같은 상위 구조 행은 자신도 계획·실적일자를 갖고 있을 수
 // 있지만 실제 진척 추적 단위가 아니라서, 통계(loadWbsStats 등)가 leaf만 롤업하는 것과 같은 기준으로 여기서도 걸러낸다.
 function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, stage: string | null, isLeaf: boolean): WbsItemRow {
   const start = row.startDate, due = row.dueDate;
   const actualStart = row.actualStartDate, actualDue = row.actualDueDate;
-  const actual = actualProgress(row.assignments.map((a) => a.progressPercent));
+  // 실적종료일이 있으면 세부진도(actualProgress)·진척율(progressIndex)을 역할별 평균이나 목표 대비 계산 대신 100%로 확정한다.
+  const actual = actualDue ? 1 : actualProgress(row.assignments.map((a) => a.progressPercent));
   const planned = start && due ? plannedProgress(today, start, due) : null;
   const plannedWorkingDays = start && due ? workingDays(start, due, holidays) : null;
   const todayStr = dateStr(today)!;
   const startStr = dateStr(start), dueStr = dateStr(due);
   const actualStartStr = dateStr(actualStart), actualDueStr = dateStr(actualDue);
   const isDelayed = isLeaf && isWbsItemDelayed(todayStr, { plannedStart: startStr, actualStart: actualStartStr, plannedDue: dueStr, actualDue: actualDueStr });
-  // 실적종료일이 비어 있어도 계획종료일이 지났으면 오늘을 임시 실적종료일 삼아 진행 중인 지연을 계산한다.
-  const effectiveActualDue = actualDue ?? (dueStr && dueStr < todayStr ? new Date(todayStr) : null);
-  const delayDaysValue = isLeaf && due && effectiveActualDue ? wbsDelayDays(due, effectiveActualDue) : null;
+  // 지연일자 — 이미 지연완료로 확정·저장된 값(row.delayDays)이 있으면 그 값을 쓴다. 아직 완료 전(실적종료일 없음)인데
+  // 계획종료일이 지난 진행 중 항목은 저장은 하지 않되(완료 시점에만 확정 저장) 오늘 기준 진행 중인 지연 영업일수를
+  // 그때그때 계산해 보여준다 — "지연 중인데 지연일자가 안 보인다"는 문제(2026-09-05)를 막기 위함.
+  // leaf 여부와 무관하게 계획종료일·실적종료일이 있으면 계산한다 — 상위(비-leaf) 항목도 자기 자신의 계획·실적일을
+  // 직접 가질 수 있고, 지연완료 이벤트도 leaf 여부와 상관없이 저장되므로 leaf만 걸러내면 저장된 값이 화면에서 숨어버린다.
+  const openDelayDays = due && !actualDue && dueStr! < todayStr ? workingDays(new Date(due.getTime() + 86_400_000), today, holidays) : null;
+  const delayDaysValue = row.delayDays ?? openDelayDays;
   return {
     id: row.id, displayId: row.displayId, projectId: row.projectId, parentId: row.parentId, path: row.path, level: row.level, code: codeFromPath(row.path), stage,
     name: row.name, description: row.description, configStatus: row.configStatus,
@@ -136,8 +149,9 @@ function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, st
     actualStartDate: actualStartStr, actualDueDate: actualDueStr,
     status: row.status, weight: row.weight ? Number(row.weight) : null,
     workingDays: plannedWorkingDays, actualWorkingDays: actualStart && actualDue ? workingDays(actualStart, actualDue, holidays) : null,
-    plannedProgress: planned, actualProgress: actual, progressIndex: planned !== null ? progressIndex(actual, planned) : null,
+    plannedProgress: planned, actualProgress: actual, progressIndex: actualDue ? 1 : (planned !== null ? progressIndex(actual, planned) : null),
     delayDays: delayDaysValue, delayRate: delayDaysValue !== null && plannedWorkingDays !== null ? wbsDelayRate(delayDaysValue, plannedWorkingDays) : null, isDelayed,
+    isDelayedCompletion: row.isDelayedCompletion, delayedCompletionDate: dateStr(row.delayedCompletionDate),
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), version: row.version,
   } satisfies WbsItemRow;
 }
@@ -166,8 +180,8 @@ export type WbsListFilters = {
   page?: number; pageSize?: number | "all"; q?: string; assignee?: string;
   startDateFrom?: string; startDateTo?: string; dueDateFrom?: string; dueDateTo?: string;
   actualStartDateFrom?: string; actualStartDateTo?: string; actualDueDateFrom?: string; actualDueDateTo?: string;
-  groupLabel?: string; delayed?: "" | "y" | "n";
-  plannedMin?: number; actualMin?: number; progressMin?: number;
+  delayed?: "" | "y" | "n";
+  stage?: string; status?: "" | "not_started" | "in_progress" | "completed" | "on_hold";
 };
 
 // 엑셀 원본 47개 컬럼(A~AU)을 그대로 담아 반환한다 — 목록 화면의 전체 컬럼 보기, 향후 엑셀 다운로드가 그대로 쓸 형태.
@@ -201,9 +215,9 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   const dueDateFrom = filters.dueDateFrom?.trim() ?? "", dueDateTo = filters.dueDateTo?.trim() ?? "";
   const actualStartDateFrom = filters.actualStartDateFrom?.trim() ?? "", actualStartDateTo = filters.actualStartDateTo?.trim() ?? "";
   const actualDueDateFrom = filters.actualDueDateFrom?.trim() ?? "", actualDueDateTo = filters.actualDueDateTo?.trim() ?? "";
-  const groupLabel = filters.groupLabel?.trim().toLowerCase() ?? "";
   const delayed = filters.delayed ?? "";
-  const { plannedMin, actualMin, progressMin } = filters;
+  const stage = filters.stage?.trim().toLowerCase() ?? "";
+  const status = filters.status ?? "";
   const inRange = (value: string | null, from: string, to: string) => (!from && !to) || (value !== null && (!from || value >= from) && (!to || value <= to));
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
@@ -212,12 +226,10 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
     const matchesDueDate = inRange(row.dueDate, dueDateFrom, dueDateTo);
     const matchesActualStartDate = inRange(row.actualStartDate, actualStartDateFrom, actualStartDateTo);
     const matchesActualDueDate = inRange(row.actualDueDate, actualDueDateFrom, actualDueDateTo);
-    const matchesGroupLabel = !groupLabel || (row.groupLabel ?? "").toLowerCase().includes(groupLabel);
     const matchesDelayed = !delayed || (delayed === "y" ? row.isDelayed : !row.isDelayed);
-    const matchesPlanned = plannedMin == null || (row.plannedProgress ?? 0) * 100 >= plannedMin;
-    const matchesActual = actualMin == null || row.actualProgress * 100 >= actualMin;
-    const matchesProgress = progressMin == null || (row.progressIndex ?? 0) * 100 >= progressMin;
-    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesGroupLabel && matchesDelayed && matchesPlanned && matchesActual && matchesProgress;
+    const matchesStage = !stage || (row.stage ?? "").toLowerCase().includes(stage);
+    const matchesStatus = !status || row.status === status;
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesDelayed && matchesStage && matchesStatus;
   });
   const total = filteredRows.length;
   const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 10));
@@ -548,12 +560,14 @@ async function assertOwner(projectId: string, userId: string | null | undefined)
 
 export async function createWbsItem(projectId: string, userId: string, input: unknown) {
   const data = createWbsItemSchema.parse(input), requestId = crypto.randomUUID();
+  if (data.actualDueDate && !data.actualStartDate) throw new DomainError("INVALID_CODE", "실적시작일이 없으면 실적종료일을 입력할 수 없습니다.");
   await Promise.all([
     data.groupId ? assertWbsWorkGroupCode(projectId, data.groupId) : Promise.resolve(),
     assertOwner(projectId, data.ownerUserId),
   ]);
   const prisma = getPrisma();
-  const actorName = await actorNameOf(userId);
+  const [actorName, holidays] = await Promise.all([actorNameOf(userId), loadHolidaySet(projectId)]);
+  const { isDelayedCompletion, delayedCompletionDate, delayDays } = delayCompletionFields(data.dueDate, data.actualDueDate, holidays);
   const { item, displayId } = await prisma.$transaction(async (tx) => {
     const parent = data.parentId ? await tx.wbsItem.findUnique({ where: { id: data.parentId } }) : null;
     if (data.parentId && (!parent || parent.projectId !== projectId || parent.archivedAt)) throw new DomainError("NOT_FOUND", "상위 항목을 찾을 수 없습니다.");
@@ -568,9 +582,28 @@ export async function createWbsItem(projectId: string, userId: string, input: un
         ownerUserId: data.ownerUserId || null, groupId: data.groupId || null,
         startDate: data.startDate ? new Date(data.startDate) : null, dueDate: data.dueDate ? new Date(data.dueDate) : null,
         actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null, actualDueDate: data.actualDueDate ? new Date(data.actualDueDate) : null,
-        status: data.status, configStatus: data.configStatus, weight: data.weight ?? null, createdBy: userId,
+        isDelayedCompletion, delayedCompletionDate, delayDays,
+        status: data.actualDueDate ? "completed" : data.status, configStatus: data.configStatus, weight: data.weight ?? null, createdBy: userId,
       },
     });
+    if (isDelayedCompletion && (delayDays ?? 0) >= 1) {
+      const [group, owner] = await Promise.all([
+        data.groupId ? tx.commonCode.findUnique({ where: { id: data.groupId } }) : Promise.resolve(null),
+        data.ownerUserId ? tx.user.findUnique({ where: { id: data.ownerUserId } }) : Promise.resolve(null),
+      ]);
+      await tx.wbsDelayedTask.create({
+        data: {
+          projectId, wbsItemId: item.id, name: data.name,
+          plannedStartDate: data.startDate ? new Date(data.startDate) : null,
+          plannedDueDate: data.dueDate ? new Date(data.dueDate) : null,
+          actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null,
+          actualDueDate: new Date(data.actualDueDate!),
+          delayedCompletionDate: delayedCompletionDate!,
+          delayDays: delayDays!,
+          groupLabel: group?.label ?? null, ownerName: owner?.name ?? null,
+        },
+      });
+    }
     await tx.wbsItemEvent.create({ data: { wbsItemId: item.id, eventType: "created", actorId: userId, actorName, body: "신규 등록" } });
     return { item, displayId };
   });
@@ -581,12 +614,14 @@ export async function createWbsItem(projectId: string, userId: string, input: un
 
 export async function updateWbsItem(projectId: string, userId: string, id: string, input: unknown) {
   const data = updateWbsItemSchema.parse(input), requestId = crypto.randomUUID();
+  if (data.actualDueDate && !data.actualStartDate) throw new DomainError("INVALID_CODE", "실적시작일이 없으면 실적종료일을 입력할 수 없습니다.");
   await Promise.all([
     data.groupId ? assertWbsWorkGroupCode(projectId, data.groupId) : Promise.resolve(),
     assertOwner(projectId, data.ownerUserId),
   ]);
   const prisma = getPrisma();
-  const actorName = await actorNameOf(userId);
+  const [actorName, holidays] = await Promise.all([actorNameOf(userId), loadHolidaySet(projectId)]);
+  const { isDelayedCompletion, delayedCompletionDate, delayDays } = delayCompletionFields(data.dueDate, data.actualDueDate, holidays);
   const { before, version, moved } = await prisma.$transaction(async (tx) => {
     const before = await tx.wbsItem.findUnique({ where: { id } });
     if (!before || before.projectId !== projectId) throw new DomainError("NOT_FOUND", "WBS 항목을 찾을 수 없습니다.");
@@ -617,9 +652,31 @@ export async function updateWbsItem(projectId: string, userId: string, id: strin
         ownerUserId: data.ownerUserId || null, groupId: data.groupId || null,
         startDate: data.startDate ? new Date(data.startDate) : null, dueDate: data.dueDate ? new Date(data.dueDate) : null,
         actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null, actualDueDate: data.actualDueDate ? new Date(data.actualDueDate) : null,
-        status: data.status, configStatus: data.configStatus, weight: data.weight ?? null, version,
+        isDelayedCompletion, delayedCompletionDate, delayDays,
+        status: data.actualDueDate ? "completed" : data.status, configStatus: data.configStatus, weight: data.weight ?? null, version,
       },
     });
+    // 실적종료일이 있으면 진척등록권한이 있는(=WbsAssignment 행이 존재하는) Track은 모두 완료로 간주해 진도율을 100%로 맞춘다.
+    if (data.actualDueDate) await tx.wbsAssignment.updateMany({ where: { wbsItemId: id }, data: { progressPercent: 100, updatedBy: userId } });
+    // 실적종료일이 이번에 바뀌었고 그 결과 지연일자(영업일)가 1 이상이면, 지연테스크관리 로그를 한 건 남긴다(2026-09-05 사용자 요청).
+    if (dateStr(before.actualDueDate) !== data.actualDueDate && isDelayedCompletion && (delayDays ?? 0) >= 1) {
+      const [group, owner] = await Promise.all([
+        data.groupId ? tx.commonCode.findUnique({ where: { id: data.groupId } }) : Promise.resolve(null),
+        data.ownerUserId ? tx.user.findUnique({ where: { id: data.ownerUserId } }) : Promise.resolve(null),
+      ]);
+      await tx.wbsDelayedTask.create({
+        data: {
+          projectId, wbsItemId: id, name: data.name,
+          plannedStartDate: data.startDate ? new Date(data.startDate) : null,
+          plannedDueDate: data.dueDate ? new Date(data.dueDate) : null,
+          actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null,
+          actualDueDate: new Date(data.actualDueDate!),
+          delayedCompletionDate: delayedCompletionDate!,
+          delayDays: delayDays!,
+          groupLabel: group?.label ?? null, ownerName: owner?.name ?? null,
+        },
+      });
+    }
     await tx.wbsItemEvent.create({
       data: {
         wbsItemId: id, eventType: moved ? "moved" : "edited", actorId: userId, actorName, body: moved ? "상위 항목 변경 및 정보 수정" : "기본 정보 수정",
