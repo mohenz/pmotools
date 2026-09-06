@@ -1,4 +1,4 @@
-import { requirePmPmoContext } from "@/lib/server/context";
+import { getLocalContext } from "@/lib/server/context";
 import { getCodeOptions } from "@/lib/server/common-codes";
 import { listManagementTasks } from "@/lib/server/management-tasks";
 import { ManagementTaskListScreen } from "@/screens/ManagementTaskListScreen";
@@ -13,7 +13,7 @@ export default async function ManagementTasksPage({ searchParams }: { searchPara
     band: typeof params.band === "string" ? params.band : "",
     page: typeof params.page === "string" ? Number(params.page) || 1 : 1,
   };
-  const { projectId } = await requirePmPmoContext();
+  const { projectId } = await getLocalContext();
   const [result, options] = await Promise.all([listManagementTasks(projectId, filters), getCodeOptions(projectId)]);
   return <ManagementTaskListScreen result={result} filters={filters} groups={options.tracks} />;
 }

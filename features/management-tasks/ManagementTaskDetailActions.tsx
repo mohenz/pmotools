@@ -1,9 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { BAND_LABEL, MANAGEMENT_TASK_AXES, MANAGEMENT_TASK_STATUSES, scoreBand, totalScore, type ManagementTaskPercents } from "@/lib/domain/management-tasks";
+import { MANAGEMENT_TASK_STATUSES } from "@/lib/domain/management-tasks";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { ManagementTaskLinkSummary, ManagementTaskRow } from "@/lib/server/management-tasks";
 import { TaskLinkPicker } from "@/features/management-tasks/TaskLinkPicker";
@@ -16,10 +15,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
   const [version, setVersion] = useState(task.version);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState("");
-  const [percents, setPercents] = useState<ManagementTaskPercents>({ prep: task.prepPercent, owner: task.ownerPercent, progress: task.progressPercent, issue: task.issuePercent, close: task.closePercent });
   const [assigneeIds, setAssigneeIds] = useState(task.assignees.map((assignee) => assignee.id));
-  const score = useMemo(() => totalScore(percents), [percents]);
-  const band = scoreBand(score);
 
   async function mutate(path: string, method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>, action: string) {
     setPending(action); setMessage("");
@@ -38,17 +34,8 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
     const saved = await mutate(`/api/v1/management-tasks/${task.id}`, "PATCH", {
       groupId: form.get("groupId"), name: form.get("name"), registrationDate: form.get("registrationDate"),
       assigneeIds, status: form.get("status"), purpose: form.get("purpose"), impactAnalysis: form.get("impactAnalysis"),
-      prepContent: form.get("prepContent"), prepPercent: percents.prep,
-      ownerContent: form.get("ownerContent"), ownerPercent: percents.owner,
-      progressContent: form.get("progressContent"), progressPercent: percents.progress,
-      issueContent: form.get("issueContent"), issuePercent: percents.issue,
-      closeContent: form.get("closeContent"), closePercent: percents.close,
     }, "details");
     if (saved) router.push(`/management-tasks/${task.id}`);
-  }
-
-  async function archive() {
-    if (await mutate(`/api/v1/management-tasks/${task.id}/archive`, "POST", {}, "archive")) router.push("/management-tasks");
   }
 
   async function link(relation: "predecessor" | "successor", targetId: string) {
@@ -73,17 +60,7 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
       <label>관리목적<textarea name="purpose" rows={2} maxLength={2000} defaultValue={task.purpose} /></label>
       <label>영향도분석<textarea name="impactAnalysis" rows={2} maxLength={2000} defaultValue={task.impactAnalysis} /></label>
 
-      {MANAGEMENT_TASK_AXES.map((axis) => {
-        const contentField = `${axis.key}Content` as const;
-        return <fieldset key={axis.key}>
-          <legend>{axis.label} <small>({percents[axis.key]}% · {Math.round(percents[axis.key] * 0.2)}점)</small></legend>
-          <div className="form-grid management-axis-grid">
-            <label>내용<textarea name={contentField} rows={2} maxLength={2000} defaultValue={task[contentField]} /></label>
-            <label>평가점수(%)<input type="number" min={0} max={100} value={percents[axis.key]} onChange={(e) => setPercents((prev) => ({ ...prev, [axis.key]: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))} /></label>
-          </div>
-        </fieldset>;
-      })}
-      <div className="suggest"><span className={`badge band-${band}`}>{BAND_LABEL[band]} · 총점 {score}점</span><p>저장 시 이 값으로 갱신됩니다.</p></div>
+      <p className="auth-hint">세부항목(일정/범위/자원/소통/품질)별 액션아이템은 상세 화면에서 등록·수정합니다. 신호등은 액션아이템 상태로 자동 산출되어 여기서는 바꿀 수 없습니다.</p>
       <button className="button primary" type="submit" disabled={!!pending}>{pending === "details" ? "저장 중…" : "수정 저장"}</button>
     </form></section>
 
@@ -104,21 +81,5 @@ export function ManagementTaskDetailActions({ task, predecessors, successors, gr
     </section>
 
     <WarningDialog message={message} onClose={() => setMessage("")} />
-    <section className="danger-zone"><div><strong>항목 보관</strong><p>보관된 항목은 목록·대시보드·선후행 검색에서 제외됩니다.</p></div>
-      <AlertDialog.Root>
-        <AlertDialog.Trigger asChild><button className="button danger" type="button" disabled={!!pending}>{pending === "archive" ? "처리 중…" : "보관 처리"}</button></AlertDialog.Trigger>
-        <AlertDialog.Portal>
-          <AlertDialog.Overlay className="calendar-modal-backdrop" />
-          <AlertDialog.Content className="alert-dialog">
-            <AlertDialog.Title asChild><h2>이 항목을 보관 처리하시겠습니까?</h2></AlertDialog.Title>
-            <AlertDialog.Description asChild><p>보관하면 목록·대시보드·선후행 검색에서 제외됩니다.</p></AlertDialog.Description>
-            <div className="alert-dialog-actions">
-              <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
-              <AlertDialog.Action asChild><button className="button danger" type="button" onClick={archive}>보관 처리</button></AlertDialog.Action>
-            </div>
-          </AlertDialog.Content>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
-    </section>
   </>;
 }
