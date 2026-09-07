@@ -3,13 +3,18 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import type { WbsImportReport } from "@/lib/server/wbs-excel";
+import type { WbsImportApplyResult, WbsImportReport } from "@/lib/server/wbs-excel";
 import { WarningDialog } from "@/components/WarningDialog";
+
+const OUTCOME_LABEL: Record<WbsImportApplyResult["rows"][number]["outcome"], string> = {
+  deleted: "삭제(보관)", delete_not_found: "삭제 대상 없음", created: "생성", updated: "수정",
+};
 
 export function WbsDataManagementPanel({ children }: { children?: React.ReactNode } = {}) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<WbsImportReport | null>(null);
+  const [applyResult, setApplyResult] = useState<WbsImportApplyResult | null>(null);
   const [pending, setPending] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [resetMessage, setResetMessage] = useState("");
@@ -17,7 +22,7 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
   async function validate(event: FormEvent) {
     event.preventDefault();
     if (!file) return;
-    setPending("validate"); setUploadMessage(""); setReport(null);
+    setPending("validate"); setUploadMessage(""); setReport(null); setApplyResult(null);
     const form = new FormData(); form.append("file", file);
     const response = await fetch("/api/v1/wbs-items/excel/import/validate", { method: "POST", body: form });
     const payload = await response.json().catch(() => null);
@@ -27,13 +32,13 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
   }
   async function apply() {
     if (!file) return;
-    setPending("apply"); setUploadMessage("");
+    setPending("apply"); setUploadMessage(""); setApplyResult(null);
     const form = new FormData(); form.append("file", file);
     const response = await fetch("/api/v1/wbs-items/excel/import", { method: "POST", body: form });
     const payload = await response.json().catch(() => null);
     setPending("");
     if (!response.ok) { setUploadMessage(payload?.error?.message ?? "반영에 실패했습니다."); if (payload?.data) setReport(payload.data); return; }
-    setUploadMessage(`${payload.data.imported}건을 반영했습니다. 기존 데이터는 전부 교체되었습니다.`);
+    setApplyResult(payload.data);
     setReport(null); setFile(null);
     router.refresh();
   }
@@ -48,6 +53,7 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
   }
 
   const canApply = report && report.errorCount === 0 && report.validCount > 0;
+  const actionSummary = report ? `유지 ${report.actionCounts.blank}건 · 삭제 ${report.actionCounts.delete}건 · 수정 ${report.actionCounts.update}건 · 신규 ${report.actionCounts.insert}건` : "";
 
   return <>
     <section className="panel compact">
@@ -58,27 +64,45 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
     </section>
 
     <section className="panel compact">
-      <div className="panel-head"><h2>엑셀 업로드</h2><span>전체 교체 — 기존 데이터를 지우고 파일 내용으로 새로 만듭니다</span></div>
+      <div className="panel-head"><h2>엑셀 업로드</h2><span>가장 왼쪽 &apos;작업구분&apos; 컬럼 기준 반영 — 빈칸은 기존 데이터 유지, D는 삭제(보관), U는 기존 Task 수정, I는 신규 Task 삽입</span></div>
       <div className="wbs-inline-form">
-        <label>엑셀 파일<input type="file" accept=".xlsx" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setReport(null); setUploadMessage(""); }} /></label>
+        <label>엑셀 파일<input type="file" accept=".xlsx" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setReport(null); setApplyResult(null); setUploadMessage(""); }} /></label>
         <button className="button secondary" type="button" onClick={validate} disabled={!file || !!pending}>{pending === "validate" ? "검증 중…" : "검증(Dry-run)"}</button>
-        {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${report.validCount}건, 기존 데이터 삭제됨)`}</button>}
+        {canApply && <button className="button primary" type="button" onClick={apply} disabled={!!pending}>{pending === "apply" ? "반영 중…" : `반영 (${actionSummary})`}</button>}
       </div>
-      {uploadMessage && uploadMessage.includes("반영") && <p className="form-success" role="status">{uploadMessage}</p>}
-      <WarningDialog message={uploadMessage && !uploadMessage.includes("반영") ? uploadMessage : ""} onClose={() => setUploadMessage("")} />
+      <WarningDialog message={uploadMessage} onClose={() => setUploadMessage("")} />
       {report && (() => {
         const issueRows = report.rows.filter((row) => row.errors.length || row.warnings.length);
         return <div className="table-wrap">
-          <p className="table-wrap-note">전체 {report.rows.length}행 중 오류·경고가 있는 {issueRows.length}행만 표시합니다.</p>
+          <p className="table-wrap-note">{actionSummary} — 전체 {report.rows.length}행 중 오류·경고가 있는 {issueRows.length}행만 표시합니다.</p>
           <table>
-            <thead><tr><th>행</th><th>Task</th><th>이름</th><th>오류</th><th>경고</th></tr></thead>
+            <thead><tr><th>행</th><th>작업구분</th><th>Task</th><th>이름</th><th>오류</th><th>경고</th></tr></thead>
             <tbody>
               {issueRows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}>
-                <td>{row.row}</td><td className="mono">{row.code}</td><td>{row.name}</td>
+                <td>{row.row}</td><td className="mono">{row.action || "-"}</td><td className="mono">{row.code}</td><td>{row.name}</td>
                 <td>{row.errors.join(" / ") || "-"}</td><td>{row.warnings.join(" / ") || "-"}</td>
               </tr>)}
-              {!report.rows.length && <tr><td colSpan={5} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
-              {report.rows.length > 0 && !issueRows.length && <tr><td colSpan={5} className="empty">오류·경고 없이 전체 {report.rows.length}행 정상입니다.</td></tr>}
+              {!report.rows.length && <tr><td colSpan={6} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
+              {report.rows.length > 0 && !issueRows.length && <tr><td colSpan={6} className="empty">오류·경고 없이 전체 {report.rows.length}행 정상입니다.</td></tr>}
+            </tbody>
+          </table>
+        </div>;
+      })()}
+      {applyResult && (() => {
+        const c = applyResult.counts;
+        const changedRows = applyResult.rows.filter((row) => row.outcome !== "delete_not_found");
+        return <div className="table-wrap">
+          <p className="form-success" role="status">
+            반영 완료 — 유지 {c.blank}건 · 삭제 {c.deleted}건{c.deleteNotFound ? `(대상 없음 ${c.deleteNotFound}건)` : ""} · 수정 {c.updated}건 · 신규 {c.created}건
+          </p>
+          <table>
+            <thead><tr><th>행</th><th>작업구분</th><th>Task</th><th>이름</th><th>처리 결과</th></tr></thead>
+            <tbody>
+              {applyResult.rows.map((row) => <tr key={row.row}>
+                <td>{row.row}</td><td className="mono">{row.action}</td><td className="mono">{row.code}</td><td>{row.name}</td>
+                <td>{OUTCOME_LABEL[row.outcome]}</td>
+              </tr>)}
+              {!changedRows.length && <tr><td colSpan={5} className="empty">삭제·생성·수정된 행이 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>;

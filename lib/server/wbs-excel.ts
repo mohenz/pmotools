@@ -2,24 +2,28 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { revalidateTag } from "next/cache";
 import { codeFromPath, levelOf, pathFromCode, sortKeyFromCode } from "@/lib/domain/wbs";
-import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { wbsTag } from "@/lib/server/cache-tags";
 import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns, listWbsWorkGroups } from "@/lib/server/wbs";
-import type { Prisma } from "@/lib/generated/prisma/client";
 
 const HEADER_LIST: readonly string[] = WBS_EXCEL_HEADERS;
-const col = (label: string) => HEADER_LIST.indexOf(label) + 1;
+
+// 엑셀 가장 왼쪽 컬럼 — 값이 없으면 해당 행은 그대로 두고, D는 삭제(보관), U는 기존 Task 수정, I는 신규 Task
+// 삽입이다(2026-09-07 사용자 요청, I 추가는 같은 날 후속 요청). U는 코드가 이미 있어야 하고, I는 코드가 아직
+// 없어야 한다 — 다운로드한 파일을 그대로 올리면 기존 행은 U, 새로 추가하는 행은 I로 구분해 쓰는 용도.
+// WBS_EXCEL_HEADERS(다른 화면·엑셀 다운로드가 함께 쓰는 47개 컬럼 스키마)에는 넣지 않고 업로드/다운로드에서만 다룬다.
+const IMPORT_ACTION_HEADER = "작업구분";
 
 export async function exportWbsToExcel(projectId: string): Promise<Buffer> {
   const { rows } = await listWbsItemsExcelColumns(projectId, { pageSize: "all" });
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("WBS");
-  sheet.addRow([...WBS_EXCEL_HEADERS]);
+  sheet.addRow([IMPORT_ACTION_HEADER, ...WBS_EXCEL_HEADERS]);
   sheet.getRow(1).font = { bold: true };
   for (const item of rows) {
     sheet.addRow([
-      item.level, sortKeyFromCode(item.code), item.projectCode, item.configStatus, item.stage ?? "", item.code, item.name, "",
+      "", item.level, sortKeyFromCode(item.code), item.projectCode, item.configStatus, item.stage ?? "", item.code, item.name, "",
       item.isLeaf ? 1 : "", item.ownerName ?? "", item.ownerLoginId ?? "", item.groupLabel ?? "", item.startDate ?? "", item.dueDate ?? "",
       item.deliverable?.note ?? "", item.deliverable?.isOfficial ? "Y" : "", item.deliverable?.fileUrl ?? "", item.sequenceNo,
       item.deliverable?.templateUrl ?? "", item.deliverable?.reviewerName ?? "", item.deliverable?.reviewedAt ?? "",
@@ -35,10 +39,15 @@ export async function exportWbsToExcel(projectId: string): Promise<Buffer> {
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
-export type WbsImportRowResult = { row: number; code: string; name: string; errors: string[]; warnings: string[] };
-export type WbsImportReport = { rows: WbsImportRowResult[]; validCount: number; errorCount: number };
+export type WbsImportRowResult = { row: number; code: string; name: string; action: "" | "D" | "U" | "I"; errors: string[]; warnings: string[] };
+export type WbsImportReport = {
+  rows: WbsImportRowResult[]; validCount: number; errorCount: number;
+  actionCounts: { blank: number; delete: number; update: number; insert: number };
+};
 
-type ParsedWbsRow = {
+type ParsedDeleteRow = { row: number; path: string; code: string; name: string };
+type ParsedUpsertRow = {
+  row: number; action: "U" | "I";
   path: string; level: number; name: string; configStatus: string;
   ownerUserId: string | null; ownerNameRaw: string; ownerLoginId: string; groupId: string | null;
   startDate: string | null; dueDate: string | null; weight: number | null;
@@ -54,16 +63,24 @@ const STAGE_DEFAULT_OWNER_LOGIN_ID: Record<string, string> = { "기획": "q93w36
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CODE_RE = /^\d+(\.\d+)*$/;
 
-async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Promise<{ report: WbsImportReport; parsed: ParsedWbsRow[] }> {
+async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Promise<{
+  report: WbsImportReport; deletes: ParsedDeleteRow[]; upserts: ParsedUpsertRow[]; existingIdByPath: Map<string, string>;
+}> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
   // 공휴일 등 다른 시트가 함께 들어있는 파일도 있어 A1 헤더("wbs_level")로 실제 WBS 시트를 찾고, 못 찾으면 첫 시트로 되돌아간다.
-  const sheet = workbook.worksheets.find((candidate) => String(candidate.getRow(1).getCell(1).value ?? "").trim() === WBS_EXCEL_HEADERS[0]) ?? workbook.worksheets[0];
+  const sheet = workbook.worksheets.find((candidate) => {
+    const row1 = candidate.getRow(1);
+    return [row1.getCell(1).value, row1.getCell(2).value].some((v) => String(v ?? "").trim() === WBS_EXCEL_HEADERS[0]);
+  }) ?? workbook.worksheets[0];
   const prisma = getPrisma();
-  const [groups, members] = await Promise.all([
+  const [groups, members, existingItems] = await Promise.all([
     listWbsWorkGroups(projectId),
     prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: true } }),
+    prisma.wbsItem.findMany({ where: { projectId, archivedAt: null }, select: { id: true, path: true } }),
   ]);
+  const existingIdByPath = new Map(existingItems.map((item) => [item.path, item.id]));
+  const existingPaths = new Set(existingIdByPath.keys());
   const groupsByLabel = new Map(groups.map((group) => [group.label, group]));
   const membersByName = new Map<string, string[]>();
   const membersByLoginId = new Map(members.map((member) => [member.user.userId, member.user.id]));
@@ -98,12 +115,6 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     return null;
   }
 
-  const rows: WbsImportRowResult[] = [];
-  const parsed: ParsedWbsRow[] = [];
-  const seenPaths = new Set<string>();
-  // Stage(엑셀 E열) = 최상위(레벨1) 조상의 이름 — 상위 행이 하위 행보다 먼저 나온다는 기존 검증 규칙 덕분에
-  // 행을 순서대로 훑으면서 "path의 첫 세그먼트 → 그 레벨1 행의 이름"만 기록해두면 매 행의 Stage를 즉석에서 구할 수 있다.
-  const stageNameByRootPath = new Map<string, string>();
   // ExcelJS는 하이퍼링크 셀을 {text,hyperlink}, 리치텍스트를 {richText:[...]}, 수식을 {formula,result}로 반환한다.
   // String(value)로 바로 문자열화하면 이런 객체가 "[object Object]"로 저장되므로 실제 텍스트를 꺼내 쓴다.
   const cellText = (value: ExcelJS.CellValue): string => {
@@ -119,15 +130,15 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     return String(value);
   };
   // 원본 엑셀은 우리 스키마(WBS_EXCEL_HEADERS)에 없는 빈 스페이서 열이 중간에 섞여 있을 수 있어(예: DueDate와
-  // Deliverables 사이) 컬럼 순번 고정 매핑(col())은 위험하다 — 파일 자체의 1행 헤더 텍스트로 열 위치를 찾는다.
+  // Deliverables 사이) 컬럼 순번 고정 매핑은 위험하다 — 파일 자체의 1행 헤더 텍스트로 열 위치를 찾는다.
   // 리치텍스트로 줄바꿈이 섞여 들어오는 헤더도 있어 공백을 전부 제거하고 비교한다.
   const norm = (s: string) => s.replace(/\s+/g, "");
   const headerIndexByText = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, idx) => { const text = norm(cellText(cell.value)); if (text) headerIndexByText.set(text, idx); });
   const col = (label: string) => headerIndexByText.get(norm(label)) ?? (HEADER_LIST.indexOf(label) + 1);
   const cellAt = (row: ExcelJS.Row, label: string) => cellText(row.getCell(col(label)).value).trim();
-  // 사용자ID는 기존 47개 컬럼 서식에 없던 신규 컬럼이라, 헤더 텍스트로 못 찾으면(구버전 파일) 위치 추정 폴백을
-  // 쓰지 않는다 — 폴백을 쓰면 구버전 파일의 R&R(지원)(모듈) 값이 사용자ID로 잘못 읽힌다.
+  // 사용자ID·작업구분은 기존 47개 컬럼 서식에 없던 신규 컬럼이라, 헤더 텍스트로 못 찾으면(구버전 파일) 위치 추정 폴백을
+  // 쓰지 않는다 — 폴백을 쓰면 구버전 파일의 다른 컬럼 값이 잘못 읽힌다.
   const cellAtIfHeaderPresent = (row: ExcelJS.Row, label: string) => (headerIndexByText.has(norm(label)) ? cellAt(row, label) : "");
 
   const formatUtcDate = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
@@ -148,33 +159,68 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     return text;
   };
 
+  const rows: WbsImportRowResult[] = [];
+  const deletes: ParsedDeleteRow[] = [];
+  const upserts: ParsedUpsertRow[] = [];
+  const seenPaths = new Set<string>();
+  // Stage(엑셀 E열) = 최상위(레벨1) 조상의 이름 — 상위 행이 하위 행보다 먼저 나온다는 검증 규칙 덕분에 행을
+  // 순서대로 훑으면서 "path의 첫 세그먼트 → 그 레벨1 행의 이름"만 기록해두면 매 행의 Stage를 즉석에서 구할 수 있다.
+  const stageNameByRootPath = new Map<string, string>();
+  let blankCount = 0, deleteRawCount = 0, updateRawCount = 0, insertRawCount = 0;
+
+  const hasActionColumn = headerIndexByText.has(norm(IMPORT_ACTION_HEADER));
+  if (!hasActionColumn) {
+    rows.push({
+      row: 1, code: "", name: "(파일 형식)", action: "",
+      errors: [`'${IMPORT_ACTION_HEADER}' 컬럼을 찾을 수 없습니다. 엑셀을 다시 내려받아 가장 왼쪽 컬럼에 작업구분(공백/D/U/I)을 입력한 뒤 업로드해 주세요.`],
+      warnings: [],
+    });
+    return { report: { rows, validCount: 0, errorCount: 1, actionCounts: { blank: 0, delete: 0, update: 0, insert: 0 } }, deletes, upserts, existingIdByPath };
+  }
+
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const code = cellAt(row, "Task");
     const name = cellAt(row, "Task Description");
-    if (!code && !name) return; // 완전히 빈 행은 건너뛴다.
+    const actionRaw = cellAt(row, IMPORT_ACTION_HEADER).toUpperCase();
+    if (!code && !name && !actionRaw) return; // 완전히 빈 행은 건너뛴다.
 
     const errors: string[] = [];
     const warnings: string[] = [];
+    const action: "" | "D" | "U" | "I" = actionRaw === "D" || actionRaw === "U" || actionRaw === "I" ? actionRaw : "";
+    if (actionRaw && !action) errors.push(`작업구분 값은 공백/D/U/I만 가능합니다(${actionRaw}).`);
+    if (action === "D") deleteRawCount++; else if (action === "U") updateRawCount++; else if (action === "I") insertRawCount++; else blankCount++;
+
     const codeValid = CODE_RE.test(code);
     if (!codeValid) errors.push(`Task 코드 형식이 올바르지 않습니다(${code || "빈 값"}).`);
-    if (!name) errors.push("Task Description은 필수입니다.");
+    if (!name && (action === "U" || action === "I")) errors.push("Task Description은 필수입니다.");
 
     const path = codeValid ? pathFromCode(code) : "";
     let stage: string | null = null;
     if (path) {
       if (seenPaths.has(path)) errors.push(`Task 코드가 중복됩니다(${code}).`);
       const level = levelOf(path);
-      if (level > 1) {
+      if (level > 1 && (action === "U" || action === "I")) {
         const parentPath = path.split(".").slice(0, -1).join(".");
-        if (!seenPaths.has(parentPath)) errors.push(`상위 Task(${codeFromPath(parentPath)})에 해당하는 행이 이 행보다 앞에 있어야 합니다.`);
+        if (!seenPaths.has(parentPath) && !existingPaths.has(parentPath)) errors.push(`상위 Task(${codeFromPath(parentPath)})가 없습니다. 상위 Task가 이미 등록되어 있거나 이 행보다 앞에 있어야 합니다.`);
       }
+      if (action === "U" && !existingPaths.has(path)) errors.push(`수정 대상 Task를 찾을 수 없습니다(${code}). 신규 등록이면 작업구분을 I로 입력해 주세요.`);
+      if (action === "I" && existingPaths.has(path)) errors.push(`이미 등록된 Task 코드입니다(${code}). 수정이면 작업구분을 U로 입력해 주세요.`);
       seenPaths.add(path);
       const rootPath = path.split(".")[0];
-      if (level === 1) { stage = name; stageNameByRootPath.set(rootPath, name); }
+      if (level === 1) { stage = name || null; if (name) stageNameByRootPath.set(rootPath, name); }
       else stage = stageNameByRootPath.get(rootPath) ?? null;
     }
 
+    if (action === "D") {
+      if (path && !errors.length && !existingPaths.has(path)) warnings.push("삭제 대상 Task를 찾을 수 없습니다(이미 삭제되었거나 존재하지 않는 코드).");
+      rows.push({ row: rowNumber, code, name: name || "(이름 없음)", action, errors, warnings });
+      if (!errors.length && path) deletes.push({ row: rowNumber, path, code, name: name || "(이름 없음)" });
+      return;
+    }
+    if (action === "") { rows.push({ row: rowNumber, code, name: name || "(이름 없음)", action, errors, warnings }); return; }
+
+    // action === "U" | "I" — 수정 또는 신규 삽입할 값을 파싱한다.
     const startDate = cellDateAt(row, "StartDate");
     const dueDate = cellDateAt(row, "DueDate");
     if (startDate && !DATE_RE.test(startDate)) errors.push("StartDate 형식이 올바르지 않습니다(YYYY-MM-DD).");
@@ -218,9 +264,9 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
       }
     }
 
-    rows.push({ row: rowNumber, code, name: name || "(이름 없음)", errors, warnings });
-    if (!errors.length && path) parsed.push({
-      path, level: levelOf(path), name, configStatus: cellAt(row, "Confing Status"),
+    rows.push({ row: rowNumber, code, name: name || "(이름 없음)", action, errors, warnings });
+    if (!errors.length && path && (action === "U" || action === "I")) upserts.push({
+      row: rowNumber, action, path, level: levelOf(path), name, configStatus: cellAt(row, "Confing Status"),
       ownerUserId, ownerNameRaw: ownerName, ownerLoginId, groupId, startDate: startDate || null, dueDate: dueDate || null, weight,
       deliverable: hasDeliverable ? { note, isOfficial, fileUrl, templateUrl, reviewerUserId, reviewedAt: reviewedAt || null } : null,
       assignments,
@@ -228,7 +274,10 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
   });
 
   const errorCount = rows.filter((row) => row.errors.length > 0).length;
-  return { report: { rows, validCount: rows.length - errorCount, errorCount }, parsed };
+  return {
+    report: { rows, validCount: rows.length - errorCount, errorCount, actionCounts: { blank: blankCount, delete: deleteRawCount, update: updateRawCount, insert: insertRawCount } },
+    deletes, upserts, existingIdByPath,
+  };
 }
 
 export async function validateWbsImport(projectId: string, buffer: Buffer): Promise<WbsImportReport> {
@@ -236,48 +285,105 @@ export async function validateWbsImport(projectId: string, buffer: Buffer): Prom
   return report;
 }
 
-// 전체 교체 — 기존 WBS 데이터를 지우고 업로드 파일 내용으로 새로 만든다(병합/upsert 아님).
-export async function applyWbsImport(projectId: string, userId: string, buffer: Buffer) {
+export type WbsImportApplyResultRow = { row: number; code: string; name: string; action: "D" | "U" | "I"; outcome: "deleted" | "delete_not_found" | "created" | "updated" };
+export type WbsImportApplyResult = {
+  counts: {
+    blank: number; markedDelete: number; markedUpdate: number; markedInsert: number;
+    deleted: number; deleteNotFound: number; created: number; updated: number;
+  };
+  rows: WbsImportApplyResultRow[];
+};
+
+// 부분 반영 — 작업구분이 빈 행은 건드리지 않고, D는 보관 처리, U는 기존 Task 수정, I는 신규 Task 삽입한다
+// (U는 코드가 이미 있어야, I는 코드가 없어야 검증을 통과하므로 여기서는 존재 여부로 분기해도 항상 일치한다).
+// 하위 Task까지 함께 삭제하지는 않는다(2026-09-07 사용자 확정 — 해당 행만 삭제).
+export async function applyWbsImport(projectId: string, userId: string, buffer: Buffer): Promise<{ report: WbsImportReport; result: WbsImportApplyResult | null }> {
   await assertManager(projectId, userId);
-  const { report, parsed } = await parseAndValidateWbsImport(projectId, buffer);
-  if (report.errorCount > 0) return { imported: 0, report };
+  const { report, deletes, upserts, existingIdByPath } = await parseAndValidateWbsImport(projectId, buffer);
+  if (report.errorCount > 0) return { report, result: null };
 
   const prisma = getPrisma();
-  const sorted = [...parsed].sort((a, b) => a.path.localeCompare(b.path));
+  const actorName = await actorNameOf(userId);
+  const sortedUpserts = [...upserts].sort((a, b) => a.path.localeCompare(b.path));
+  const idByPath = new Map(existingIdByPath);
+  const resultRows: WbsImportApplyResultRow[] = [];
+  let deletedCount = 0, deleteNotFoundCount = 0, createdCount = 0, updatedCount = 0;
   const year = new Date().getUTCFullYear();
-  const idByPath = new Map<string, string>();
-  const itemRows: Prisma.WbsItemCreateManyInput[] = [];
-  const assignmentRows: Prisma.WbsAssignmentCreateManyInput[] = [];
-  const deliverableRows: Prisma.WbsDeliverableCreateManyInput[] = [];
-
-  sorted.forEach((row, index) => {
-    const id = crypto.randomUUID();
-    idByPath.set(row.path, id);
-    const parentPath = row.level > 1 ? row.path.split(".").slice(0, -1).join(".") : null;
-    const parentId = parentPath ? (idByPath.get(parentPath) ?? null) : null;
-    itemRows.push({
-      id, displayId: `WBS-${year}-${String(index + 1).padStart(6, "0")}`, projectId, parentId,
-      path: row.path, level: row.level, name: row.name, description: "",
-      ownerUserId: row.ownerUserId, ownerNameRaw: row.ownerUserId ? "" : row.ownerNameRaw, ownerLoginId: row.ownerUserId ? "" : row.ownerLoginId, groupId: row.groupId,
-      startDate: row.startDate ? new Date(row.startDate) : null, dueDate: row.dueDate ? new Date(row.dueDate) : null,
-      status: "not_started", configStatus: row.configStatus, weight: row.weight ?? null, createdBy: userId,
-    });
-    for (const assignment of row.assignments) assignmentRows.push({ wbsItemId: id, groupId: assignment.groupId, progressPercent: assignment.progressPercent, updatedBy: userId });
-    if (row.deliverable) deliverableRows.push({
-      wbsItemId: id, note: row.deliverable.note, isOfficial: row.deliverable.isOfficial,
-      fileUrl: row.deliverable.fileUrl, templateUrl: row.deliverable.templateUrl,
-      reviewerUserId: row.deliverable.reviewerUserId, reviewedAt: row.deliverable.reviewedAt ? new Date(row.deliverable.reviewedAt) : null,
-    });
-  });
 
   await prisma.$transaction(async (tx) => {
-    await tx.wbsItem.deleteMany({ where: { projectId } });
-    if (itemRows.length) await tx.wbsItem.createMany({ data: itemRows });
-    if (assignmentRows.length) await tx.wbsAssignment.createMany({ data: assignmentRows });
-    if (deliverableRows.length) await tx.wbsDeliverable.createMany({ data: deliverableRows });
-    await tx.wbsItemSequence.upsert({ where: { projectId }, create: { projectId, value: itemRows.length }, update: { value: itemRows.length } });
-  });
-  await writeAuditLog(projectId, userId, "WBS_EXCEL_IMPORT_REPLACE", "wbs_items", projectId, null, { importedCount: itemRows.length });
+    for (const del of deletes) {
+      const existingId = idByPath.get(del.path);
+      if (!existingId) {
+        deleteNotFoundCount++;
+        resultRows.push({ row: del.row, code: del.code, name: del.name, action: "D", outcome: "delete_not_found" });
+        continue;
+      }
+      await tx.wbsItem.update({ where: { id: existingId }, data: { archivedAt: new Date(), version: { increment: 1 } } });
+      await tx.wbsItemEvent.create({ data: { wbsItemId: existingId, eventType: "archived", actorId: userId, actorName, body: "엑셀 업로드(작업구분 D)로 보관 처리" } });
+      deletedCount++;
+      resultRows.push({ row: del.row, code: del.code, name: del.name, action: "D", outcome: "deleted" });
+    }
+
+    const sequenceRow = await tx.wbsItemSequence.findUnique({ where: { projectId } });
+    let sequenceValue = sequenceRow?.value ?? 0;
+
+    for (const up of sortedUpserts) {
+      const code = codeFromPath(up.path);
+      const parentPath = up.level > 1 ? up.path.split(".").slice(0, -1).join(".") : null;
+      const parentId = parentPath ? (idByPath.get(parentPath) ?? null) : null;
+      const existingId = idByPath.get(up.path);
+      const deliverableData = up.deliverable ? {
+        note: up.deliverable.note, isOfficial: up.deliverable.isOfficial, fileUrl: up.deliverable.fileUrl, templateUrl: up.deliverable.templateUrl,
+        reviewerUserId: up.deliverable.reviewerUserId, reviewedAt: up.deliverable.reviewedAt ? new Date(up.deliverable.reviewedAt) : null,
+      } : null;
+
+      if (existingId) {
+        await tx.wbsItem.update({
+          where: { id: existingId },
+          data: {
+            parentId, name: up.name,
+            ownerUserId: up.ownerUserId, ownerNameRaw: up.ownerUserId ? "" : up.ownerNameRaw, ownerLoginId: up.ownerUserId ? "" : up.ownerLoginId, groupId: up.groupId,
+            startDate: up.startDate ? new Date(up.startDate) : null, dueDate: up.dueDate ? new Date(up.dueDate) : null,
+            configStatus: up.configStatus, weight: up.weight ?? null, version: { increment: 1 },
+          },
+        });
+        await tx.wbsAssignment.deleteMany({ where: { wbsItemId: existingId } });
+        if (up.assignments.length) await tx.wbsAssignment.createMany({ data: up.assignments.map((a) => ({ wbsItemId: existingId, groupId: a.groupId, progressPercent: a.progressPercent, updatedBy: userId })) });
+        if (deliverableData) await tx.wbsDeliverable.upsert({ where: { wbsItemId: existingId }, create: { wbsItemId: existingId, ...deliverableData }, update: deliverableData });
+        else await tx.wbsDeliverable.deleteMany({ where: { wbsItemId: existingId } });
+        updatedCount++;
+        resultRows.push({ row: up.row, code, name: up.name, action: up.action, outcome: "updated" });
+      } else {
+        const id = crypto.randomUUID();
+        sequenceValue += 1;
+        const displayId = `WBS-${year}-${String(sequenceValue).padStart(6, "0")}`;
+        await tx.wbsItem.create({
+          data: {
+            id, displayId, projectId, parentId, path: up.path, level: up.level, name: up.name, description: "",
+            ownerUserId: up.ownerUserId, ownerNameRaw: up.ownerUserId ? "" : up.ownerNameRaw, ownerLoginId: up.ownerUserId ? "" : up.ownerLoginId, groupId: up.groupId,
+            startDate: up.startDate ? new Date(up.startDate) : null, dueDate: up.dueDate ? new Date(up.dueDate) : null,
+            status: "not_started", configStatus: up.configStatus, weight: up.weight ?? null, createdBy: userId,
+          },
+        });
+        if (up.assignments.length) await tx.wbsAssignment.createMany({ data: up.assignments.map((a) => ({ wbsItemId: id, groupId: a.groupId, progressPercent: a.progressPercent, updatedBy: userId })) });
+        if (deliverableData) await tx.wbsDeliverable.create({ data: { wbsItemId: id, ...deliverableData } });
+        idByPath.set(up.path, id);
+        createdCount++;
+        resultRows.push({ row: up.row, code, name: up.name, action: up.action, outcome: "created" });
+      }
+    }
+
+    await tx.wbsItemSequence.upsert({ where: { projectId }, create: { projectId, value: sequenceValue }, update: { value: sequenceValue } });
+  }, { timeout: 120_000 });
+
+  const result: WbsImportApplyResult = {
+    counts: {
+      blank: report.actionCounts.blank, markedDelete: report.actionCounts.delete, markedUpdate: report.actionCounts.update, markedInsert: report.actionCounts.insert,
+      deleted: deletedCount, deleteNotFound: deleteNotFoundCount, created: createdCount, updated: updatedCount,
+    },
+    rows: resultRows,
+  };
+  await writeAuditLog(projectId, userId, "WBS_EXCEL_IMPORT_PATCH", "wbs_items", projectId, null, result.counts);
   revalidateTag(wbsTag(projectId));
-  return { imported: itemRows.length, report };
+  return { report, result };
 }
