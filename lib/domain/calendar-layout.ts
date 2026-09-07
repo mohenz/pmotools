@@ -31,12 +31,18 @@ function minutes(time: string) {
   return hour * 60 + minute;
 }
 
-export function calendarTimePlacement(startTime: string, durationMinutes: number) {
+export function calendarTimePlacement(
+  startTime: string,
+  durationMinutes: number,
+  startMinutes: number = CALENDAR_START_MINUTES,
+  endMinutes: number = CALENDAR_END_MINUTES,
+  slotMinutes: number = CALENDAR_SLOT_MINUTES,
+) {
   const rawStart = minutes(startTime);
-  const visibleStart = Math.min(Math.max(rawStart, CALENDAR_START_MINUTES), CALENDAR_END_MINUTES - CALENDAR_SLOT_MINUTES);
-  const slot = Math.floor(visibleStart / CALENDAR_SLOT_MINUTES) * CALENDAR_SLOT_MINUTES;
-  const visibleEnd = Math.min(Math.max(rawStart + Math.max(durationMinutes, CALENDAR_SLOT_MINUTES), visibleStart + CALENDAR_SLOT_MINUTES), CALENDAR_END_MINUTES);
-  const pixelsPerMinute = CALENDAR_ROW_HEIGHT / CALENDAR_SLOT_MINUTES;
+  const visibleStart = Math.min(Math.max(rawStart, startMinutes), endMinutes - slotMinutes);
+  const slot = Math.floor(visibleStart / slotMinutes) * slotMinutes;
+  const visibleEnd = Math.min(Math.max(rawStart + Math.max(durationMinutes, slotMinutes), visibleStart + slotMinutes), endMinutes);
+  const pixelsPerMinute = CALENDAR_ROW_HEIGHT / slotMinutes;
   return {
     slot,
     offsetPx: (visibleStart - slot) * pixelsPerMinute,
