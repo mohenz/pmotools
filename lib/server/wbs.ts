@@ -505,6 +505,43 @@ export async function listAmbiguousWbsOwners(projectId: string): Promise<WbsOwne
     .filter((row) => row.candidates.length > 1);
 }
 
+export type WbsDelayedTaskRow = {
+  id: string; wbsItemId: string; code: string | null; name: string;
+  plannedStartDate: string | null; plannedDueDate: string | null; actualStartDate: string | null; actualDueDate: string;
+  delayDays: number; groupLabel: string | null; ownerName: string | null; createdAt: string;
+};
+
+function clampPage(filters: { page?: number; pageSize?: number }, total: number) {
+  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, filters.page ?? 1));
+  return { pageSize, totalPages, page };
+}
+
+// wbsDelayedTask 로그 조회 — 등록 시점 스냅샷을 그대로 보여주고, 현재 WBS 항목으로 이동할 수 있게 path만 함께 읽는다.
+export async function listWbsDelayedTasks(projectId: string, filters: { from?: string; to?: string; page?: number; pageSize?: number } = {}) {
+  const prisma = getPrisma();
+  const where = {
+    projectId,
+    ...(filters.from || filters.to ? { createdAt: { ...(filters.from ? { gte: new Date(`${filters.from}T00:00:00.000Z`) } : {}), ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59.999Z`) } : {}) } } : {}),
+  };
+  const total = await prisma.wbsDelayedTask.count({ where });
+  const { pageSize, totalPages, page } = clampPage(filters, total);
+  const rows = await prisma.wbsDelayedTask.findMany({
+    where, include: { wbsItem: { select: { path: true } } }, orderBy: { createdAt: "desc" },
+    skip: (page - 1) * pageSize, take: pageSize,
+  });
+  return {
+    rows: rows.map((row) => ({
+      id: row.id, wbsItemId: row.wbsItemId, code: codeFromPath(row.wbsItem.path), name: row.name,
+      plannedStartDate: dateStr(row.plannedStartDate), plannedDueDate: dateStr(row.plannedDueDate),
+      actualStartDate: dateStr(row.actualStartDate), actualDueDate: dateStr(row.actualDueDate)!,
+      delayDays: row.delayDays, groupLabel: row.groupLabel, ownerName: row.ownerName, createdAt: row.createdAt.toISOString(),
+    } satisfies WbsDelayedTaskRow)),
+    total, page, pageSize, totalPages,
+  };
+}
+
 const resolveOwnerAmbiguitySchema = z.object({ ownerUserId: z.string().uuid() });
 
 export async function resolveWbsOwnerAmbiguity(projectId: string, userId: string, wbsItemId: string, input: unknown) {
