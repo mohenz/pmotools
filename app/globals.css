@@ -735,8 +735,12 @@ a.history-item:hover { background: var(--accent); }
 .calendar-toolbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin-bottom: 12px; }
 .calendar-toolbar h2 { margin: 0; font: 600 16px/24px var(--font-sans); text-align: center; }
 .calendar-nav,.calendar-views { display: flex; align-items: center; gap: 5px; }
-.calendar-mine-toggle { display: flex; align-items: center; gap: 6px; margin-left: 10px; padding: 0 4px; color: var(--foreground); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; }
-.calendar-mine-toggle input { margin: 0; }
+.calendar-mine-toggle { display: flex; align-items: center; gap: 8px; margin-left: 10px; padding: 0 4px; color: var(--foreground); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.calendar-mine-toggle input { appearance: none; position: relative; width: 34px; height: 20px; min-height: 20px; margin: 0; border: 0; border-radius: 999px; background: var(--border); cursor: pointer; transition: background .15s ease; }
+.calendar-mine-toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px oklch(0 0 0 / 20%); transition: transform .15s ease; }
+.calendar-mine-toggle input:checked { background: var(--primary); }
+.calendar-mine-toggle input:checked::after { transform: translateX(14px); }
+.calendar-mine-toggle input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .calendar-views { justify-content: flex-end; }
 .calendar-weekdays,.calendar-month { display: grid; min-width: 760px; grid-template-columns: repeat(7,minmax(100px,1fr)); }
 .calendar-weekdays { border: 1px solid var(--border); border-bottom: 0; background: var(--muted); }
