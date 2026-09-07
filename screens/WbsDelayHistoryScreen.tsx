@@ -19,10 +19,12 @@ export function WbsDelayHistoryScreen({ result, filters }: { result: Result; fil
     <header className="topbar"><div><h1>지연 이력</h1><p>실적종료일이 계획종료일보다 늦게 등록될 때마다 남는 지연 이력입니다.</p></div></header>
     <div className="content">
       <section className="panel compact">
-        <form className="inline-create" method="get">
-          <label>시작일<input name="from" type="date" defaultValue={filters.from ?? ""} /></label>
-          <label>종료일<input name="to" type="date" defaultValue={filters.to ?? ""} /></label>
-          <button className="button secondary" type="submit">조회</button>
+        <form className="filters inline-filter" method="get">
+          <div className="filter-row">
+            <label>시작일<input name="from" type="date" defaultValue={filters.from ?? ""} /></label>
+            <label>종료일<input name="to" type="date" defaultValue={filters.to ?? ""} /></label>
+            <button className="button secondary" type="submit">조회</button>
+          </div>
         </form>
       </section>
       <section className="panel">
