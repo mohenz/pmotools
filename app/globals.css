@@ -86,6 +86,8 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .meeting-date-nav .button { width: 34px; min-width: 34px; padding: 6px; font-size: 20px; line-height: 1; }
 .meeting-toolbar input[type="date"] { flex: 0 0 156px; width: 156px; }
 .meeting-toolbar .meeting-date-label { color: var(--foreground); font-size: 14px; }
+.meeting-room-filter { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 11px; font-weight: 700; }
+.meeting-room-filter select { width: 160px; min-width: 160px; }
 .view-switch { display: flex; gap: 4px; margin-left: auto; }
 .day-overview { position: sticky; z-index: 3; left: 0; display: flex; min-width: 680px; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 24px; border-bottom: 1px solid var(--border); background: linear-gradient(110deg,color-mix(in oklch,var(--primary) 8%,var(--card)),var(--card) 58%); }
 .day-overview-label { color: var(--primary); font: 700 10px var(--font-mono); letter-spacing: .14em; }
@@ -115,6 +117,10 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .reservation-row:hover { background: var(--accent); }.reservation-row small,.reservation-row span { color: var(--muted-foreground); }
 .meeting-week,.meeting-month { display: grid; border-top: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }.meeting-week { grid-template-columns: repeat(7,minmax(140px,1fr)); }.meeting-month { grid-template-columns: repeat(7,minmax(120px,1fr)); }
 .period-day { min-height: 150px; padding: 8px; background: var(--card); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }.meeting-month .period-day { min-height: 120px; }.period-day.today { background: var(--info-bg); }.period-day>header { display:flex; justify-content:space-between; margin-bottom:7px; }.period-day>header span { color:var(--muted-foreground);font-size:11px; }
+.meeting-month-weekday { padding: 8px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--muted); color: var(--muted-foreground); font-size: 11px; font-weight: 700; text-align: center; }
+.meeting-month-weekday:nth-child(6) { color: var(--info); }
+.meeting-month-weekday:nth-child(7) { color: var(--destructive); }
+.meeting-month .period-day.empty { background: color-mix(in oklch,var(--muted) 38%,var(--card)); }
 .period-event { display:grid; grid-template-columns:auto 1fr; width:100%; margin:3px 0; padding:3px 5px; overflow:hidden; border:0; border-left:3px solid var(--info); border-radius:var(--radius-sm); background:var(--info-bg); text-align:left; cursor:pointer; font-size: 10px; }.period-event time { margin-right:5px;font:10px var(--font-mono); }.period-event strong,.period-event span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.period-event span { grid-column:1/-1;color:var(--muted-foreground); }
 .attendee-picker { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .attendee-picker legend { font-size: 12px; font-weight: 700; }
@@ -134,7 +140,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .reservation-detail dl { display:grid;grid-template-columns:90px 1fr;gap:10px;margin:0; }.reservation-detail dt { color:var(--muted-foreground);font-size:12px;font-weight:700; }.reservation-detail dd { margin:0; }
 .button.danger { border-color: var(--destructive); background: var(--destructive-bg); color: var(--destructive); }
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 45%); }.modal-card { display: grid; gap: 14px; width: min(460px, 100%); padding: 22px; border-radius: var(--radius); background: var(--card); box-shadow: 0 20px 60px rgb(0 0 0 / 25%); }.modal-card h2 { margin: 0; }.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-@media (max-width: 850px) { .meeting-split { grid-template-columns: 1fr; }.meeting-week,.meeting-month { grid-template-columns:1fr; }.reservation-row { grid-template-columns:1fr; }.meeting-toolbar { gap:8px;flex-wrap:wrap; }.meeting-date-label { order:3;width:100%; }.day-overview { padding:16px; }.day-overview dl { display:none; } }
+@media (max-width: 850px) { .meeting-split { grid-template-columns: 1fr; }.meeting-week { grid-template-columns:1fr; }.meeting-month { min-width: 840px; }.reservation-row { grid-template-columns:1fr; }.meeting-toolbar { gap:8px;flex-wrap:wrap; }.meeting-date-label { order:3;width:100%; }.day-overview { padding:16px; }.day-overview dl { display:none; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
