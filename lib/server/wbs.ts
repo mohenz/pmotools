@@ -115,13 +115,13 @@ type WbsItemWithRelations = Prisma.WbsItemGetPayload<{ include: typeof wbsItemIn
 
 const dateStr = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
 
-async function loadHolidaySet(projectId: string): Promise<Set<string>> {
+export async function loadHolidaySet(projectId: string): Promise<Set<string>> {
   const rows = await getPrisma().holiday.findMany({ where: { OR: [{ projectId }, { projectId: null }] } });
   return new Set(rows.map((row) => dateStr(row.date)!));
 }
 
 // 실적종료일 저장 시(생성·수정) 지연완료 여부를 매번 다시 확정한다 — 조기 완료로 정정되면 지연완료도 함께 풀린다.
-function delayCompletionFields(dueDateStr: string | null, actualDueDateStr: string | null, holidays: Set<string>) {
+export function delayCompletionFields(dueDateStr: string | null, actualDueDateStr: string | null, holidays: Set<string>) {
   if (!dueDateStr || !actualDueDateStr) return { isDelayedCompletion: false, delayedCompletionDate: null as Date | null, delayDays: null as number | null };
   const { isDelayedCompletion, delayDays } = wbsDelayCompletion(new Date(`${dueDateStr}T00:00:00.000Z`), new Date(`${actualDueDateStr}T00:00:00.000Z`), holidays);
   return { isDelayedCompletion, delayedCompletionDate: isDelayedCompletion ? new Date(`${actualDueDateStr}T00:00:00.000Z`) : null, delayDays: isDelayedCompletion ? delayDays : null };

@@ -9,6 +9,7 @@ import { WarningDialog } from "@/components/WarningDialog";
 const OUTCOME_LABEL: Record<WbsImportApplyResult["rows"][number]["outcome"], string> = {
   deleted: "삭제(보관)", delete_not_found: "삭제 대상 없음", created: "생성", updated: "수정",
 };
+const ACTION_LABEL = { "": "유지", D: "삭제(보관)", U: "수정", I: "등록" } as const;
 
 export function WbsDataManagementPanel({ children }: { children?: React.ReactNode } = {}) {
   const router = useRouter();
@@ -72,18 +73,20 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
       </div>
       <WarningDialog message={uploadMessage} onClose={() => setUploadMessage("")} />
       {report && (() => {
-        const issueRows = report.rows.filter((row) => row.errors.length || row.warnings.length);
+        const targetRows = report.rows.filter((row) => row.action !== "");
+        const visibleRows = report.rows.filter((row) => row.action !== "" || row.errors.length || row.warnings.length);
         return <div className="table-wrap">
-          <p className="table-wrap-note">{actionSummary} — 전체 {report.rows.length}행 중 오류·경고가 있는 {issueRows.length}행만 표시합니다.</p>
+          <h3>반영 대상 목록</h3>
+          <p className="table-wrap-note">등록·수정·삭제 대상 {targetRows.length}건입니다. 유지 행은 오류·경고가 있을 때만 표시합니다.{report.errorCount > 0 ? " 오류를 수정하고 다시 검증해 주세요." : " 아래 대상을 확인한 후 반영해 주세요."}</p>
           <table>
             <thead><tr><th>행</th><th>작업구분</th><th>Task</th><th>이름</th><th>오류</th><th>경고</th></tr></thead>
             <tbody>
-              {issueRows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}>
-                <td>{row.row}</td><td className="mono">{row.action || "-"}</td><td className="mono">{row.code}</td><td>{row.name}</td>
+              {visibleRows.map((row) => <tr className={row.errors.length ? "high-risk-row" : ""} key={row.row}>
+                <td>{row.row}</td><td>{ACTION_LABEL[row.action]}{row.action ? ` (${row.action})` : ""}</td><td className="mono">{row.code}</td><td>{row.name}</td>
                 <td>{row.errors.join(" / ") || "-"}</td><td>{row.warnings.join(" / ") || "-"}</td>
               </tr>)}
               {!report.rows.length && <tr><td colSpan={6} className="empty">읽을 수 있는 행이 없습니다.</td></tr>}
-              {report.rows.length > 0 && !issueRows.length && <tr><td colSpan={6} className="empty">오류·경고 없이 전체 {report.rows.length}행 정상입니다.</td></tr>}
+              {report.rows.length > 0 && !visibleRows.length && <tr><td colSpan={6} className="empty">등록·수정·삭제 대상이 없습니다. 모든 행을 유지합니다.</td></tr>}
             </tbody>
           </table>
         </div>;

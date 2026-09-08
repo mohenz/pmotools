@@ -5,7 +5,7 @@ import { codeFromPath, levelOf, pathFromCode, sortKeyFromCode } from "@/lib/doma
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { wbsTag } from "@/lib/server/cache-tags";
-import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns, listWbsWorkGroups } from "@/lib/server/wbs";
+import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns, listWbsWorkGroups, loadHolidaySet, delayCompletionFields } from "@/lib/server/wbs";
 
 const HEADER_LIST: readonly string[] = WBS_EXCEL_HEADERS;
 
@@ -14,12 +14,13 @@ const HEADER_LIST: readonly string[] = WBS_EXCEL_HEADERS;
 // 없어야 한다 — 다운로드한 파일을 그대로 올리면 기존 행은 U, 새로 추가하는 행은 I로 구분해 쓰는 용도.
 // WBS_EXCEL_HEADERS(다른 화면·엑셀 다운로드가 함께 쓰는 47개 컬럼 스키마)에는 넣지 않고 업로드/다운로드에서만 다룬다.
 const IMPORT_ACTION_HEADER = "작업구분";
+const ACTUAL_HEADERS = ["실적시작일", "실적종료일", "지연완료", "지연완료일자", "지연일자"];
 
 export async function exportWbsToExcel(projectId: string): Promise<Buffer> {
   const { rows } = await listWbsItemsExcelColumns(projectId, { pageSize: "all" });
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("WBS");
-  sheet.addRow([IMPORT_ACTION_HEADER, ...WBS_EXCEL_HEADERS]);
+  sheet.addRow([IMPORT_ACTION_HEADER, ...WBS_EXCEL_HEADERS, ...ACTUAL_HEADERS]);
   sheet.getRow(1).font = { bold: true };
   for (const item of rows) {
     sheet.addRow([
@@ -33,6 +34,8 @@ export async function exportWbsToExcel(projectId: string): Promise<Buffer> {
       item.plannedProgress === null ? "" : Math.round(item.plannedProgress * 100),
       Math.round(item.actualProgress * 100),
       item.progressIndex === null ? "" : Math.round(item.progressIndex * 100),
+      item.actualStartDate ?? "", item.actualDueDate ?? "", item.isDelayedCompletion ? 1 : 0,
+      item.delayedCompletionDate ?? "", item.delayDays ?? "",
     ]);
   }
   sheet.columns.forEach((column) => { column.width = 16; });
@@ -51,6 +54,7 @@ type ParsedUpsertRow = {
   path: string; level: number; name: string; configStatus: string;
   ownerUserId: string | null; ownerNameRaw: string; ownerLoginId: string; groupId: string | null;
   startDate: string | null; dueDate: string | null; weight: number | null;
+  actualStartDate: string | null; actualDueDate: string | null;
   deliverable: { note: string; isOfficial: boolean; fileUrl: string; templateUrl: string; reviewerUserId: string | null; reviewedAt: string | null } | null;
   assignments: { groupId: string; progressPercent: number }[];
 };
@@ -77,10 +81,11 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
   const [groups, members, existingItems] = await Promise.all([
     listWbsWorkGroups(projectId),
     prisma.projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: true } }),
-    prisma.wbsItem.findMany({ where: { projectId, archivedAt: null }, select: { id: true, path: true } }),
+    prisma.wbsItem.findMany({ where: { projectId, archivedAt: null }, select: { id: true, path: true, actualStartDate: true, actualDueDate: true } }),
   ]);
   const existingIdByPath = new Map(existingItems.map((item) => [item.path, item.id]));
   const existingPaths = new Set(existingIdByPath.keys());
+  const existingByPath = new Map(existingItems.map((item) => [item.path, item]));
   const groupsByLabel = new Map(groups.map((group) => [group.label, group]));
   const membersByName = new Map<string, string[]>();
   const membersByLoginId = new Map(members.map((member) => [member.user.userId, member.user.id]));
@@ -225,6 +230,19 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     const dueDate = cellDateAt(row, "DueDate");
     if (startDate && !DATE_RE.test(startDate)) errors.push("StartDate 형식이 올바르지 않습니다(YYYY-MM-DD).");
     if (dueDate && !DATE_RE.test(dueDate)) errors.push("DueDate 형식이 올바르지 않습니다(YYYY-MM-DD).");
+    // 구버전 파일의 누락 컬럼은 기존 값을 유지하고, 포함된 컬럼의 공백은 날짜를 지운다.
+    const existing = existingByPath.get(path);
+    const actualStartDate = headerIndexByText.has(norm("실적시작일"))
+      ? cellDateAt(row, "실적시작일") : existing?.actualStartDate?.toISOString().slice(0, 10) ?? "";
+    const actualDueDate = headerIndexByText.has(norm("실적종료일"))
+      ? cellDateAt(row, "실적종료일") : existing?.actualDueDate?.toISOString().slice(0, 10) ?? "";
+    const validDate = (value: string) => DATE_RE.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+    for (const [label, value] of [["실적시작일", actualStartDate], ["실적종료일", actualDueDate]]) {
+      if (value && !validDate(value)) errors.push(`${label}에 유효한 날짜를 입력해 주세요(YYYY-MM-DD).`);
+    }
+    if (actualDueDate && !actualStartDate) errors.push("실적시작일이 없으면 실적종료일을 입력할 수 없습니다.");
+    if (actualStartDate && actualDueDate && actualDueDate < actualStartDate) errors.push("실적종료일은 실적시작일보다 빠를 수 없습니다.");
+    if (dueDate && !validDate(dueDate) && DATE_RE.test(dueDate)) errors.push("DueDate에 유효한 날짜를 입력해 주세요.");
 
     const weightRaw = cellAt(row, "가중치(입력불필요)");
     const weight = weightRaw ? Number(weightRaw) : null;
@@ -268,6 +286,7 @@ async function parseAndValidateWbsImport(projectId: string, buffer: Buffer): Pro
     if (!errors.length && path && (action === "U" || action === "I")) upserts.push({
       row: rowNumber, action, path, level: levelOf(path), name, configStatus: cellAt(row, "Confing Status"),
       ownerUserId, ownerNameRaw: ownerName, ownerLoginId, groupId, startDate: startDate || null, dueDate: dueDate || null, weight,
+      actualStartDate: actualStartDate || null, actualDueDate: actualDueDate || null,
       deliverable: hasDeliverable ? { note, isOfficial, fileUrl, templateUrl, reviewerUserId, reviewedAt: reviewedAt || null } : null,
       assignments,
     });
@@ -304,6 +323,7 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
 
   const prisma = getPrisma();
   const actorName = await actorNameOf(userId);
+  const holidays = await loadHolidaySet(projectId);
   const sortedUpserts = [...upserts].sort((a, b) => a.path.localeCompare(b.path));
   const idByPath = new Map(existingIdByPath);
   const resultRows: WbsImportApplyResultRow[] = [];
@@ -332,6 +352,12 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
       const parentPath = up.level > 1 ? up.path.split(".").slice(0, -1).join(".") : null;
       const parentId = parentPath ? (idByPath.get(parentPath) ?? null) : null;
       const existingId = idByPath.get(up.path);
+      // 엑셀의 지연 결과값은 신뢰하지 않고 화면과 같은 영업일 계산으로 확정한다.
+      const actualFields = {
+        actualStartDate: up.actualStartDate ? new Date(up.actualStartDate) : null,
+        actualDueDate: up.actualDueDate ? new Date(up.actualDueDate) : null,
+        ...delayCompletionFields(up.dueDate, up.actualDueDate, holidays),
+      };
       const deliverableData = up.deliverable ? {
         note: up.deliverable.note, isOfficial: up.deliverable.isOfficial, fileUrl: up.deliverable.fileUrl, templateUrl: up.deliverable.templateUrl,
         reviewerUserId: up.deliverable.reviewerUserId, reviewedAt: up.deliverable.reviewedAt ? new Date(up.deliverable.reviewedAt) : null,
@@ -342,13 +368,15 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
           where: { id: existingId },
           data: {
             parentId, name: up.name,
+            ...actualFields,
+            ...(up.actualDueDate ? { status: "completed" as const } : {}),
             ownerUserId: up.ownerUserId, ownerNameRaw: up.ownerUserId ? "" : up.ownerNameRaw, ownerLoginId: up.ownerUserId ? "" : up.ownerLoginId, groupId: up.groupId,
             startDate: up.startDate ? new Date(up.startDate) : null, dueDate: up.dueDate ? new Date(up.dueDate) : null,
             configStatus: up.configStatus, weight: up.weight ?? null, version: { increment: 1 },
           },
         });
         await tx.wbsAssignment.deleteMany({ where: { wbsItemId: existingId } });
-        if (up.assignments.length) await tx.wbsAssignment.createMany({ data: up.assignments.map((a) => ({ wbsItemId: existingId, groupId: a.groupId, progressPercent: a.progressPercent, updatedBy: userId })) });
+        if (up.assignments.length) await tx.wbsAssignment.createMany({ data: up.assignments.map((a) => ({ wbsItemId: existingId, groupId: a.groupId, progressPercent: up.actualDueDate ? 100 : a.progressPercent, updatedBy: userId })) });
         if (deliverableData) await tx.wbsDeliverable.upsert({ where: { wbsItemId: existingId }, create: { wbsItemId: existingId, ...deliverableData }, update: deliverableData });
         else await tx.wbsDeliverable.deleteMany({ where: { wbsItemId: existingId } });
         updatedCount++;
@@ -360,12 +388,13 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
         await tx.wbsItem.create({
           data: {
             id, displayId, projectId, parentId, path: up.path, level: up.level, name: up.name, description: "",
+            ...actualFields,
             ownerUserId: up.ownerUserId, ownerNameRaw: up.ownerUserId ? "" : up.ownerNameRaw, ownerLoginId: up.ownerUserId ? "" : up.ownerLoginId, groupId: up.groupId,
             startDate: up.startDate ? new Date(up.startDate) : null, dueDate: up.dueDate ? new Date(up.dueDate) : null,
-            status: "not_started", configStatus: up.configStatus, weight: up.weight ?? null, createdBy: userId,
+            status: up.actualDueDate ? "completed" : "not_started", configStatus: up.configStatus, weight: up.weight ?? null, createdBy: userId,
           },
         });
-        if (up.assignments.length) await tx.wbsAssignment.createMany({ data: up.assignments.map((a) => ({ wbsItemId: id, groupId: a.groupId, progressPercent: a.progressPercent, updatedBy: userId })) });
+        if (up.assignments.length) await tx.wbsAssignment.createMany({ data: up.assignments.map((a) => ({ wbsItemId: id, groupId: a.groupId, progressPercent: up.actualDueDate ? 100 : a.progressPercent, updatedBy: userId })) });
         if (deliverableData) await tx.wbsDeliverable.create({ data: { wbsItemId: id, ...deliverableData } });
         idByPath.set(up.path, id);
         createdCount++;
