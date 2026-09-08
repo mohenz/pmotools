@@ -839,6 +839,9 @@ a.history-item:hover { background: var(--accent); }
 .calendar-agenda { display: grid; gap: 14px; }
 .calendar-agenda-day header { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; }
 .calendar-agenda-day > div { display: grid; gap: 4px; }
+.calendar-agenda-day.today { scroll-margin-top: 16px; }
+.calendar-agenda-day.today > header { border-bottom-color: var(--primary); color: var(--primary); }
+.calendar-agenda-day.today:focus { outline: 2px solid var(--primary); outline-offset: 6px; border-radius: var(--radius-sm); }
 .print-report { max-width: 900px; margin: 24px auto; padding: 30px; background: white; }
 .print-report-shell { width: 100%; min-width: 0; padding: 20px; }
 .print-report-actions { display: flex; max-width: 900px; justify-content: flex-end; gap: 8px; margin: 0 auto; }
