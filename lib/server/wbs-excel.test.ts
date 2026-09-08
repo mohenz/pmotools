@@ -21,7 +21,7 @@ vi.mock("@/lib/server/db-pg", () => {
 vi.mock("@/lib/server/wbs", async (original) => ({
   ...await original<typeof import("./wbs")>(), listWbsWorkGroups: async () => [],
 }));
-import { applyWbsImport, validateWbsImport } from "./wbs-excel";
+import { applyWbsImport, validateWbsImport, exportWbsSample } from "./wbs-excel";
 import { WBS_EXCEL_HEADERS } from "./wbs";
 
 async function file(values: Record<string, ExcelJS.CellValue>, actual = true) {
@@ -34,6 +34,18 @@ async function file(values: Record<string, ExcelJS.CellValue>, actual = true) {
 }
 beforeEach(() => { mocks.existing = []; vi.clearAllMocks(); });
 describe("WBS Excel actual dates", () => {
+  it("downloads a sample with unused codes that passes the import validator", async () => {
+    mocks.existing = [{ id: "w", path: "0001", actualStartDate: null, actualDueDate: null }];
+    const buffer = await exportWbsSample("p");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+    expect(workbook.worksheets.map(s => s.name)).toEqual(["WBS", "작성안내"]);
+    expect(workbook.worksheets[0].getRow(2).getCell(7).value).toBe("2");
+    expect(workbook.worksheets[0].getRow(3).getCell(50).value).toEqual(new Date("2026-09-01"));
+    const report = await validateWbsImport("p", buffer);
+    expect(report.errorCount).toBe(0);
+    expect(report.actionCounts.insert).toBe(4);
+  });
   it("saves dates and recalculates delay excluding weekends and holidays", async () => {
     const buffer = await file({ 실적시작일: new Date("2026-09-01"), 실적종료일: "2026.9.8", 지연완료: 0, 지연일자: 999 });
     const result = await applyWbsImport("p", "u", buffer);

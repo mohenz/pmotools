@@ -16,6 +16,62 @@ const HEADER_LIST: readonly string[] = WBS_EXCEL_HEADERS;
 const IMPORT_ACTION_HEADER = "작업구분";
 const ACTUAL_HEADERS = ["실적시작일", "실적종료일", "지연완료", "지연완료일자", "지연일자"];
 
+export async function exportWbsSample(projectId: string): Promise<Buffer> {
+  const existing = await getPrisma().wbsItem.findMany({ where: { projectId, archivedAt: null }, select: { path: true } });
+  const roots = new Set(existing.map((item) => Number(item.path.split(".")[0])));
+  let root = 1;
+  while (roots.has(root)) root++;
+  const headers = [IMPORT_ACTION_HEADER, ...WBS_EXCEL_HEADERS, ...ACTUAL_HEADERS];
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("WBS", { views: [{ state: "frozen", ySplit: 1 }] });
+  sheet.addRow(headers);
+  const examples = [
+    { code: String(root), name: "샘플 단계", end: "" },
+    { code: `${root}.1`, name: "정상 완료 예시", end: "2026-09-04" },
+    { code: `${root}.2`, name: "지연 완료 예시", end: "2026-09-08" },
+    { code: `${root}.3`, name: "진행 중 예시", end: "" },
+  ];
+  for (const [index, example] of examples.entries()) {
+    const values: Record<string, ExcelJS.CellValue> = {
+      작업구분: "I", wbs_level: index ? 2 : 1, Stage: "샘플 단계", Task: example.code,
+      "Task Description": example.name,
+      StartDate: new Date("2026-09-01T00:00:00Z"), DueDate: new Date("2026-09-04T00:00:00Z"),
+      실적시작일: index ? new Date("2026-09-01T00:00:00Z") : null,
+      실적종료일: example.end ? new Date(`${example.end}T00:00:00Z`) : null,
+    };
+    sheet.addRow(headers.map((header) => values[header] ?? null));
+  }
+  sheet.columns.forEach((column, index) => {
+    column.width = index === headers.indexOf("Task Description") ? 30 : 18;
+    if (["StartDate", "DueDate", "실적시작일", "실적종료일", "지연완료일자"].includes(headers[index])) column.numFmt = "yyyy-mm-dd";
+  });
+  const guide = workbook.addWorksheet("작성안내");
+  guide.addRows([
+    ["항목", "작성 방법"],
+    ["샘플", "신규 등록(I) 예시 4건입니다. Task 코드는 다운로드 시 현재 프로젝트에서 사용하지 않는 번호로 생성합니다."],
+    ["작업구분", "I: 신규 등록, U: 기존 수정, D: 해당 행 삭제(보관), 공백: 유지"],
+    ["기존 항목 수정", "현재 WBS 목록을 내려받아 작업구분을 U로 변경하세요. 샘플은 기존 데이터 수정용이 아닙니다."],
+    ["날짜", "계획일과 실적일을 실제 일정에 맞게 수정하세요. 날짜 형식은 yyyy-mm-dd입니다."],
+    ["실적일", "실적종료일을 입력하려면 실적시작일이 필요합니다. 종료일은 시작일보다 빠를 수 없습니다."],
+    ["지연 계산", "오른쪽 지연완료·지연완료일자·지연일자는 비워 두세요. 업로드 시 주말·공휴일을 제외해 자동 계산합니다."],
+    ["정상 완료", "정상 완료 예시의 지연완료는 0, 지연완료일자와 저장된 지연일수는 공백입니다."],
+    ["지연 완료", "지연 완료 예시의 지연완료는 1, 지연완료일자는 2026-09-08이며 지연일수는 2일에서 등록된 공휴일을 제외합니다."],
+    ["담당자·Track", "현재 프로젝트의 사용자ID와 WBS 업무그룹을 입력하세요. 샘플에서는 비워 두었습니다."],
+    ["업로드", "파일을 선택하고 검증한 뒤 반영 대상 목록을 확인하세요. 반영하면 샘플 항목이 실제 등록됩니다."],
+  ]);
+  guide.columns = [{ width: 22 }, { width: 95 }];
+  guide.getColumn(2).alignment = { wrapText: true, vertical: "middle" };
+  for (const tab of [sheet, guide]) {
+    tab.eachRow((row, index) => { row.height = index === 1 ? 55 : 32; });
+    tab.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF243746" } };
+      cell.alignment = { wrapText: true, vertical: "middle" };
+    });
+  }
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
 export async function exportWbsToExcel(projectId: string): Promise<Buffer> {
   const { rows } = await listWbsItemsExcelColumns(projectId, { pageSize: "all" });
   const workbook = new ExcelJS.Workbook();

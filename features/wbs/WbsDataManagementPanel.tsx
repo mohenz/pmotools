@@ -61,6 +61,7 @@ export function WbsDataManagementPanel({ children }: { children?: React.ReactNod
       <div className="panel-head"><h2>엑셀 다운로드</h2></div>
       <div className="wbs-inline-form">
         <label>현재 WBS 목록<a className="button secondary" href="/api/v1/wbs-items/excel/export">엑셀로 내려받기</a></label>
+        <label>업로드 양식 및 작성 예시<a className="button secondary" href="/api/v1/wbs-items/excel/sample">샘플 엑셀 다운로드</a></label>
       </div>
     </section>
 
