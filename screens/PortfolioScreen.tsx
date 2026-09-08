@@ -14,7 +14,7 @@ const invitationDateFormat = new Intl.DateTimeFormat("ko-KR", { dateStyle: "shor
 
 function invitationTitle(invitation: InvitationSummary) {
   if (invitation.messageType === "CALENDAR_INVITATION") return invitation.calendarInvitation?.title ?? "일정 초청";
-  return invitation.meetingInvitation?.roomName ?? "회의실 예약 초청";
+  return invitation.meetingInvitation?.purpose || "회의실 예약 초청";
 }
 // 목록에는 쪽지가 생성된 시각이 아니라, 실제 일정/예약이 시작하는 일시·장소를 보여준다.
 function invitationStartAt(invitation: InvitationSummary) {
@@ -22,9 +22,8 @@ function invitationStartAt(invitation: InvitationSummary) {
   return invitation.meetingInvitation?.startAt ?? invitation.createdAt;
 }
 function invitationLocation(invitation: InvitationSummary) {
-  // 회의실 예약 초청은 방 이름이 곧 제목이라 장소를 따로 표시하면 중복되므로 일정 초청에만 표시한다.
   if (invitation.messageType === "CALENDAR_INVITATION") return invitation.calendarInvitation?.location ?? "";
-  return "";
+  return invitation.meetingInvitation?.roomName ?? "";
 }
 
 export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations }: {
