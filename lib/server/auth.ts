@@ -5,9 +5,10 @@ import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { getPrisma } from "@/lib/server/db-pg";
 import { DEFAULT_PROJECT_ID } from "@/lib/domain/constants";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/domain/session";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt", maxAge: 60 * 60 },
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS },
   pages: { signIn: "/login" },
   providers: [
     Credentials({

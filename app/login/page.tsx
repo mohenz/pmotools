@@ -22,6 +22,7 @@ function LoginForm() {
       const saved = localStorage.getItem(SAVED_USER_ID_KEY);
       if (saved) { setUserId(saved); setRememberUserId(true); }
     } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
+    if (params.get("reason") === "idle") setMessage("30분 동안 활동이 없어 자동으로 로그아웃되었습니다.");
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
