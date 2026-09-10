@@ -285,16 +285,17 @@ function delayStatsOf(rows: WbsItemRow[]) {
   return { delayedCount, delayTrackedCount: tracked.length, delayRate: tracked.length === 0 ? 0 : delayedCount / tracked.length };
 }
 
-// 계획건수/실적건수/공정율 — Stage 개요 화면 전용 누적 기준(2026-09-10 확정, PMO Daily "1. 공정현황"과는 계획건수
+// 계획건수/실적건수 — Stage 개요 화면 전용 누적 기준(2026-09-10 확정, PMO Daily "1. 공정현황"과는 계획건수
 // 필터가 다르다: PMO Daily는 계획종료일이 "정확히 기준일"인 건만 세는 하루 단위 스냅샷이고, 여기는 "기준일까지 누적"이라
 // 프로젝트가 진행될수록 단조 증가한다 — Stage 전체 진행 상황을 보여주는 화면 성격상 의도적으로 다르게 설계했다.
-// 계획건수 = 계획종료일이 오늘 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목.
-// 공정율 = scheduleProgress(pmo-daily)와 동일한 공식(실적÷계획, 100% 상한).
+// 계획건수 = 계획종료일이 오늘 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목. 참고용 건수일 뿐,
+// 공정율 계산에는 쓰지 않는다 — 같은 행의 계획(%)/실적(%)(leaf 전체 가중평균)과 모집단이 달라 공정율을 건수비로 구하면
+// "계획건수=실적건수인데 계획%≠실적%"처럼 서로 안 맞는 숫자가 나온다(2026-09-10 사용자 지적으로 수정).
 function countStatsOf(rows: WbsItemRow[], todayStr: string) {
   const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate <= todayStr);
   const plannedCount = plannedRows.length;
   const actualCount = plannedRows.filter((item) => item.actualProgress >= 1).length;
-  return { plannedCount, actualCount, scheduleProgress: scheduleProgress(plannedCount, actualCount) };
+  return { plannedCount, actualCount };
 }
 
 // 통계 화면 — leaf 항목(다른 항목의 상위로 참조되지 않는 행 = 엑셀 "상세진도(진도관리대상)")만 가중치(weight ?? workingDays) 기준으로 롤업한다.
@@ -316,9 +317,9 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
     const rollup = rollupProgress(toRollupInputs(rows));
     const stageDelay = delayStatsOf(rows);
     const stageCounts = countStatsOf(rows, todayStr);
-    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: stageDelay.delayedCount > 0, ...stageCounts, delayedCount: stageDelay.delayedCount, delayTrackedCount: stageDelay.delayTrackedCount, delayRate: stageDelay.delayRate };
+    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: stageDelay.delayedCount > 0, ...stageCounts, scheduleProgress: scheduleProgress(rollup.planned, rollup.actual), delayedCount: stageDelay.delayedCount, delayTrackedCount: stageDelay.delayTrackedCount, delayRate: stageDelay.delayRate };
   });
-  return { overall, itemCount: leaves.length, delayRate: overallDelay.delayRate, delayedCount: overallDelay.delayedCount, delayTrackedCount: overallDelay.delayTrackedCount, ...overallCounts, stages };
+  return { overall, itemCount: leaves.length, delayRate: overallDelay.delayRate, delayedCount: overallDelay.delayedCount, delayTrackedCount: overallDelay.delayTrackedCount, ...overallCounts, scheduleProgress: scheduleProgress(overall.planned, overall.actual), stages };
 }
 
 // 변동 빈도가 낮은 통계 화면이라 포트폴리오 KPI와 동일하게 30초 캐시하고, WBS 변경(mutation) 시 wbsTag로 무효화한다.
