@@ -408,9 +408,12 @@ export function defaultWbsWeeklyRange(): { startDate: string; endDate: string } 
 // 주간 통계 — PMO 주간보고 "진행 사항" 표(총대상/계획/완료/지연/달성률/진척률) 형식을 업무그룹별로 재현한다.
 // 완료 시점을 별도로 기록하지 않아 "과거 시점 기준 완료 건수"를 정확히 재현할 수 없으므로, 계획(건)의 조회 기간(시작일~종료일)만
 // 사용자가 조정할 수 있고 완료 여부는 항상 현재 실적(actualProgress) 기준으로 판정한다 (2026-08-30 사용자 결정).
-// 계획(건) = DueDate가 조회 기간(시작일~종료일) 이내인 leaf 항목, 완료(건) = 그중 실적(actualProgress)이 100%인 항목 —
-// 엑셀 일괄 업로드 항목은 status가 항상 not_started로 고정 저장되어 상태값이 아니라 실제로 갱신되는 실적(Track 진도율)을
-// 완료 판정 기준으로 쓴다. 달성률 = 완료/계획, 진척률 = 완료/총대상.
+// 계획(건) = DueDate가 조회 기간(시작일~종료일) 이내인 leaf 항목. 완료(건)/진척률(전체)은 getWbsDailyTaskCounts와 동일한
+// 원칙으로 조회 기간과 무관하게 그룹 전체 leaf 중 실적(actualProgress)이 100%인 항목을 센다 — 마감일이 이번 조회 기간
+// 밖이거나 마감일 자체가 없는 항목도 실제로 끝났으면 "완료"로 잡혀야 하기 때문이다(계획 범위로 좁히면 이미 끝난 일도
+// 완료 0건으로 보이는 문제가 있었다, 2026-09-10 사용자 지적으로 수정). 지연(건)/달성률(계획대비)만 "이번 기간에 계획된
+// 것 중 완료된 것"이라는 별도의 기간-한정 완료 수를 쓴다 — 엑셀 일괄 업로드 항목은 status가 항상 not_started로 고정
+// 저장되어 상태값이 아니라 실제로 갱신되는 실적(Track 진도율)을 완료 판정 기준으로 쓴다.
 async function loadWbsWeeklyStats(projectId: string, startDate: string, endDate: string): Promise<WbsWeeklyStats> {
   const [items, { groupLabelByOwner, groupSortKeyByLabel }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
@@ -418,13 +421,14 @@ async function loadWbsWeeklyStats(projectId: string, startDate: string, endDate:
 
   function buildStat(rows: typeof leaves): Omit<WbsWeeklyGroupStat, "groupLabel"> {
     const totalCount = rows.length;
+    const completedCount = rows.filter((item) => item.actualProgress >= 1).length;
     const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate >= startDate && item.dueDate <= endDate);
     const plannedCount = plannedRows.length;
-    const completedCount = plannedRows.filter((item) => item.actualProgress >= 1).length;
-    const delayedCount = plannedCount - completedCount;
+    const completedInPeriodCount = plannedRows.filter((item) => item.actualProgress >= 1).length;
+    const delayedCount = plannedCount - completedInPeriodCount;
     return {
       totalCount, plannedCount, completedCount, delayedCount,
-      achievementRate: plannedCount === 0 ? 0 : completedCount / plannedCount,
+      achievementRate: plannedCount === 0 ? 0 : completedInPeriodCount / plannedCount,
       progressRate: totalCount === 0 ? 0 : completedCount / totalCount,
     };
   }
