@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AppNavigation } from "@/components/AppNavigation";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { InvitationPopup } from "@/components/InvitationPopup";
 import { UnreadMessageProvider } from "@/components/UnreadMessageProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -58,7 +59,10 @@ export function AuthenticatedAppShell({
                 <strong>PMO<span className="brand-accent">TOOLS</span></strong>
               </span>
             </Link>
-            <div className="sidebar-foot"><UserMenu /></div>
+            <div className="global-header-end">
+              <GlobalSearch />
+              <div className="sidebar-foot"><UserMenu /></div>
+            </div>
           </div>
           <AppNavigation area="sidebar" menuPrefs={menuPrefs} canManageWorkLogs={canManageWorkLogs} />
         </header>

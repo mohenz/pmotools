@@ -146,6 +146,7 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .app-shell { width: 100%; min-width: 0; min-height: 100vh; }
 .global-header { position: sticky; z-index: 30; top: 0; display: block; background: var(--sidebar); color: var(--sidebar-foreground); box-shadow: 0 1px 0 var(--sidebar-border); }
 .global-header-main { display: flex; height: 58px; align-items: stretch; justify-content: space-between; border-bottom: 1px solid var(--sidebar-border); }
+.global-header-end { display: flex; align-items: center; gap: 14px; padding-right: 4px; }
 .app-body { display: flex; width: 100%; min-width: 0; min-height: calc(100vh - 112px); }
 .module-sidebar { position: sticky; top: 112px; flex: 0 0 clamp(170px, 15vw, 210px); min-width: 0; height: calc(100vh - 112px); overflow-y: auto; border-right: 1px solid var(--border); background: var(--card); }
 .sidebar { position: sticky; top: 0; display: flex; flex: 0 0 200px; flex-direction: column; height: 100vh; background: var(--sidebar); color: var(--sidebar-foreground); }
@@ -191,6 +192,30 @@ table, [data-numeric] { font-variant-numeric: tabular-nums; }
 .sidebar-icon-actions .nav-badge { position: absolute; top: -7px; right: -7px; margin: 0; }
 .sidebar-icon-actions a:hover, .sidebar-icon-actions button:hover, .sidebar-icon-actions a.active { background: var(--sidebar-accent); color: white; }
 .sidebar-icon-actions svg { width: 15px; height: 15px; }
+.global-search { position: relative; width: clamp(200px, 22vw, 320px); }
+.global-search-input { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border: 1px solid var(--sidebar-border); border-radius: var(--radius-full); background: oklch(1 0 0 / 8%); }
+.global-search-input svg { flex: none; width: 14px; height: 14px; color: oklch(1 0 0 / 45%); }
+.global-search-input input { flex: 1; min-width: 0; border: 0; background: transparent; color: white; font-size: 12px; }
+.global-search-input input::placeholder { color: oklch(1 0 0 / 40%); }
+.global-search-input input:focus { outline: 0; }
+.global-search-input:focus-within { border-color: oklch(1 0 0 / 35%); background: oklch(1 0 0 / 12%); }
+.global-search-results { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; right: 0; max-height: 70vh; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--popover); color: var(--popover-foreground); box-shadow: var(--shadow-md); }
+.global-search-status { margin: 0; padding: 10px 8px; color: var(--muted-foreground); font-size: 12px; text-align: center; }
+.global-search-group { padding: 6px 4px; }
+.global-search-group + .global-search-group { border-top: 1px solid var(--border); }
+.global-search-group h3 { margin: 0 0 4px; padding: 0 4px; color: var(--muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.global-search-group ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.global-search-group li a { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); color: var(--foreground); text-decoration: none; }
+.global-search-group li a:hover { background: var(--accent); }
+.global-search-item-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.global-search-item-meta { flex: none; color: var(--muted-foreground); font: 11px var(--font-mono); }
+.global-search-more { display: block; width: 100%; margin-top: 4px; padding: 9px 8px; border: 0; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: transparent; color: var(--primary); font-size: 12px; font-weight: 600; text-align: center; cursor: pointer; }
+.global-search-more:hover { background: var(--accent); }
+.search-result-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.search-result-list li { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.search-result-list small { display: block; margin-top: 2px; color: var(--muted-foreground); font: 11px var(--font-mono); }
+.search-result-list p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 12px; }
+@media (max-width: 850px) { .global-search { display: none; } }
 .main { width: 100%; min-width: 0; max-width: 100%; flex: 1 1 0; overflow-x: clip; container: workspace / inline-size; }
 .main > * { min-width: 0; }
 .workspace-nav { position: sticky; z-index: 10; top: 0; display: flex; min-height: 44px; align-items: center; gap: 18px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--card); }
