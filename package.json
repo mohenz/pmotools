@@ -16,7 +16,8 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:jest": "jest --runInBand",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy-via-gemini.ps1"
   },
   "dependencies": {
     "@google/genai": "^2.18.0",
