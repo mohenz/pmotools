@@ -252,7 +252,6 @@ export async function archiveIssue(projectId: string, userId: string, issueId: s
   const { before, version } = await prisma.$transaction(async (tx) => {
     const before = await tx.issue.findUnique({ where: { id: issueId } });
     mutationError(before, data.version);
-    if (before!.status !== "CLOSED") throw new DomainError("INVALID_STATE", "종결 상태의 이슈만 보관할 수 있습니다. 이슈가 종료되기 전까지는 일련번호가 계속 관리되어야 합니다.");
     const version = data.version + 1;
     await tx.issue.update({ where: { id: issueId }, data: { archivedAt: new Date(), version } });
     return { before, version };

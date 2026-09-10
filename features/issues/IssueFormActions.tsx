@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { probabilities, type Probability } from "@/lib/domain/levels";
 import { issueStatuses, issueStatusLabel } from "@/lib/domain/issues";
@@ -95,6 +96,8 @@ function ProgressEntryForm({ initial, options, members, onSubmit, onCancel, subm
 
 export function IssueFormActions({ issue, options, members }: { issue: IssueRow; options: Options; members: ProjectMemberOption[] }) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isManager = session?.user?.role === "ADMIN" || session?.user?.role === "OPERATOR" || session?.user?.role === "SUPER_ADMIN";
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState("");
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -131,7 +134,7 @@ export function IssueFormActions({ issue, options, members }: { issue: IssueRow;
         <span>버전 {issue.version} · 현재 상태 {issueStatusLabel(issue.status)}</span>
         <AlertDialog.Root>
           <AlertDialog.Trigger asChild>
-            <button className="text-button danger" type="button" disabled={issue.status !== "CLOSED"} title={issue.status !== "CLOSED" ? "종결 상태의 이슈만 보관할 수 있습니다." : undefined}>이슈 보관</button>
+            <button className="text-button danger" type="button" disabled={!isManager} title={!isManager ? "운영자 이상만 이슈를 보관할 수 있습니다." : undefined}>이슈 보관</button>
           </AlertDialog.Trigger>
           <AlertDialog.Portal>
             <AlertDialog.Overlay className="calendar-modal-backdrop" />
