@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
+import { WBS_ITEM_STATUS_LABEL } from "@/lib/domain/wbs";
 import type { WbsOwnerStatus } from "@/lib/server/wbs";
 
 const pct = (value: number | null) => (value === null ? "-" : `${Math.round(value * 100)}%`);
@@ -19,16 +20,18 @@ export function WbsOwnerStatusScreen({ status }: { status: NonNullable<WbsOwnerS
       <section className="panel">
         <div className="panel-head"><h2>담당 Task 목록</h2><span>{items.length}건</span></div>
         {items.length ? <div className="table-wrap"><table>
-          <thead><tr><th>Task</th><th>Task Description</th><th>Stage</th><th>StartDate</th><th>DueDate</th><th>목표</th><th>실적</th><th>진척율</th></tr></thead>
+          <thead><tr><th>Task</th><th>Task Description</th><th>Stage</th><th>계획시작일</th><th>계획종료일</th><th>실적시작일</th><th>실적종료일</th><th>상태</th><th>지연일자</th><th>지연여부</th></tr></thead>
           <tbody>{items.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
             <td className="mono">{item.code}</td>
             <td className="title-cell"><Link className="table-link" href={`/wbs/${item.id}`}>{item.name}</Link></td>
             <td>{item.stage ?? ""}</td>
             <td>{dot(item.startDate)}</td>
             <td>{dot(item.dueDate)}</td>
-            <td>{pct(item.plannedProgress)}</td>
-            <td>{pct(item.actualProgress)}</td>
-            <td>{pct(item.progressIndex)}</td>
+            <td>{dot(item.actualStartDate)}</td>
+            <td>{dot(item.actualDueDate)}</td>
+            <td>{item.actualDueDate ? "완료" : WBS_ITEM_STATUS_LABEL[item.status]}</td>
+            <td>{item.delayDays !== null ? `${item.delayDays}일` : "-"}</td>
+            <td>{item.isDelayed ? <span className="badge band-red">지연</span> : ""}</td>
           </ClickableTableRow>)}</tbody>
         </table></div> : <div className="empty">담당 중인 WBS 항목이 없습니다.</div>}
       </section>
