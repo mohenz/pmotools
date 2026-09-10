@@ -254,7 +254,11 @@ export async function getWbsOwnerStatus(projectId: string, loginId: string) {
   const items = rows.filter((row) => row.ownerUserId === member.userId);
   const leaves = items.filter((row) => row.isLeaf);
   const overall = rollupProgress(leaves.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
-  return { owner: { userId: member.userId, loginId, name: member.user.name }, overall, items };
+  // 진척율(실적÷목표)은 오늘 기준 선형보간 목표 대비 페이스 지표라, 마감 전인데 입력된 진도율이
+  // 아직 낮은 항목이 있으면 실제 지연(계획종료일 경과 미완료, 또는 지연완료)이 하나도 없어도 100% 밑으로 나올 수 있다.
+  // "critical" 강조는 진척율 수치가 아니라 실제 지연 항목 존재 여부로 판단한다(2026-09-10 사용자 요청).
+  const hasDelayed = leaves.some((row) => row.isDelayed);
+  return { owner: { userId: member.userId, loginId, name: member.user.name }, overall, hasDelayed, items };
 }
 
 export type WbsOwnerTaskOption = { code: string; name: string };
