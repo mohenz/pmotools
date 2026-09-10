@@ -100,14 +100,16 @@ export function IssueFormActions({ issue, options, members }: { issue: IssueRow;
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  async function mutate(path: string, method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown> | null, action: string) {
+  async function mutate(path: string, method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown> | null, action: string, onSuccess?: () => void) {
     setPending(action); setMessage("");
     const response = await fetch(path, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify({ ...body, version: issue.version }) : undefined });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       setMessage(payload?.error?.message ?? "요청을 처리하지 못했습니다."); setPending(""); return false;
     }
-    setPending(""); router.refresh(); return true;
+    setPending("");
+    if (onSuccess) onSuccess(); else router.refresh();
+    return true;
   }
 
   async function addEntry(payload: Record<string, unknown>) {
@@ -119,10 +121,31 @@ export function IssueFormActions({ issue, options, members }: { issue: IssueRow;
   async function deleteEntry(entryId: string) {
     await mutate(`/api/v1/issues/${issue.id}/progress/${entryId}`, "DELETE", null, `delete-${entryId}`);
   }
+  async function archiveIssue() {
+    await mutate(`/api/v1/issues/${issue.id}/archive`, "POST", {}, "archive", () => router.push("/issues"));
+  }
 
   return <>
     <section className="panel action-panel">
-      <div className="panel-head"><h2>{issue.title}</h2><span>버전 {issue.version} · 현재 상태 {issueStatusLabel(issue.status)}</span></div>
+      <div className="panel-head"><h2>{issue.title}</h2><div className="panel-head-title">
+        <span>버전 {issue.version} · 현재 상태 {issueStatusLabel(issue.status)}</span>
+        <AlertDialog.Root>
+          <AlertDialog.Trigger asChild>
+            <button className="text-button danger" type="button" disabled={issue.status !== "CLOSED"} title={issue.status !== "CLOSED" ? "종결 상태의 이슈만 보관할 수 있습니다." : undefined}>이슈 보관</button>
+          </AlertDialog.Trigger>
+          <AlertDialog.Portal>
+            <AlertDialog.Overlay className="calendar-modal-backdrop" />
+            <AlertDialog.Content className="alert-dialog">
+              <AlertDialog.Title asChild><h2>이 이슈를 보관하시겠습니까?</h2></AlertDialog.Title>
+              <AlertDialog.Description asChild><p>보관하면 목록·조회에서 제외됩니다. 이 작업은 되돌릴 수 없습니다.</p></AlertDialog.Description>
+              <div className="alert-dialog-actions">
+                <AlertDialog.Cancel asChild><button className="button secondary" type="button">취소</button></AlertDialog.Cancel>
+                <AlertDialog.Action asChild><button className="button danger" type="button" onClick={archiveIssue}>보관</button></AlertDialog.Action>
+              </div>
+            </AlertDialog.Content>
+          </AlertDialog.Portal>
+        </AlertDialog.Root>
+      </div></div>
       <p className="table-wrap-note">진행 이력을 추가하면 그 내용이 곧 이슈 정보가 됩니다 — 최초 등록과 동일한 항목을 갖춘 스냅샷이 이슈 현황에 즉시 반영됩니다.</p>
     </section>
 
