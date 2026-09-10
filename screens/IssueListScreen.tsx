@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClickableTableRow } from "@/components/ClickableTableRow";
 import { probabilityLabel } from "@/lib/domain/levels";
 import { issueStatuses, issueStatusLabel } from "@/lib/domain/issues";
 import type { CommonCode } from "@/lib/server/common-codes";
@@ -60,7 +61,7 @@ function IssueTable({ issues }: { issues: IssueRow[] }) {
   return <div className="table-wrap"><table className="issue-table"><thead><tr>
     <th>SEQ</th><th>이슈구분</th><th>이슈명</th><th>이슈내용</th><th>중요도</th><th>우선순위</th><th>상태</th><th>발생일자</th><th>해결기한</th><th>담당자</th>
   </tr></thead>
-    <tbody>{issues.map((issue) => <tr key={issue.id}>
+    <tbody>{issues.map((issue) => <ClickableTableRow href={`/issues/${issue.id}`} ariaLabel={`${issue.title} 이슈 상세보기`} key={issue.id}>
       <td className="mono"><Link className="table-link" href={`/issues/${issue.id}`}>{issue.seq}</Link></td>
       <td>{issue.categoryLabel}</td>
       <td className="wrap-cell"><Link className="table-link" href={`/issues/${issue.id}`}>{issue.title}</Link></td>
@@ -71,5 +72,5 @@ function IssueTable({ issues }: { issues: IssueRow[] }) {
       <td>{issue.occurredAt.slice(0, 10)}</td>
       <td>{issue.dueAt ? issue.dueAt.slice(0, 10) : "-"}</td>
       <td>{issue.ownerName ?? "-"}</td>
-    </tr>)}</tbody></table></div>;
+    </ClickableTableRow>)}</tbody></table></div>;
 }
