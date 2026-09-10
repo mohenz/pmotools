@@ -21,7 +21,7 @@ export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
         <div className="panel-head"><h2>Stage별 공정율</h2><span>{stages.length}개 Stage · 총 {fmt(itemCount)}건</span></div>
         {stages.length ? <>
           <WbsStageChart stages={stages} />
-          <div className="table-wrap"><table><thead><tr><th>Stage</th><th>Task 건수</th><th>계획건수</th><th>실적건수</th><th>공정율</th><th>계획</th><th>실적</th><th>지연건수</th><th>지연율</th><th>상태</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>Stage</th><th data-numeric>Task 건수</th><th data-numeric>계획건수</th><th data-numeric>실적건수</th><th data-numeric>공정율</th><th data-numeric>계획</th><th data-numeric>실적</th><th data-numeric>지연건수</th><th data-numeric>지연율</th><th>상태</th></tr></thead>
             <tbody>{stages.map((stage) => <tr key={stage.stage}>
               <td>{stage.stage}</td>
               <td data-numeric>{fmt(stage.itemCount)}건</td>

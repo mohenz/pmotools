@@ -339,6 +339,7 @@ tfoot .totals-row td { border-top: 2px solid var(--border); border-bottom: 0; ba
 tfoot .totals-row:hover td { background: var(--muted); }
 .mono { font-family: var(--font-mono); font-size: 13px; }
 td.mono, td[data-numeric] { text-align: right; }
+th[data-numeric] { text-align: right; }
 .title-cell { max-width: 320px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
 /* WBS 목록 — wbs_level~Task Description(1~7번째 컬럼) 열고정, 나머지 40개 컬럼만 가로 스크롤.
    overflow-x:auto가 있으면 overflow-y도 브라우저가 auto로 승격시키는 스펙 규정 때문에(overflow-y:visible을 명시해도 무시됨),
