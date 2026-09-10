@@ -285,8 +285,11 @@ function delayStatsOf(rows: WbsItemRow[]) {
   return { delayedCount, delayTrackedCount: tracked.length, delayRate: tracked.length === 0 ? 0 : delayedCount / tracked.length };
 }
 
-// 계획건수/실적건수/공정율 — PMO Daily "1. 공정현황"(getWbsDailyTaskCounts)과 같은 기준: 계획건수 = 계획종료일이 오늘
-// 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목. 공정율 = scheduleProgress(pmo-daily)와 동일한 공식.
+// 계획건수/실적건수/공정율 — Stage 개요 화면 전용 누적 기준(2026-09-10 확정, PMO Daily "1. 공정현황"과는 계획건수
+// 필터가 다르다: PMO Daily는 계획종료일이 "정확히 기준일"인 건만 세는 하루 단위 스냅샷이고, 여기는 "기준일까지 누적"이라
+// 프로젝트가 진행될수록 단조 증가한다 — Stage 전체 진행 상황을 보여주는 화면 성격상 의도적으로 다르게 설계했다.
+// 계획건수 = 계획종료일이 오늘 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목.
+// 공정율 = scheduleProgress(pmo-daily)와 동일한 공식(실적÷계획, 100% 상한).
 function countStatsOf(rows: WbsItemRow[], todayStr: string) {
   const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate <= todayStr);
   const plannedCount = plannedRows.length;
@@ -313,7 +316,7 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
     const rollup = rollupProgress(toRollupInputs(rows));
     const stageDelay = delayStatsOf(rows);
     const stageCounts = countStatsOf(rows, todayStr);
-    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned, ...stageCounts, delayedCount: stageDelay.delayedCount, delayTrackedCount: stageDelay.delayTrackedCount, delayRate: stageDelay.delayRate };
+    return { stage, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: stageDelay.delayedCount > 0, ...stageCounts, delayedCount: stageDelay.delayedCount, delayTrackedCount: stageDelay.delayTrackedCount, delayRate: stageDelay.delayRate };
   });
   return { overall, itemCount: leaves.length, delayRate: overallDelay.delayRate, delayedCount: overallDelay.delayedCount, delayTrackedCount: overallDelay.delayTrackedCount, ...overallCounts, stages };
 }
@@ -367,7 +370,8 @@ async function loadWbsWorkGroupStats(projectId: string): Promise<WbsWorkGroupSta
     .map(([groupLabel, rows]) => {
       const rollup = rollupProgress(toRollupInputs(rows));
       const memberCount = new Set(rows.map((row) => row.ownerUserId).filter((id): id is string => !!id)).size;
-      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned, ...delayStatsOf(rows) };
+      const groupDelay = delayStatsOf(rows);
+      return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: groupDelay.delayedCount > 0, ...groupDelay };
     })
     // 업무그룹 코드(Groups.code) 기준 오름차순. 코드가 없는 "미지정"·"담당자 없음"은 맨 뒤로 보낸다.
     .sort((a, b) => {

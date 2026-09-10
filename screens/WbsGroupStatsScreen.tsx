@@ -10,7 +10,7 @@ export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
   const chartData = groups.map((group) => ({ stage: group.groupLabel, planned: group.planned, actual: group.actual, delayed: group.delayed }));
   const totalMembers = groups.reduce((sum, group) => sum + group.memberCount, 0);
   const totalItems = groups.reduce((sum, group) => sum + group.itemCount, 0);
-  const overallDelayed = overall.actual < overall.planned;
+  const overallDelayed = delayedCount > 0;
   return <>
     <header className="topbar"><div><h1>WBS 업무그룹별 통계</h1><p>사용자관리에서 지정한 업무그룹 기준 WBS 담당자별 공정율 현황</p></div></header>
     <div className="content">

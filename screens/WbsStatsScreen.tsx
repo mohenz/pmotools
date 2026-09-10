@@ -6,7 +6,7 @@ const fmt = (value: number) => value.toLocaleString("ko-KR");
 
 export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
   const { overall, itemCount, delayRate, delayedCount, delayTrackedCount, stages } = stats;
-  const overallDelayed = overall.actual < overall.planned;
+  const overallDelayed = delayedCount > 0;
   return <>
     <header className="topbar"><div><h1>WBS 통계</h1><p>전체 공정율 및 Stage별 계획·실적·지연 현황 · 총 {fmt(itemCount)}건</p></div></header>
     <div className="content">

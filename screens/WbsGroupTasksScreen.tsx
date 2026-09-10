@@ -23,7 +23,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
       const rollup = rollupProgress(rows.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
       const completedCount = rows.filter((row) => row.actualProgress >= 1).length;
       const ownerLoginId = rows.find((row) => row.ownerLoginId)?.ownerLoginId ?? null;
-      return { owner, ownerLoginId, itemCount: rows.length, completedCount, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+      return { owner, ownerLoginId, itemCount: rows.length, completedCount, planned: rollup.planned, actual: rollup.actual, delayed: rows.some((row) => row.isDelayed) };
     })
     .sort((a, b) => a.owner.localeCompare(b.owner, "ko"));
   const chartData = owners.map((row) => ({ stage: row.owner, planned: row.planned, actual: row.actual, delayed: row.delayed }));
@@ -59,7 +59,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
               <td>{pct(overall.planned)}</td>
               <td>{pct(overall.actual)}</td>
               <td>{overall.planned === 0 ? "-" : `${Math.round((overall.actual / overall.planned) * 100)}%`}</td>
-              <td>{overall.actual < overall.planned ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
+              <td>{items.some((item) => item.isDelayed) ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
             </tr></tfoot>
           </table></div>
         </> : <div className="empty">담당자 정보가 없습니다.</div>}
