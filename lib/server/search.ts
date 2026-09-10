@@ -8,15 +8,22 @@ export type SearchResultGroup = { type: string; label: string; items: SearchResu
 const dateStr = (value: Date) => value.toISOString().slice(0, 10);
 const snippetOf = (value: string, max = 80) => (value.length > max ? `${value.slice(0, max)}…` : value);
 
-// 상단 전체 검색 — 실무에서 가장 많이 찾는 6개 데이터(WBS Task/이슈/요구사항/관리업무/업무일지/PMO Daily/공지사항)를
+// 상단 전체 검색 — 실무에서 가장 많이 찾는 데이터(사용자/WBS Task/이슈/요구사항/관리업무/업무일지/PMO Daily/공지사항)를
 // 프로젝트 범위로 키워드(제목·본문 contains, 대소문자 무시) 검색한다. 소프트삭제(archivedAt/deletedAt)된 항목은 제외한다.
+// "사용자" 결과는 그 사람 개인 정보가 아니라 담당 Task 조회 화면(/wbs/by-owner)으로 바로 연결해, 사람 이름으로
+// 검색했을 때 "이 사람이 뭘 하고 있는지"를 바로 찾을 수 있게 한다 — WBS Task 검색도 담당자명을 함께 매칭해
+// 같은 목적(사용자 Task 검색)을 보완한다(2026-09-10 사용자 요청).
 export async function searchAll(projectId: string, query: string, limitPerGroup: number): Promise<SearchResultGroup[]> {
   const contains = (value: string) => ({ contains: value, mode: "insensitive" as const });
   const prisma = getPrisma();
 
-  const [wbsItems, issues, requirements, managementTasks, workLogs, announcements, delayedTasks] = await Promise.all([
+  const [members, wbsItems, issues, requirements, managementTasks, workLogs, announcements, delayedTasks] = await Promise.all([
+    prisma.projectMember.findMany({
+      where: { projectId, isActive: true, user: { status: "ACTIVE", OR: [{ name: contains(query) }, { userId: contains(query) }] } },
+      include: { user: true }, orderBy: { user: { name: "asc" } }, take: limitPerGroup,
+    }),
     prisma.wbsItem.findMany({
-      where: { projectId, archivedAt: null, OR: [{ name: contains(query) }, { description: contains(query) }] },
+      where: { projectId, archivedAt: null, OR: [{ name: contains(query) }, { description: contains(query) }, { ownerNameRaw: contains(query) }, { owner: { name: contains(query) } }] },
       orderBy: { updatedAt: "desc" }, take: limitPerGroup,
     }),
     prisma.issue.findMany({
@@ -46,6 +53,7 @@ export async function searchAll(projectId: string, query: string, limitPerGroup:
   ]);
 
   const groups: SearchResultGroup[] = [
+    { type: "user", label: "사용자", items: members.map((member) => ({ id: member.user.id, title: member.user.name, snippet: member.user.department || member.user.jobTitle || "", meta: member.user.userId, href: `/wbs/by-owner/${member.user.userId}` })) },
     { type: "wbs", label: "WBS Task", items: wbsItems.map((item) => ({ id: item.id, title: item.name, snippet: snippetOf(item.description), meta: item.displayId, href: `/wbs/${item.id}` })) },
     { type: "issue", label: "이슈", items: issues.map((item) => ({ id: item.id, title: item.title, snippet: snippetOf(item.description || item.responseContent), meta: item.displayId, href: `/issues/${item.id}` })) },
     { type: "requirement", label: "요구사항", items: requirements.map((item) => ({ id: item.id, title: item.title, snippet: snippetOf(item.content), meta: item.displayId, href: `/requirements/${item.id}` })) },
