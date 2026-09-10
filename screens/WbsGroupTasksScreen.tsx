@@ -8,8 +8,12 @@ const pct = (value: number | null) => (value === null ? "-" : `${Math.round(valu
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
 
 export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
-  const { group, delayedOnly, overall, items } = tasks;
+  const { group, delayedOnly, weekRange, overall, items } = tasks;
   const groupTitle = group || "전체";
+  const titleSuffix = weekRange ? "주간 총대상 Task" : delayedOnly ? "지연 Task" : "Task";
+  const description = weekRange
+    ? `${dot(weekRange.startDate)} ~ ${dot(weekRange.endDate)} 기준 계획(마감일이 기간 내) + 이월(이전 마감인데 아직 미완료) 항목입니다.`
+    : delayedOnly ? "계획일이 지났는데 실적일이 비어 있는 항목만 표시합니다." : "업무그룹 담당자 전체의 Task 목록입니다.";
 
   const itemsByOwner = new Map<string, typeof items>();
   for (const item of items) {
@@ -30,7 +34,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
   const totalCompletedCount = items.filter((item) => item.actualProgress >= 1).length;
 
   return <>
-    <header className="topbar"><div><h1>{groupTitle} {delayedOnly ? "지연 Task" : "Task"} 조회</h1><p>{delayedOnly ? "계획일이 지났는데 실적일이 비어 있는 항목만 표시합니다." : "업무그룹 담당자 전체의 Task 목록입니다."} 총 {items.length}건</p></div><div className="topbar-actions"><Link className="button secondary" href="/wbs/group-stats">업무그룹별 통계로</Link></div></header>
+    <header className="topbar"><div><h1>{groupTitle} {titleSuffix} 조회</h1><p>{description} 총 {items.length}건</p></div><div className="topbar-actions"><Link className="button secondary" href={weekRange ? "/wbs/weekly-stats" : "/wbs/group-stats"}>{weekRange ? "주간 통계로" : "업무그룹별 통계로"}</Link></div></header>
     <div className="content">
       <section className="kpi-grid">
         <div className="kpi"><span>목표(today)</span><strong>{pct(overall.planned)}</strong><small>계획 공정율</small></div>

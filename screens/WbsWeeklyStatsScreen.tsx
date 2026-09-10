@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { WbsWeeklyStats } from "@/lib/server/wbs";
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -24,7 +25,7 @@ export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
           <thead><tr><th>업무그룹</th><th data-numeric>총대상(건)</th><th data-numeric>계획(건)</th><th data-numeric>완료(건)</th><th data-numeric>지연(건)</th><th data-numeric>달성률(%)(계획대비)</th><th data-numeric>진척률(%)(전체)</th><th>비고</th></tr></thead>
           <tbody>{groups.map((group) => <tr key={group.groupLabel}>
             <td>{group.groupLabel}</td>
-            <td data-numeric>{fmt(group.totalCount)}</td>
+            <td data-numeric><Link className="table-link" href={`/wbs/group-tasks?group=${encodeURIComponent(group.groupLabel)}&startDate=${startDate}&endDate=${endDate}`}>{fmt(group.totalCount)}</Link></td>
             <td data-numeric>{fmt(group.plannedCount)}</td>
             <td data-numeric>{fmt(group.completedCount)}</td>
             <td data-numeric>{fmt(group.delayedCount)}</td>
@@ -34,7 +35,7 @@ export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
           </tr>)}</tbody>
           <tfoot><tr className="totals-row">
             <td>전체</td>
-            <td data-numeric>{fmt(overall.totalCount)}</td>
+            <td data-numeric><Link className="table-link" href={`/wbs/group-tasks?startDate=${startDate}&endDate=${endDate}`}>{fmt(overall.totalCount)}</Link></td>
             <td data-numeric>{fmt(overall.plannedCount)}</td>
             <td data-numeric>{fmt(overall.completedCount)}</td>
             <td data-numeric>{fmt(overall.delayedCount)}</td>

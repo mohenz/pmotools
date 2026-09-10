@@ -490,14 +490,22 @@ export async function getWbsDueTodayIncompleteTasks(projectId: string, asOfDate:
 
 // 업무그룹별 통계 화면의 업무그룹명·지연율 클릭 진입점 — 해당 업무그룹(담당자 기준) leaf 항목을 그대로 나열한다.
 // delayedOnly면 실적이 목표에 못 미치는 항목만 추린다. group을 비우면 프로젝트 전체(모든 그룹) 대상이다.
-export async function getWbsGroupTasks(projectId: string, group: string, delayedOnly: boolean) {
+// weekRange가 있으면 주간 통계 화면의 "총대상(건)"(계획 + 이월) 클릭 진입점 — loadWbsWeeklyStats의 buildStat과
+// 동일한 기준으로 추린다.
+export async function getWbsGroupTasks(projectId: string, group: string, delayedOnly: boolean, weekRange?: { startDate: string; endDate: string }) {
   const [items, { groupLabelByOwner }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   let leaves = items.filter((item) => !parentIds.has(item.id));
   if (group) leaves = leaves.filter((item) => ownerGroupLabelOf(item, groupLabelByOwner) === group);
   if (delayedOnly) leaves = leaves.filter((item) => item.isDelayed);
+  if (weekRange) {
+    const { startDate, endDate } = weekRange;
+    leaves = leaves.filter((item) =>
+      (item.dueDate !== null && item.dueDate >= startDate && item.dueDate <= endDate) ||
+      (item.dueDate !== null && item.dueDate < startDate && item.actualProgress < 1));
+  }
   const overall = rollupProgress(leaves.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress })));
-  return { group, delayedOnly, overall, items: leaves };
+  return { group, delayedOnly, weekRange: weekRange ?? null, overall, items: leaves };
 }
 export type WbsGroupTasks = Awaited<ReturnType<typeof getWbsGroupTasks>>;
 
