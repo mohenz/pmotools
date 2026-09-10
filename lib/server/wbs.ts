@@ -189,6 +189,9 @@ export type WbsListFilters = {
   actualStartDateFrom?: string; actualStartDateTo?: string; actualDueDateFrom?: string; actualDueDateTo?: string;
   delayed?: "" | "y" | "n";
   stage?: string; status?: "" | "not_started" | "in_progress" | "completed" | "on_hold";
+  // 자유 텍스트 assignee(이름 부분일치)와 달리, 호출자(페이지)가 권한 판단 후 강제로 걸어주는 정확 일치 제한 —
+  // URL 쿼리스트링으로 우회할 수 없도록 이 값은 assignee 필터와 별개로 항상 적용된다.
+  ownerUserId?: string;
 };
 
 // 엑셀 원본 47개 컬럼(A~AU)을 그대로 담아 반환한다 — 목록 화면의 전체 컬럼 보기, 향후 엑셀 다운로드가 그대로 쓸 형태.
@@ -236,7 +239,8 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
     const matchesDelayed = !delayed || (delayed === "y" ? row.isDelayed : !row.isDelayed);
     const matchesStage = !stage || (row.stage ?? "").toLowerCase().includes(stage);
     const matchesStatus = !status || row.status === status;
-    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesDelayed && matchesStage && matchesStatus;
+    const matchesOwnerUserId = !filters.ownerUserId || row.ownerUserId === filters.ownerUserId;
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesDelayed && matchesStage && matchesStatus && matchesOwnerUserId;
   });
   const total = filteredRows.length;
   const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 10));
@@ -600,8 +604,8 @@ export async function getWbsItemDetail(projectId: string, id: string) {
   const assignmentByGroup = new Map(item.assignments.map((a) => [a.groupId, a]));
   return {
     item: toRow(item, holidays, new Date(), stageItem?.name ?? null, children.length === 0),
-    parent: parent ? { id: parent.id, code: codeFromPath(parent.path), name: parent.name } : null,
-    children: children.map((child) => ({ id: child.id, code: codeFromPath(child.path), name: child.name, status: child.status })),
+    parent: parent ? { id: parent.id, code: codeFromPath(parent.path), name: parent.name, ownerUserId: parent.ownerUserId } : null,
+    children: children.map((child) => ({ id: child.id, code: codeFromPath(child.path), name: child.name, status: child.status, ownerUserId: child.ownerUserId })),
     assignments: groups.map((group) => {
       const existing = assignmentByGroup.get(group.id);
       return { groupId: group.id, groupLabel: group.label, groupCode: group.code, hasPermission: !!existing, progressPercent: existing?.progressPercent ?? 0 } satisfies WbsAssignmentRow;

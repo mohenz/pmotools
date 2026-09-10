@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasPmPmoAccess } from "@/lib/domain/job-access";
+import { canViewAllWbs, hasPmPmoAccess } from "@/lib/domain/job-access";
 
 describe("hasPmPmoAccess", () => {
   it.each(["PM", "PMO", " pm ", "pmo"])("%s 직무를 허용한다", (jobTitle) => {
@@ -17,5 +17,15 @@ describe("hasPmPmoAccess", () => {
   it("슈퍼관리자가 아니면 여전히 직무 기준을 따른다", () => {
     expect(hasPmPmoAccess("개발", "ADMIN")).toBe(false);
     expect(hasPmPmoAccess("PM", "MEMBER")).toBe(true);
+  });
+});
+
+describe("canViewAllWbs", () => {
+  it.each(["ADMIN", "OPERATOR", "SUPER_ADMIN"])("%s는 전체 WBS를 볼 수 있다", (role) => {
+    expect(canViewAllWbs(role)).toBe(true);
+  });
+
+  it.each(["MEMBER", null, undefined, "", "PM"])("%s는 전체 WBS를 볼 수 없다(본인 담당만)", (role) => {
+    expect(canViewAllWbs(role)).toBe(false);
   });
 });

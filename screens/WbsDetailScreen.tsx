@@ -7,8 +7,9 @@ function percent(value: number | null) {
   return value === null ? "-" : `${Math.round(value * 100)}%`;
 }
 
-export function WbsDetailScreen({ detail, excelRow }: { detail: NonNullable<WbsItemDetail>; excelRow: WbsExcelRow | null }) {
+export function WbsDetailScreen({ detail, excelRow, viewer }: { detail: NonNullable<WbsItemDetail>; excelRow: WbsExcelRow | null; viewer: { userId: string; canViewAllWbs: boolean } }) {
   const { item, parent, children, assignments, deliverable, events } = detail;
+  const canView = (ownerUserId: string | null) => viewer.canViewAllWbs || ownerUserId === viewer.userId;
   return <>
     <header className="topbar"><div><p className="mono">{item.displayId} · {item.code}</p><h1>{item.name}</h1></div></header>
     <div className="content">
@@ -24,7 +25,7 @@ export function WbsDetailScreen({ detail, excelRow }: { detail: NonNullable<WbsI
             <div><dt>Task Description</dt><dd>{item.name}</dd></div>
             <div><dt>트랜젝션코드(정렬SEQ)</dt><dd className="mono">{excelRow?.sequenceNo ?? "-"}</dd></div>
             <div><dt>상세진도</dt><dd>{excelRow?.isLeaf ? "대상" : "-"}</dd></div>
-            <div><dt>상위 항목</dt><dd>{parent ? <Link className="table-link" href={`/wbs/${parent.id}`}>{parent.code} {parent.name}</Link> : "(최상위 레벨)"}</dd></div>
+            <div><dt>상위 항목</dt><dd>{parent ? (canView(parent.ownerUserId) ? <Link className="table-link" href={`/wbs/${parent.id}`}>{parent.code} {parent.name}</Link> : `${parent.code} ${parent.name}`) : "(최상위 레벨)"}</dd></div>
             <div><dt>내용</dt><dd className="prewrap">{item.description || "-"}</dd></div>
           </dl>
         </article>
@@ -84,7 +85,7 @@ export function WbsDetailScreen({ detail, excelRow }: { detail: NonNullable<WbsI
           <div className="table-wrap"><table><thead><tr><th>코드</th><th>이름</th><th>상태</th></tr></thead>
             <tbody>{children.map((child) => <tr key={child.id}>
               <td className="mono">{child.code}</td>
-              <td><Link className="table-link" href={`/wbs/${child.id}`}>{child.name}</Link></td>
+              <td>{canView(child.ownerUserId) ? <Link className="table-link" href={`/wbs/${child.id}`}>{child.name}</Link> : child.name}</td>
               <td>{WBS_ITEM_STATUS_LABEL[child.status]}</td>
             </tr>)}</tbody></table></div>
         </section>}

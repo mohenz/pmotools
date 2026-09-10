@@ -13,17 +13,27 @@ const snippetOf = (value: string, max = 80) => (value.length > max ? `${value.sl
 // "사용자" 결과는 그 사람 개인 정보가 아니라 담당 Task 조회 화면(/wbs/by-owner)으로 바로 연결해, 사람 이름으로
 // 검색했을 때 "이 사람이 뭘 하고 있는지"를 바로 찾을 수 있게 한다 — WBS Task 검색도 담당자명을 함께 매칭해
 // 같은 목적(사용자 Task 검색)을 보완한다(2026-09-10 사용자 요청).
-export async function searchAll(projectId: string, query: string, limitPerGroup: number): Promise<SearchResultGroup[]> {
+// viewer.canViewAllWbs가 false(관리자·운영자가 아닌 일반 사용자)면 WBS Task는 본인이 담당한 것만, 사용자는 본인
+// 한 명만 나온다 — /wbs/[id]·/wbs/by-owner 페이지 자체의 접근 제한과 검색 결과가 항상 같은 기준을 쓰도록 맞춘다.
+export async function searchAll(projectId: string, query: string, limitPerGroup: number, viewer: { userId: string; canViewAllWbs: boolean }): Promise<SearchResultGroup[]> {
   const contains = (value: string) => ({ contains: value, mode: "insensitive" as const });
   const prisma = getPrisma();
 
   const [members, wbsItems, issues, requirements, managementTasks, workLogs, announcements, delayedTasks] = await Promise.all([
     prisma.projectMember.findMany({
-      where: { projectId, isActive: true, user: { status: "ACTIVE", OR: [{ name: contains(query) }, { userId: contains(query) }] } },
+      where: {
+        projectId, isActive: true,
+        ...(viewer.canViewAllWbs ? {} : { userId: viewer.userId }),
+        user: { status: "ACTIVE", OR: [{ name: contains(query) }, { userId: contains(query) }] },
+      },
       include: { user: true }, orderBy: { user: { name: "asc" } }, take: limitPerGroup,
     }),
     prisma.wbsItem.findMany({
-      where: { projectId, archivedAt: null, OR: [{ name: contains(query) }, { description: contains(query) }, { ownerNameRaw: contains(query) }, { owner: { name: contains(query) } }] },
+      where: {
+        projectId, archivedAt: null,
+        ...(viewer.canViewAllWbs ? {} : { ownerUserId: viewer.userId }),
+        OR: [{ name: contains(query) }, { description: contains(query) }, { ownerNameRaw: contains(query) }, { owner: { name: contains(query) } }],
+      },
       orderBy: { updatedAt: "desc" }, take: limitPerGroup,
     }),
     prisma.issue.findMany({
