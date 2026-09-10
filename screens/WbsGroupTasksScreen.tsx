@@ -22,7 +22,8 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
     .map(([owner, rows]) => {
       const rollup = rollupProgress(rows.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
       const completedCount = rows.filter((row) => row.actualProgress >= 1).length;
-      return { owner, itemCount: rows.length, completedCount, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
+      const ownerLoginId = rows.find((row) => row.ownerLoginId)?.ownerLoginId ?? null;
+      return { owner, ownerLoginId, itemCount: rows.length, completedCount, planned: rollup.planned, actual: rollup.actual, delayed: rollup.actual < rollup.planned };
     })
     .sort((a, b) => a.owner.localeCompare(b.owner, "ko"));
   const chartData = owners.map((row) => ({ stage: row.owner, planned: row.planned, actual: row.actual, delayed: row.delayed }));
@@ -43,7 +44,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
           <WbsStageChart stages={chartData} />
           <div className="table-wrap"><table><thead><tr><th>담당자</th><th>Task 건수</th><th>완료 건수</th><th>목표</th><th>실적</th><th>진척율</th><th>상태</th></tr></thead>
             <tbody>{owners.map((row) => <tr key={row.owner}>
-              <td>{row.owner}</td>
+              <td>{row.ownerLoginId ? <Link className="table-link" href={`/wbs/by-owner/${row.ownerLoginId}`}>{row.owner}</Link> : row.owner}</td>
               <td>{row.itemCount}건</td>
               <td>{row.completedCount}건</td>
               <td>{pct(row.planned)}</td>
