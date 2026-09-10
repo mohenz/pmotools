@@ -1,12 +1,16 @@
 # Project Tool
 
+## 원클릭 설치 (새 PC)
+
+저장소를 새 Windows PC에 클론한 뒤 `setup.cmd`를 더블클릭하면 Node.js·PostgreSQL 18 설치(winget, 없을 때만)부터 로컬 DB 생성, `npm install`, 마이그레이션, 시드 데이터, 개발 서버 실행까지 한 번에 끝납니다. 재실행해도 안전합니다(이미 끝난 단계는 건너뜀). 자세한 옵션은 `scripts/setup-new-pc.ps1` 상단 주석 참고.
+
 ## 로컬 실행
 
 회의실 예약 기능은 프로젝트 전용 PostgreSQL 18(`localhost:55432`)을 사용합니다.
 
 ```powershell
 npm run db:local:start
-npx prisma migrate dev
+npx prisma migrate deploy
 npx prisma db seed
 npm run dev
 ```
@@ -57,7 +61,7 @@ npm.cmd run local
 - 상태 확인: `http://127.0.0.1:3020/api/health`
 - 최초 로그인 후 반드시 비밀번호를 변경하세요. seed 계정은 `prisma/seed.ts` 참고.
 
-로컬에서 DB에 연결하려면 `vercel env pull .env.local`로 Supabase 연결값을 받아오거나, `.env.example`을 참고해 `.env.local`을 직접 구성하세요.
+로컬 DB는 `setup.cmd`가 자동으로 구성합니다(`.env`의 `DATABASE_URL`이 로컬 PostgreSQL을 가리킴). 수동으로 구성하려면 `npm run db:local:start`로 로컬 Postgres를 띄운 뒤 `.env`에 `DATABASE_URL="postgresql://johndoe:randompassword@localhost:55432/mydb?schema=public"`을 넣으세요. 프로덕션 Supabase 값이 필요하면(배포 검증 등) `vercel env pull .env.local`을 별도로 사용하되, `.env`의 로컬 `DATABASE_URL`이 우선 적용됩니다.
 
 ## 주요 명령
 
@@ -67,7 +71,7 @@ npm.cmd run dev
 npm.cmd run lint
 npm.cmd test
 npm.cmd run build
-npx prisma migrate dev   # 스키마 변경 시
+npx prisma migrate deploy   # 스키마 변경 시(이 프로젝트는 migrate dev 대신 항상 deploy 사용)
 npx tsx prisma/seed.ts   # 데모 데이터 시드
 ```
 
