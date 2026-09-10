@@ -21,7 +21,7 @@ export function WbsWeeklyStatsScreen({ stats }: { stats: WbsWeeklyStats }) {
       <section className="panel">
         <div className="panel-head"><h2>진행 사항</h2><span>{groups.length}개 업무그룹</span></div>
         <div className="table-wrap"><table>
-          <thead><tr><th>업무그룹</th><th>총대상(건)</th><th>계획(건)</th><th>완료(건)</th><th>지연(건)</th><th>달성률(%)(계획대비)</th><th>진척률(%)(전체)</th><th>비고</th></tr></thead>
+          <thead><tr><th>업무그룹</th><th data-numeric>총대상(건)</th><th data-numeric>계획(건)</th><th data-numeric>완료(건)</th><th data-numeric>지연(건)</th><th data-numeric>달성률(%)(계획대비)</th><th data-numeric>진척률(%)(전체)</th><th>비고</th></tr></thead>
           <tbody>{groups.map((group) => <tr key={group.groupLabel}>
             <td>{group.groupLabel}</td>
             <td data-numeric>{fmt(group.totalCount)}</td>

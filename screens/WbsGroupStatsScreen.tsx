@@ -25,7 +25,7 @@ export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
         <div className="panel-head"><h2>업무그룹별 공정율</h2><span>{groups.length}개 그룹</span></div>
         {groups.length ? <>
           <WbsStageChart stages={chartData} />
-          <div className="table-wrap"><table><thead><tr><th>업무그룹</th><th>담당 인원</th><th>Task 건수</th><th>목표</th><th>실적</th><th>진척율</th><th>지연율</th><th>상태</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>업무그룹</th><th data-numeric>담당 인원</th><th data-numeric>Task 건수</th><th data-numeric>목표</th><th data-numeric>실적</th><th data-numeric>진척율</th><th data-numeric>지연율</th><th>상태</th></tr></thead>
             <tbody>{groups.map((group) => <tr key={group.groupLabel}>
               <td><Link className="table-link" href={`/wbs/group-tasks?group=${encodeURIComponent(group.groupLabel)}`}>{group.groupLabel}</Link></td>
               <td data-numeric>{fmt(group.memberCount)}명</td>
