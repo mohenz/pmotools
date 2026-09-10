@@ -50,7 +50,7 @@ export function GlobalSearch() {
         <Search aria-hidden="true" />
         <input
           type="search"
-          placeholder="전체 검색 (WBS, 이슈, 요구사항, 관리업무, 업무일지, PMO Daily, 공지사항)"
+          placeholder="검색"
           value={query}
           aria-label="전체 검색"
           onChange={(e) => setQuery(e.target.value)}
