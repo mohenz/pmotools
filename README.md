@@ -4,6 +4,8 @@
 
 저장소를 새 Windows PC에 클론한 뒤 `setup.cmd`를 더블클릭하면 Node.js·PostgreSQL 18 설치(winget, 없을 때만)부터 로컬 DB 생성, `npm install`, 마이그레이션, 시드 데이터, 개발 서버 실행까지 한 번에 끝납니다. 재실행해도 안전합니다(이미 끝난 단계는 건너뜀). 자세한 옵션은 `scripts/setup-new-pc.ps1` 상단 주석 참고.
 
+시드 데이터 대신 **프로덕션 실데이터를 그대로** 로컬로 가져오려면 `scripts/migrate-prod-to-local.ps1`을 쓴다 — 절차는 `docs/프로덕션DB_로컬마이그레이션_가이드.md` 참고.
+
 ## 로컬 실행
 
 회의실 예약 기능은 프로젝트 전용 PostgreSQL 18(`localhost:55432`)을 사용합니다.
