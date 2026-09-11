@@ -1,0 +1,1526 @@
+// PMS 통합 스키마 — 단일 Postgres(Supabase) 스키마.
+// 매핑 근거: docs/PMS_캘린더기반_재개발계획서.md 3장
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// 인증 / 사용자
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+  MEMBER
+}
+
+enum ThemeMode {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  userId       String     @unique // 로그인 ID
+  name         String
+  passwordHash String
+  email        String?
+  department   String?
+  jobTitle     String?
+  role         UserRole   @default(MEMBER)
+  theme        ThemeMode  @default(SYSTEM)
+  status       UserStatus @default(ACTIVE)
+  deletedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  memberships                   ProjectMember[]
+  groupMemberships              UserGroupMap[]
+  ledWorkGroups                 Groups[]                      @relation("WorkGroupLeader")
+  createdIssues                 Issue[]                       @relation("IssueCreator")
+  ownedIssues                   Issue[]                       @relation("IssueOwner")
+  lastModifiedIssues            Issue[]                       @relation("IssueLastModifier")
+  ownedIssueProgressEntries     IssueProgress[]               @relation("IssueProgressOwner")
+  actedIssueProgressEntries     IssueProgress[]               @relation("IssueProgressActor")
+  assignedEvents                EventAssignee[]
+  createdEvents                 CalendarEvent[]               @relation("CalendarEventCreator")
+  updatedEvents                 CalendarEvent[]               @relation("CalendarEventUpdater")
+  createdWeeklyReports          WeeklyReport[]                @relation("WeeklyReportCreator")
+  createdProgress               WeeklyProgress[]              @relation("WeeklyProgressCreator")
+  createdStaffChanges           StaffChange[]                 @relation("StaffChangeCreator")
+  notificationSetting           NotificationSetting?
+  sentMessages                  Message[]                     @relation("MessageSender")
+  receivedMessages              Message[]                     @relation("MessageReceiver")
+  auditLogs                     AuditLog[]
+  meetingReservations           MeetingReservation[]
+  recurringMeetings             RecurringMeetingReservation[] @relation("RecurringApplicant")
+  reviewedMeetings              RecurringMeetingReservation[] @relation("RecurringReviewer")
+  meetingChangeLogs             MeetingReservationChangeLog[]
+  meetingAttendances            MeetingReservationAttendee[]
+  createdRequirements           Requirement[]                 @relation("RequirementCreator")
+  ownedRequirements             Requirement[]                 @relation("RequirementOwner")
+  requirementEvents             RequirementEvent[]
+  requestedRequirementChanges   RequirementChange[]           @relation("RequirementChangeRequester")
+  decidedRequirementChanges     RequirementChange[]           @relation("RequirementChangeDecider")
+  passwordResetRequests         PasswordResetRequest[]        @relation("PasswordResetRequestUser")
+  resolvedPasswordResetRequests PasswordResetRequest[]        @relation("PasswordResetRequestResolver")
+  createdAnnouncements          Announcement[]                @relation("AnnouncementAuthor")
+  updatedAnnouncements          Announcement[]                @relation("AnnouncementUpdater")
+  createdManagementTasks        ManagementTask[]              @relation("ManagementTaskCreator")
+  assignedManagementTasks       ManagementTaskAssignee[]
+  createdPmoDailySnapshots      PmoDailySnapshot[]            @relation("PmoDailySnapshotCreator")
+  createdPmoDelayedTasks        PmoDelayedTask[]              @relation("PmoDelayedTaskCreator")
+  assignedPmoDelayedTasks       PmoDelayedTaskAssignee[]
+  createdManagementTaskLinks    ManagementTaskLink[]          @relation("ManagementTaskLinkCreator")
+  assignedActionItems           ActionItem[]                  @relation("ActionItemAssignee")
+  createdActionItems            ActionItem[]                  @relation("ActionItemCreator")
+  generatedWeeklySummaries      WeeklySummary[]               @relation("WeeklySummaryGenerator")
+  workLogs                      WorkLog[]                     @relation("WorkLogAssignee")
+  createdWbsItems               WbsItem[]                     @relation("WbsItemCreator")
+  ownedWbsItems                 WbsItem[]                     @relation("WbsItemOwner")
+  wbsItemEvents                 WbsItemEvent[]
+  wbsAssignmentUpdates          WbsAssignment[]               @relation("WbsAssignmentUpdater")
+  reviewedWbsDeliverables       WbsDeliverable[]              @relation("WbsDeliverableReviewer")
+
+  @@map("users")
+}
+
+enum PasswordResetRequestStatus {
+  PENDING
+  RESOLVED
+}
+
+model PasswordResetRequest {
+  id           String                     @id @default(uuid())
+  userId       String
+  note         String?
+  status       PasswordResetRequestStatus @default(PENDING)
+  createdAt    DateTime                   @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+
+  user       User  @relation("PasswordResetRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("PasswordResetRequestResolver", fields: [resolvedById], references: [id])
+
+  @@index([status])
+  @@map("password_reset_requests")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      UserRole @default(MEMBER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// ---------------------------------------------------------------------------
+// 프로젝트
+// ---------------------------------------------------------------------------
+
+enum OpenMethod {
+  phased
+  big_bang
+}
+
+enum ProjectGrade {
+  A
+  B
+  C
+}
+
+model Project {
+  id                String       @id @default(uuid())
+  code              String       @unique
+  name              String
+  openMethod        OpenMethod   @default(phased)
+  startDate         DateTime?    @db.Date
+  endDate           DateTime?    @db.Date
+  firstOpenDate     DateTime?    @db.Date
+  secondOpenDate    DateTime?    @db.Date
+  goLiveDate        DateTime?    @db.Date
+  description       String       @default("")
+  customerName      String       @default("")
+  vendorName        String       @default("")
+  customerPm        String       @default("")
+  customerPmoCount  Int          @default(0)
+  vendorPm          String       @default("")
+  vendorPmoCount    Int          @default(0)
+  projectGrade      ProjectGrade @default(B)
+  timezone          String       @default("Asia/Seoul")
+  staleBusinessDays Int          @default(3)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  members                   ProjectMember[]
+  groups                    Groups[]
+  commonCodeGroups          CommonCodeGroup[]
+  commonCodes               CommonCode[]
+  issues                    Issue[]
+  weeks                     Week[]
+  calendarEvents            CalendarEvent[]
+  auditLogs                 AuditLog[]
+  issueSequence             IssueSequence?
+  meetingRooms              MeetingRoom[]
+  meetingReservations       MeetingReservation[]
+  recurringMeetings         RecurringMeetingReservation[]
+  requirements              Requirement[]
+  requirementSequence       RequirementSequence?
+  requirementChanges        RequirementChange[]
+  requirementChangeSequence RequirementChangeSequence?
+  menuPreferences           MenuPreference[]
+  portfolioPanelPreferences PortfolioPanelPreference[]
+  announcements             Announcement[]
+  managementTasks           ManagementTask[]
+  managementTaskSequence    ManagementTaskSequence?
+  managementTaskLinks       ManagementTaskLink[]
+  actionItems               ActionItem[]
+  pmoDailySnapshots         PmoDailySnapshot[]
+  pmoDelayedTaskSequences   PmoDelayedTaskSequence?
+  workLogs                  WorkLog[]
+  workLogSequence           WorkLogSequence?
+  wbsItems                  WbsItem[]
+  wbsItemSequence           WbsItemSequence?
+  wbsDelayedTasks           WbsDelayedTask[]
+  holidays                  Holiday[]
+
+  @@map("projects")
+}
+
+model MenuPreference {
+  projectId       String
+  menuKey         String
+  label           String
+  visibleAdmin    Boolean @default(true)
+  visibleOperator Boolean @default(true)
+  visibleMember   Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, menuKey])
+  @@map("menu_preferences")
+}
+
+model PortfolioPanelPreference {
+  projectId String
+  panelKey  String
+  visible   Boolean @default(true)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, panelKey])
+  @@map("portfolio_panel_preferences")
+}
+
+// ---------------------------------------------------------------------------
+// 그룹 (조직그룹 + 업무그룹 통합 — 기존 Track 흡수)
+// ---------------------------------------------------------------------------
+
+enum GroupType {
+  WORK_MODULE
+  COMPANY
+}
+
+model Groups {
+  id        String    @id @default(uuid())
+  projectId String
+  groupType GroupType
+  code      String
+  label     String
+  color     String?
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  leaderId  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  leader          User?            @relation("WorkGroupLeader", fields: [leaderId], references: [id], onDelete: SetNull)
+  userMap         UserGroupMap[]
+  weeklyReports   WeeklyReport[]
+  weeklyProgress  WeeklyProgress[]
+  staffChanges    StaffChange[]
+  calendarEvents  CalendarEvent[]
+  eventTags       EventGroupTag[]
+  managementTasks ManagementTask[]
+  pmoDelayedTasks PmoDelayedTask[]
+  workLogs        WorkLog[]
+  actionItems     ActionItem[]
+
+  @@unique([projectId, groupType, code])
+  @@index([leaderId])
+  @@map("groups")
+}
+
+model UserGroupMap {
+  userId  String
+  groupId String
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@map("user_group_map")
+}
+
+// ---------------------------------------------------------------------------
+// 업무일지
+// ---------------------------------------------------------------------------
+
+enum WorkLogStatus {
+  IN_PROGRESS
+  COMPLETED
+  DELETED
+}
+
+model WorkLog {
+  id               String        @id @default(uuid())
+  displayId        String        @unique
+  projectId        String
+  workDate         DateTime      @db.Date
+  groupId          String
+  assigneeId       String
+  wbsNumber        String        @default("")
+  status           WorkLogStatus @default(IN_PROGRESS)
+  workContent      String
+  referenceContent String        @default("")
+  notes            String        @default("")
+  version          Int           @default(1)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group    Groups  @relation(fields: [groupId], references: [id])
+  assignee User    @relation("WorkLogAssignee", fields: [assigneeId], references: [id])
+
+  @@index([projectId, workDate])
+  @@index([projectId, assigneeId, workDate])
+  @@index([groupId])
+  @@map("work_logs")
+}
+
+model WorkLogSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("work_log_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// 공통코드 (유형 / 에스컬레이션 — 그룹 개념과 무관, 기존 체계 유지)
+// ---------------------------------------------------------------------------
+
+model CommonCodeGroup {
+  id          String   @id @default(uuid())
+  projectId   String
+  code        String
+  label       String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  codes   CommonCode[]
+
+  @@unique([projectId, code])
+  @@map("common_code_groups")
+}
+
+model CommonCode {
+  id        String   @id @default(uuid())
+  projectId String
+  groupId   String
+  groupCode String
+  code      String
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  minScore  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project                   Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group                     CommonCodeGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  issuesByCategory          Issue[]                   @relation("IssueCategory")
+  issuesByReportLine        IssueReportLine[]         @relation("IssueReportLine")
+  issueProgressByCategory   IssueProgress[]           @relation("IssueProgressCategory")
+  issueProgressByReportLine IssueProgressReportLine[] @relation("IssueProgressReportLine")
+  requirementsByDivision    Requirement[]             @relation("RequirementDivision")
+  requirementsByCategory    Requirement[]             @relation("RequirementCategory")
+  wbsItems                  WbsItem[]
+  wbsAssignments            WbsAssignment[]
+  actionItemsByCategory     ActionItem[]              @relation("ActionItemCategory")
+
+  @@unique([groupId, code])
+  @@map("common_codes")
+}
+
+// ---------------------------------------------------------------------------
+// 이슈관리
+// ---------------------------------------------------------------------------
+
+enum ProbabilityLevel {
+  low
+  medium
+  high
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model Issue {
+  id                 String           @id @default(uuid())
+  displayId          String           @unique
+  seq                Int
+  projectId          String
+  categoryCodeId     String
+  title              String
+  description        String           @default("")
+  importance         ProbabilityLevel
+  priority           ProbabilityLevel
+  status             IssueStatus      @default(OPEN)
+  occurredAt         DateTime         @db.Date
+  dueAt              DateTime?        @db.Date
+  ownerUserId        String?
+  ownerName          String?
+  responseContent    String           @default("")
+  escalated          Boolean          @default(false)
+  remark             String           @default("")
+  createdBy          String
+  lastModifiedBy     String?
+  lastModifiedByName String?
+  version            Int              @default(1)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  closedAt           DateTime?
+  archivedAt         DateTime?
+
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category        CommonCode        @relation("IssueCategory", fields: [categoryCodeId], references: [id])
+  creator         User              @relation("IssueCreator", fields: [createdBy], references: [id])
+  owner           User?             @relation("IssueOwner", fields: [ownerUserId], references: [id])
+  lastModifier    User?             @relation("IssueLastModifier", fields: [lastModifiedBy], references: [id])
+  reportLines     IssueReportLine[]
+  progressEntries IssueProgress[]
+
+  @@index([projectId, status])
+  @@index([projectId, archivedAt])
+  @@map("issues")
+}
+
+// 이슈진행정보(DETAIL) — 최초 등록(이슈관리정보)과 동일한 전체 필드를 갖춘 시점별 스냅샷.
+// 별도의 가벼운 로그가 아니라 등록 당시와 같은 정보 수준으로 관리되며, 가장 최근 스냅샷의
+// 내용이 그대로 이슈관리정보(MASTER)에 반영된다(자동 동기화) — 진행 이력을 남기는 것이
+// 곧 이슈 정보를 갱신하는 유일한 방법이다.
+model IssueProgress {
+  id              String           @id @default(uuid())
+  issueId         String
+  entryDate       DateTime         @db.Date
+  status          IssueStatus
+  categoryCodeId  String
+  title           String
+  description     String           @default("")
+  importance      ProbabilityLevel
+  priority        ProbabilityLevel
+  dueAt           DateTime?        @db.Date
+  ownerUserId     String?
+  ownerName       String?
+  responseContent String           @default("")
+  escalated       Boolean          @default(false)
+  remark          String           @default("")
+  actorId         String?
+  actorName       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  issue       Issue                     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  category    CommonCode                @relation("IssueProgressCategory", fields: [categoryCodeId], references: [id])
+  owner       User?                     @relation("IssueProgressOwner", fields: [ownerUserId], references: [id])
+  actor       User?                     @relation("IssueProgressActor", fields: [actorId], references: [id])
+  reportLines IssueProgressReportLine[]
+
+  @@index([issueId, entryDate])
+  @@map("issue_progress_entries")
+}
+
+model IssueProgressReportLine {
+  progressId       String
+  reportLineCodeId String
+
+  progress       IssueProgress @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  reportLineCode CommonCode    @relation("IssueProgressReportLine", fields: [reportLineCodeId], references: [id])
+
+  @@id([progressId, reportLineCodeId])
+  @@index([reportLineCodeId])
+  @@map("issue_progress_report_lines")
+}
+
+model IssueReportLine {
+  issueId          String
+  reportLineCodeId String
+
+  issue          Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  reportLineCode CommonCode @relation("IssueReportLine", fields: [reportLineCodeId], references: [id])
+
+  @@id([issueId, reportLineCodeId])
+  @@index([reportLineCodeId])
+  @@map("issue_report_lines")
+}
+
+model IssueSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("issue_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// 요구사항관리 (요구사항정의서 + 요구사항변경관리)
+// ---------------------------------------------------------------------------
+
+enum RequirementAcceptance {
+  pending
+  accepted
+  partially_accepted
+  rejected
+  deferred
+}
+
+enum RequirementEventType {
+  created
+  edited
+  archived
+  change_requested
+  change_approved
+  change_rejected
+}
+
+enum RequirementChangeStatus {
+  pending
+  approved
+  rejected
+}
+
+model Requirement {
+  id                     String                @id @default(uuid())
+  displayId              String                @unique
+  requirementId          String?
+  projectId              String
+  title                  String
+  content                String                @default("")
+  ownerUserId            String?
+  basis                  String                @default("")
+  precondition           String                @default("")
+  resolution             String                @default("")
+  businessMajorCategory  String                @default("")
+  businessMiddleCategory String                @default("")
+  businessMinorCategory  String                @default("")
+  registrationDate       DateTime?
+  addedAfterConfirmation Boolean?
+  notes                  String                @default("")
+  finalCheckNote         String                @default("")
+  inspectionCriteria     String                @default("")
+  acceptanceStatus       RequirementAcceptance @default(pending)
+  requestDepartment      String                @default("")
+  divisionCodeId         String?
+  categoryCodeId         String?
+  priority               ProbabilityLevel?
+  importance             ProbabilityLevel?
+  createdBy              String
+  version                Int                   @default(1)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  archivedAt             DateTime?
+
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner    User?               @relation("RequirementOwner", fields: [ownerUserId], references: [id])
+  creator  User                @relation("RequirementCreator", fields: [createdBy], references: [id])
+  division CommonCode?         @relation("RequirementDivision", fields: [divisionCodeId], references: [id])
+  category CommonCode?         @relation("RequirementCategory", fields: [categoryCodeId], references: [id])
+  events   RequirementEvent[]
+  changes  RequirementChange[]
+
+  @@unique([projectId, requirementId])
+  @@index([projectId, archivedAt])
+  @@index([projectId, acceptanceStatus])
+  @@map("requirements")
+}
+
+model RequirementSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("requirement_sequences")
+}
+
+model RequirementEvent {
+  id            String               @id @default(uuid())
+  requirementId String
+  eventType     RequirementEventType
+  actorId       String?
+  actorName     String?
+  body          String?
+  beforeData    Json?
+  afterData     Json?
+  createdAt     DateTime             @default(now())
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  actor       User?       @relation(fields: [actorId], references: [id])
+
+  @@index([requirementId, createdAt])
+  @@map("requirement_events")
+}
+
+model RequirementChangeSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("requirement_change_sequences")
+}
+
+model RequirementChange {
+  id                   String                  @id @default(uuid())
+  displayId            String                  @unique
+  title                String
+  projectId            String
+  requirementId        String
+  changeReason         String
+  proposedTitle        String?
+  proposedContent      String?
+  proposedBasis        String?
+  proposedPrecondition String?
+  proposedResolution   String?
+  proposedAcceptance   RequirementAcceptance?
+  status               RequirementChangeStatus @default(pending)
+  requestedBy          String
+  requestedAt          DateTime                @default(now())
+  decidedBy            String?
+  decidedAt            DateTime?
+  decisionNote         String?
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  requester   User        @relation("RequirementChangeRequester", fields: [requestedBy], references: [id])
+  decider     User?       @relation("RequirementChangeDecider", fields: [decidedBy], references: [id])
+
+  @@index([projectId, status])
+  @@index([requirementId, requestedAt])
+  @@map("requirement_changes")
+}
+
+// ---------------------------------------------------------------------------
+// 프로젝트통합모니터링 (관리업무항목)
+// ---------------------------------------------------------------------------
+
+enum ManagementTaskBand {
+  RED
+  YELLOW
+  GREEN
+}
+
+enum ManagementTaskStatus {
+  IDENTIFIED
+  IN_PROGRESS
+  ISSUE_TRANSFERRED
+  RISK_TRANSFERRED
+  CLOSED
+}
+
+model ManagementTask {
+  id               String               @id @default(uuid())
+  displayId        String               @unique
+  projectId        String
+  groupId          String // WORK_MODULE Groups row (assertWorkModuleGroup으로 검증)
+  name             String
+  registrationDate DateTime             @db.Date
+  status           ManagementTaskStatus @default(IDENTIFIED)
+  purpose          String               @default("")
+  impactAnalysis   String               @default("")
+  totalScore       Int                  @default(0)
+  band             ManagementTaskBand   @default(RED)
+  createdBy        String
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  archivedAt       DateTime?
+
+  project          Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group            Groups                     @relation(fields: [groupId], references: [id])
+  creator          User                       @relation("ManagementTaskCreator", fields: [createdBy], references: [id])
+  predecessorLinks ManagementTaskLink[]       @relation("TaskSuccessor")
+  successorLinks   ManagementTaskLink[]       @relation("TaskPredecessor")
+  assignees        ManagementTaskAssignee[]
+  detailItems      ManagementTaskDetailItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, groupId])
+  @@index([projectId, band])
+  @@map("management_tasks")
+}
+
+model ManagementTaskAssignee {
+  taskId String
+  userId String
+
+  task ManagementTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("management_task_assignees")
+}
+
+model ManagementTaskSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("management_task_sequences")
+}
+
+model ManagementTaskLink {
+  id            String   @id @default(uuid())
+  projectId     String
+  predecessorId String
+  successorId   String
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predecessor ManagementTask @relation("TaskPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   ManagementTask @relation("TaskSuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+  creator     User           @relation("ManagementTaskLinkCreator", fields: [createdBy], references: [id])
+
+  @@unique([predecessorId, successorId])
+  @@index([projectId, predecessorId])
+  @@index([projectId, successorId])
+  @@map("management_task_links")
+}
+
+enum ActionItemStatus {
+  IDENTIFIED
+  IN_PROGRESS
+  DELAYED
+  ISSUE
+  CLOSED
+}
+
+model ManagementTaskDetailItem {
+  id        String             @id @default(uuid())
+  taskId    String
+  axisKey   String // "prep" | "owner" | "progress" | "issue" | "close" (ManagementTaskAxisKey)
+  axisScore Int                @default(0) // 0/10/20 환산 점수 — ManagementTask.totalScore 합산에 쓰임
+  band      ManagementTaskBand @default(RED)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  task        ManagementTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actionItems ActionItem[]
+
+  @@unique([taskId, axisKey])
+  @@index([taskId])
+  @@map("management_task_detail_items")
+}
+
+model ActionItem {
+  id             String           @id @default(uuid())
+  detailItemId   String
+  projectId      String // PM/PMO 전체 액션아이템목록조회용 비정규화
+  sequenceNo     Int // detailItem 범위 내 순번
+  categoryCodeId String? // CommonCode(action_item_category)
+  name           String
+  priority       Priority
+  importance     Priority
+  groupId        String // Groups(WORK_MODULE), assertWorkModuleGroup으로 검증
+  assigneeId     String
+  createdBy      String
+  dueDate        DateTime?        @db.Date
+  status         ActionItemStatus @default(IDENTIFIED)
+  wbsItemId      String?
+  note           String           @default("")
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  archivedAt     DateTime?
+
+  detailItem   ManagementTaskDetailItem @relation(fields: [detailItemId], references: [id], onDelete: Cascade)
+  project      Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group        Groups                   @relation(fields: [groupId], references: [id])
+  assignee     User                     @relation("ActionItemAssignee", fields: [assigneeId], references: [id])
+  creator      User                     @relation("ActionItemCreator", fields: [createdBy], references: [id])
+  wbsItem      WbsItem?                 @relation(fields: [wbsItemId], references: [id])
+  categoryCode CommonCode?              @relation("ActionItemCategory", fields: [categoryCodeId], references: [id])
+
+  @@unique([detailItemId, sequenceNo])
+  @@index([projectId, archivedAt])
+  @@index([projectId, status])
+  @@index([groupId])
+  @@index([assigneeId])
+  @@map("action_items")
+}
+
+// ---------------------------------------------------------------------------
+// PMO Daily
+// ---------------------------------------------------------------------------
+
+enum PmoDelayedTaskStatus {
+  IDENTIFIED
+  ACTION_IN_PROGRESS
+  NORMALIZED
+  CLOSED
+}
+
+model PmoDailySnapshot {
+  id                 String   @id @default(uuid())
+  projectId          String
+  reportDate         DateTime @db.Date
+  plannedTaskCount   Int      @default(0)
+  actualTaskCount    Int      @default(0)
+  totalTaskCount     Int      @default(0)
+  completedTaskCount Int      @default(0)
+  createdBy          String
+  version            Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User             @relation("PmoDailySnapshotCreator", fields: [createdBy], references: [id])
+  delayedTasks PmoDelayedTask[]
+
+  @@unique([projectId, reportDate])
+  @@index([projectId, reportDate])
+  @@map("pmo_daily_snapshots")
+}
+
+model PmoDelayedTask {
+  id              String               @id @default(uuid())
+  displayId       String               @unique
+  snapshotId      String
+  groupId         String
+  description     String
+  plannedProgress Int
+  actualProgress  Int
+  plannedEndDate  DateTime?            @db.Date
+  delayReason     String               @default("")
+  responsePlan    String               @default("")
+  status          PmoDelayedTaskStatus @default(IDENTIFIED)
+  createdBy       String
+  version         Int                  @default(1)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  archivedAt      DateTime?
+
+  snapshot  PmoDailySnapshot         @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  group     Groups                   @relation(fields: [groupId], references: [id])
+  creator   User                     @relation("PmoDelayedTaskCreator", fields: [createdBy], references: [id])
+  assignees PmoDelayedTaskAssignee[]
+
+  @@index([snapshotId, archivedAt])
+  @@index([groupId])
+  @@map("pmo_delayed_tasks")
+}
+
+model PmoDelayedTaskAssignee {
+  taskId String
+  userId String
+
+  task PmoDelayedTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("pmo_delayed_task_assignees")
+}
+
+model PmoDelayedTaskSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("pmo_delayed_task_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// 주차 / 주간보고 / 주간실적 / 인력변동
+// ---------------------------------------------------------------------------
+
+enum WeekStatus {
+  open
+  closed
+}
+
+enum ChangeType {
+  join
+  leave
+}
+
+model Week {
+  id        String     @id @default(uuid())
+  projectId String
+  weekKey   String
+  label     String
+  startDate DateTime   @db.Date
+  endDate   DateTime   @db.Date
+  status    WeekStatus @default(open)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reports      WeeklyReport[]
+  progress     WeeklyProgress[]
+  staffChanges StaffChange[]
+  summary      WeeklySummary?
+
+  @@unique([projectId, weekKey])
+  @@map("weeks")
+}
+
+model WeeklyReport {
+  id           String   @id @default(uuid())
+  weekId       String
+  groupId      String
+  achievements String   @default("")
+  nextPlan     String   @default("")
+  issues       String   @default("")
+  decisions    String   @default("")
+  notes        String   @default("")
+  createdBy    String
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  week    Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  group   Groups @relation(fields: [groupId], references: [id])
+  creator User   @relation("WeeklyReportCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@unique([weekId, groupId])
+  @@map("weekly_reports")
+}
+
+model WeeklySummary {
+  id          String   @id @default(uuid())
+  weekId      String   @unique
+  summary     String
+  sourceHash  String
+  model       String
+  generatedBy String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  week      Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  generator User @relation("WeeklySummaryGenerator", fields: [generatedBy], references: [id], onDelete: Restrict)
+
+  @@map("weekly_summaries")
+}
+
+model WeeklyProgress {
+  id             String    @id @default(uuid())
+  weekId         String
+  groupId        String
+  taskName       String
+  planDetail     String    @default("")
+  planTargetDate DateTime? @db.Date
+  actualDetail   String    @default("")
+  actualDate     DateTime? @db.Date
+  progress       Int       @default(0)
+  nextPlan       String    @default("")
+  nextTargetDate DateTime? @db.Date
+  notes          String    @default("")
+  createdBy      String
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  week    Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  group   Groups @relation(fields: [groupId], references: [id])
+  creator User   @relation("WeeklyProgressCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([weekId, groupId])
+  @@map("weekly_progress")
+}
+
+model StaffChange {
+  id           String     @id @default(uuid())
+  weekId       String
+  groupId      String
+  changeType   ChangeType
+  currentCount Int
+  nextCount    Int
+  notes        String     @default("")
+  createdBy    String
+  version      Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  week    Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  group   Groups @relation(fields: [groupId], references: [id])
+  creator User   @relation("StaffChangeCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@unique([weekId, groupId, changeType])
+  @@map("staff_changes")
+}
+
+// ---------------------------------------------------------------------------
+// 캘린더
+// ---------------------------------------------------------------------------
+
+enum CalendarEventType {
+  meeting
+  milestone
+  work
+  other
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ExceptionType {
+  MODIFIED
+  DELETED
+}
+
+model CalendarEvent {
+  id             String            @id @default(uuid())
+  projectId      String
+  title          String
+  description    String            @default("")
+  eventType      CalendarEventType @default(other)
+  startAt        DateTime
+  endAt          DateTime
+  allDay         Boolean           @default(false)
+  priority       Priority          @default(MEDIUM)
+  isMilestone    Boolean           @default(false)
+  groupId        String?
+  location       String            @default("")
+  memo           String            @default("")
+  recurrenceRule String?
+  createdBy      String
+  updatedBy      String?
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group              Groups?           @relation(fields: [groupId], references: [id])
+  creator            User              @relation("CalendarEventCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  updater            User?             @relation("CalendarEventUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  exceptions         EventException[]
+  assignees          EventAssignee[]
+  groupTags          EventGroupTag[]
+  attachments        EventAttachment[]
+  invitationMessages Message[]
+
+  @@index([projectId, startAt, endAt])
+  @@index([projectId, isMilestone])
+  @@map("calendar_events")
+}
+
+model EventException {
+  id            String        @id @default(uuid())
+  eventId       String
+  exceptionDate DateTime      @db.Date
+  type          ExceptionType
+  overrideData  Json?
+  createdAt     DateTime      @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, exceptionDate])
+  @@map("event_exceptions")
+}
+
+model EventAssignee {
+  id        String  @id @default(uuid())
+  eventId   String
+  userId    String?
+  guestName String?
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_assignees")
+}
+
+model EventGroupTag {
+  eventId String
+  groupId String
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  group Groups        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, groupId])
+  @@map("event_group_tags")
+}
+
+model EventAttachment {
+  id          String   @id @default(uuid())
+  eventId     String
+  fileName    String
+  storagePath String // Supabase Storage 버킷 경로
+  fileSize    Int
+  uploadedAt  DateTime @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_attachments")
+}
+
+// ---------------------------------------------------------------------------
+// 쪽지 / 알림 설정
+// ---------------------------------------------------------------------------
+
+enum MessageType {
+  DIRECT
+  CALENDAR_INVITATION
+  MEETING_INVITATION
+}
+
+model Message {
+  id                   String      @id @default(uuid())
+  senderId             String
+  receiverId           String
+  messageType          MessageType @default(DIRECT)
+  contentEncrypted     String?
+  contentIv            String?
+  viewPasswordHash     String?
+  calendarEventId      String?
+  meetingReservationId String?
+  systemPayload        Json?
+  isRead               Boolean     @default(false)
+  createdAt            DateTime    @default(now())
+
+  sender             User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver           User                @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  calendarEvent      CalendarEvent?      @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  meetingReservation MeetingReservation? @relation(fields: [meetingReservationId], references: [id], onDelete: SetNull)
+
+  @@unique([calendarEventId, receiverId])
+  @@unique([meetingReservationId, receiverId])
+  @@index([receiverId, isRead])
+  @@index([receiverId, messageType, isRead])
+  @@map("messages")
+}
+
+model NotificationSetting {
+  userId                String  @id
+  emailEnabled          Boolean @default(false)
+  reminderMinutesBefore Int     @default(60)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_settings")
+}
+
+enum AnnouncementAudience {
+  ALL
+  MANAGERS
+}
+
+model Announcement {
+  id                 String               @id @default(uuid())
+  projectId          String
+  title              String
+  content            String
+  audience           AnnouncementAudience @default(ALL)
+  isImportant        Boolean              @default(false)
+  showOnDashboard    Boolean              @default(false)
+  dashboardVisibleTo DateTime?            @db.Date
+  publishedAt        DateTime             @default(now())
+  expiresAt          DateTime?            @db.Date
+  viewCount          Int                  @default(0)
+  authorId           String
+  updatedById        String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User    @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  updatedBy User    @relation("AnnouncementUpdater", fields: [updatedById], references: [id])
+
+  @@index([projectId, deletedAt, isImportant, publishedAt])
+  @@index([projectId, showOnDashboard, dashboardVisibleTo])
+  @@map("announcements")
+}
+
+// ---------------------------------------------------------------------------
+// 감사 로그
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  projectId   String
+  actorId     String?
+  actorName   String?
+  action      String
+  targetTable String?
+  targetId    String?
+  beforeData  Json?
+  afterData   Json?
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@index([targetTable, targetId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// 회의실 예약
+// ---------------------------------------------------------------------------
+
+enum MeetingRoomType {
+  LARGE
+  SMALL
+}
+
+enum MeetingReservationStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum RecurringMeetingPattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum RecurringMeetingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MeetingChangeAction {
+  CREATE
+  CANCEL
+  EXTEND
+  SHORTEN
+  UPDATE
+}
+
+model MeetingRoom {
+  id        String          @id @default(uuid())
+  projectId String
+  name      String
+  roomType  MeetingRoomType
+  capacity  Int
+  floor     String?
+  equipment String[]        @default([])
+  isActive  Boolean         @default(true)
+  deletedAt DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  project      Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reservations MeetingReservation[]
+  recurring    RecurringMeetingReservation[]
+
+  @@unique([projectId, name])
+  @@index([projectId, isActive, deletedAt])
+  @@map("meeting_rooms")
+}
+
+model MeetingReservation {
+  id          String                   @id @default(uuid())
+  projectId   String
+  roomId      String
+  userId      String
+  recurringId String?
+  startAt     DateTime
+  endAt       DateTime
+  purpose     String
+  status      MeetingReservationStatus @default(CONFIRMED)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  project   Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  room      MeetingRoom                   @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  user      User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  recurring RecurringMeetingReservation?  @relation(fields: [recurringId], references: [id], onDelete: Restrict)
+  logs      MeetingReservationChangeLog[]
+  attendees MeetingReservationAttendee[]
+  messages  Message[]
+
+  @@unique([recurringId, startAt])
+  @@index([projectId, startAt, endAt])
+  @@index([roomId, startAt])
+  @@index([userId, startAt])
+  @@map("meeting_reservations")
+}
+
+model RecurringMeetingReservation {
+  id            String                  @id @default(uuid())
+  projectId     String
+  roomId        String
+  applicantId   String
+  patternType   RecurringMeetingPattern
+  patternDetail Json
+  startMinutes  Int
+  endMinutes    Int
+  periodStart   DateTime                @db.Date
+  periodEnd     DateTime                @db.Date
+  purpose       String
+  status        RecurringMeetingStatus  @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  room         MeetingRoom          @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  applicant    User                 @relation("RecurringApplicant", fields: [applicantId], references: [id], onDelete: Restrict)
+  reviewer     User?                @relation("RecurringReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  reservations MeetingReservation[]
+
+  @@index([projectId, status, createdAt])
+  @@index([roomId, periodStart, periodEnd])
+  @@map("recurring_meeting_reservations")
+}
+
+model MeetingReservationChangeLog {
+  id            String              @id @default(uuid())
+  reservationId String
+  actorId       String
+  action        MeetingChangeAction
+  beforeStart   DateTime?
+  beforeEnd     DateTime?
+  afterStart    DateTime?
+  afterEnd      DateTime?
+  createdAt     DateTime            @default(now())
+
+  reservation MeetingReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  actor       User               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([reservationId, createdAt])
+  @@map("meeting_reservation_change_logs")
+}
+
+model MeetingReservationAttendee {
+  id            String   @id @default(uuid())
+  reservationId String
+  userId        String?
+  guestName     String?
+  createdAt     DateTime @default(now())
+
+  reservation MeetingReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([reservationId, userId])
+  @@index([userId, createdAt])
+  @@map("meeting_reservation_attendees")
+}
+
+// ---------------------------------------------------------------------------
+// WBS(작업분류체계)
+// ---------------------------------------------------------------------------
+
+enum WbsItemStatus {
+  not_started
+  in_progress
+  completed
+  on_hold
+}
+
+enum WbsItemEventType {
+  created
+  edited
+  moved
+  status_changed
+  archived
+}
+
+model WbsItem {
+  id                    String        @id @default(uuid())
+  displayId             String        @unique
+  projectId             String
+  parentId              String?
+  path                  String // 레벨당 4자리 고정폭 세그먼트("0001.0002.0007") — 문자열 정렬이 곧 트리 순서
+  level                 Int // path 세그먼트 수(1부터 시작). path로부터 산출해 저장한다.
+  name                  String
+  description           String        @default("")
+  ownerUserId           String?
+  ownerNameRaw          String        @default("") // 엑셀 R&R(실행) 원본 텍스트 — 시스템 사용자와 매칭 안 돼도 표시·검색은 되도록 항상 보존
+  ownerLoginId          String        @default("") // 엑셀 사용자ID 원본 텍스트 — 로그인 ID로 담당자를 확정 지정할 때 쓰며, 매칭 안 돼도 항상 보존
+  groupId               String?
+  startDate             DateTime?     @db.Date // 계획시작일 — 엑셀 StartDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  dueDate               DateTime?     @db.Date // 계획종료일 — 엑셀 DueDate 컬럼과 매핑되는 원본 필드명은 유지한다.
+  actualStartDate       DateTime?     @db.Date // 실적시작일 — 엑셀 47개 컬럼 서식에는 없는 웹 화면 전용 커스텀 컬럼(사용자ID와 동일 패턴).
+  actualDueDate         DateTime?     @db.Date // 실적종료일 — 위와 동일.
+  isDelayedCompletion   Boolean       @default(false) // 지연완료 — 실적종료일이 계획종료일보다 늦게 저장되면 true(1), 아니면 false(0).
+  delayedCompletionDate DateTime?     @db.Date // 지연완료일자 — 지연완료 판정 시점의 실적종료일.
+  delayDays             Int? // 지연일자 — 계획종료일 다음날부터 실적종료일까지의 영업일수(주말·공휴일 제외). 지연완료가 아니면 null.
+  status                WbsItemStatus @default(not_started)
+  configStatus          String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
+  weight                Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.
+  createdBy             String
+  version               Int           @default(1)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  archivedAt            DateTime?
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       WbsItem?         @relation("WbsTree", fields: [parentId], references: [id])
+  children     WbsItem[]        @relation("WbsTree")
+  owner        User?            @relation("WbsItemOwner", fields: [ownerUserId], references: [id])
+  group        CommonCode?      @relation(fields: [groupId], references: [id])
+  creator      User             @relation("WbsItemCreator", fields: [createdBy], references: [id])
+  events       WbsItemEvent[]
+  assignments  WbsAssignment[]
+  deliverable  WbsDeliverable?
+  delayedTasks WbsDelayedTask[]
+  actionItems  ActionItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, path])
+  @@index([parentId])
+  @@map("wbs_items")
+}
+
+model WbsItemSequence {
+  projectId String @id
+  value     Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("wbs_item_sequences")
+}
+
+model WbsItemEvent {
+  id         String           @id @default(uuid())
+  wbsItemId  String
+  eventType  WbsItemEventType
+  actorId    String?
+  actorName  String?
+  body       String?
+  beforeData Json?
+  afterData  Json?
+  createdAt  DateTime         @default(now())
+
+  wbsItem WbsItem @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@index([wbsItemId, createdAt])
+  @@map("wbs_item_events")
+}
+
+// 엑셀 Y~AH(역할별 진척등록권한) + AI~AR(역할별 진도율)을 역할(행)로 정규화한 것.
+// 역할(Track) 목록은 다른 모듈(이슈·업무일지 등)과 공유하는 Groups(WORK_MODULE)가 아니라, WBS 전용 공통코드
+// 그룹("WBS_WORK_GROUP")의 CommonCode를 쓴다 — 다른 모듈의 업무그룹 구성과 무관하게 WBS 고유 10개 역할을 유지한다.
+model WbsAssignment {
+  id              String   @id @default(uuid())
+  wbsItemId       String
+  groupId         String
+  progressPercent Int      @default(0)
+  updatedBy       String
+  updatedAt       DateTime @updatedAt
+
+  wbsItem WbsItem    @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  group   CommonCode @relation(fields: [groupId], references: [id])
+  updater User       @relation("WbsAssignmentUpdater", fields: [updatedBy], references: [id])
+
+  @@unique([wbsItemId, groupId])
+  @@map("wbs_assignments")
+}
+
+// 엑셀 N(Deliverables 이슈/사유), O(공식여부), P(파일위치), R(산출물템플릿), S(검수자), T(검수실행일)
+model WbsDeliverable {
+  id             String    @id @default(uuid())
+  wbsItemId      String    @unique
+  note           String    @default("")
+  isOfficial     Boolean   @default(false)
+  fileUrl        String    @default("")
+  templateUrl    String    @default("")
+  reviewerUserId String?
+  reviewedAt     DateTime? @db.Date
+  updatedAt      DateTime  @updatedAt
+
+  wbsItem  WbsItem @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  reviewer User?   @relation("WbsDeliverableReviewer", fields: [reviewerUserId], references: [id])
+
+  @@map("wbs_deliverables")
+}
+
+// 실적종료일 저장 시 지연일자(영업일)가 1 이상이면 자동으로 한 건 남기는 지연 이력 로그(2026-09-05 사용자 요청).
+// 현재 상태를 대표하는 단일 레코드가 아니라 "실적종료일이 갱신될 때마다" 쌓이는 이력이라, 조회 시점 조인 대신
+// 테스크명·업무그룹·담당자를 등록 시점 값으로 스냅샷 보존한다(이후 WBS 항목이 바뀌어도 로그는 그대로 남는다).
+model WbsDelayedTask {
+  id                    String    @id @default(uuid())
+  projectId             String
+  wbsItemId             String
+  name                  String // 테스크명(등록 시점 스냅샷)
+  plannedStartDate      DateTime? @db.Date // 계획시작일
+  plannedDueDate        DateTime? @db.Date // 계획종료일
+  actualStartDate       DateTime? @db.Date // 실적시작일
+  actualDueDate         DateTime  @db.Date // 실적종료일
+  delayedCompletionDate DateTime  @db.Date // 지연종료일(실적종료일과 동일 — 지연 확정 시점 값)
+  delayDays             Int // 지연일(영업일)
+  groupLabel            String? // 업무그룹(등록 시점 스냅샷)
+  ownerName             String? // 담당자(등록 시점 스냅샷)
+  createdAt             DateTime  @default(now()) // 등록일자
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsItem WbsItem @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([wbsItemId])
+  @@map("wbs_delayed_tasks")
+}
+
+// 엑셀 W열(Sort/Working Day = NETWORKDAYS)이 참조하던 외부 [1]공휴일 워크북 링크를 대체한다.
+model Holiday {
+  id        String   @id @default(uuid())
+  projectId String? // null이면 프로젝트 공통(전사) 공휴일
+  date      DateTime @db.Date
+  label     String
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@map("holidays")
+}

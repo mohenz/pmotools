@@ -1,0 +1,1 @@
+ALTER TYPE "WorkLogStatus" ADD VALUE 'DELETED';

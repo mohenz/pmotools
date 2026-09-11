@@ -1,0 +1,297 @@
+import "server-only";
+import { z } from "zod";
+import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+import { getCodeOptions } from "@/lib/server/common-codes";
+import { listMeetingReservations } from "@/lib/server/meeting-rooms";
+import { assertManager } from "@/lib/server/permissions";
+import { DomainError } from "@/lib/server/errors";
+import { buildRecurrenceRule, describeRecurrence, expandOccurrences, type RecurrenceInput } from "@/lib/domain/recurrence";
+import { canManageCalendarEvent } from "@/lib/domain/calendar-permissions";
+import { calendarInvitationPayload } from "@/lib/domain/calendar-invitations";
+import { calendarDateKey, calendarDayDifference, calendarTodayKey } from "@/lib/domain/calendar-layout";
+import type { EventException, Prisma } from "@/lib/generated/prisma/client";
+
+export type EventPerson = { id: string; name: string };
+export type EventGroupTagEntry = { id: string; label: string };
+export type CalendarEvent = { id: string; masterId: string; source: "schedule" | "progress" | "next_plan" | "issue" | "meeting"; title: string; description: string; eventType: string; startAt: string; endAt: string; date: string; startTime: string; endTime: string; allDay: boolean; areaCodeId: string | null; areaLabel: string | null; location: string; priority: "HIGH" | "MEDIUM" | "LOW"; isMilestone: boolean; isRecurring: boolean; occurrenceDate: string | null; recurrenceSummary: string | null; assignees: EventPerson[]; groupTags: EventGroupTagEntry[]; editable: boolean; sourceUrl: string | null };
+export type MilestoneEntry = { id: string; title: string; date: string; kind: "event" | "project"; daysUntil: number; sourceUrl: string | null };
+export type CalendarSearchFilters = { q?: string; priority?: string; groupId?: string; assigneeId?: string; from?: string; to?: string };
+
+const recurrenceSchema = z.object({ freq: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]), endType: z.enum(["never", "until", "count"]), until: z.string().date().optional(), count: z.number().int().min(1).max(365).optional() });
+const eventSchema = z.object({
+  title: z.string().trim().min(1).max(200), description: z.string().max(10000), eventType: z.enum(["meeting", "milestone", "work", "other"]),
+  startAt: z.string().datetime(), endAt: z.string().datetime(), allDay: z.boolean(), areaCodeId: z.string().uuid().nullable(), location: z.string().trim().max(200),
+  priority: z.enum(["HIGH", "MEDIUM", "LOW"]).default("MEDIUM"), isMilestone: z.boolean().default(false), recurrence: recurrenceSchema.nullable().optional(),
+  assigneeIds: z.array(z.string().uuid()).default([]), assigneeNames: z.array(z.string().trim().min(1).max(50)).max(50).default([]), groupTagIds: z.array(z.string().uuid()).default([]),
+}).superRefine((d, ctx) => {
+  if (d.endAt < d.startAt) ctx.addIssue({ code: "custom", path: ["endAt"], message: "종료일시는 시작일시 이후여야 합니다." });
+  for (const field of ["startAt", "endAt"] as const) { const date = new Date(d[field]); if (date.getUTCMinutes() % 10 !== 0 || date.getUTCSeconds() !== 0) ctx.addIssue({ code: "custom", path: [field], message: "시간은 10분 단위로 입력해 주세요." }); }
+});
+
+function parts(value: string) { const formatted = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value)); const part = (type: string) => formatted.find((v) => v.type === type)?.value ?? ""; return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` }; }
+function inRange(date: string, from: string, to: string) { return date >= from && date <= to; }
+function parseCompositeId(id: string): { masterId: string; occurrenceDate: string | null } { const [masterId, occurrenceDate] = id.split("::"); return { masterId, occurrenceDate: occurrenceDate ?? null }; }
+type OverrideData = { title?: string; description?: string; eventType?: string; startAt?: string; endAt?: string; allDay?: boolean; groupId?: string | null; location?: string; priority?: "HIGH" | "MEDIUM" | "LOW"; isMilestone?: boolean };
+
+const isPriority = (value?: string): value is "HIGH" | "MEDIUM" | "LOW" => value === "HIGH" || value === "MEDIUM" || value === "LOW";
+const like = (query: string) => ({ contains: query, mode: "insensitive" }) as const;
+
+export async function listCalendarEvents(projectId: string, from: string, to: string, filters: CalendarSearchFilters = {}, viewerUserId?: string) {
+  const prisma = getPrisma();
+  const rangeFrom = new Date(`${from}T00:00:00.000Z`), rangeTo = new Date(`${to}T23:59:59.999Z`);
+  // KST 변환(parts) 때문에 UTC 경계에서 하루가 밀릴 수 있어 타임스탬프 조회는 ±1일 여유를 둔다.
+  const paddedFrom = new Date(rangeFrom.getTime() - 86_400_000), paddedTo = new Date(rangeTo.getTime() + 86_400_000);
+  const dateTo = new Date(`${to}T00:00:00.000Z`);
+  const query = filters.q?.trim();
+  const priority = isPriority(filters.priority) ? filters.priority : undefined;
+  const { groupId, assigneeId } = filters;
+
+  // 반복 일정은 회차별 예외(override)로 제목·우선순위·그룹이 달라질 수 있어 DB에서 좁히지 않고 전개 후 걸러낸다.
+  const eventAnd: Prisma.CalendarEventWhereInput[] = [{ startAt: { lte: paddedTo } }, { endAt: { gte: paddedFrom } }];
+  if (query) eventAnd.push({ OR: [{ title: like(query) }, { description: like(query) }, { location: like(query) }] });
+  if (priority) eventAnd.push({ priority });
+  if (groupId) eventAnd.push({ OR: [{ groupId }, { groupTags: { some: { groupId } } }] });
+  if (assigneeId) eventAnd.push({ assignees: { some: { userId: assigneeId } } });
+
+  // 주간실적·이슈 파생 일정은 담당자가 없고 우선순위가 고정(실적 MEDIUM/LOW, 이슈 LOW)이라 매칭 불가능하면 조회 자체를 생략한다.
+  const progressAnd: Prisma.WeeklyProgressWhereInput[] = [{ OR: [{ planTargetDate: { gte: rangeFrom, lte: dateTo } }, { nextTargetDate: { gte: rangeFrom, lte: dateTo } }] }];
+  if (query) progressAnd.push({ OR: [{ taskName: like(query) }, { planDetail: like(query) }, { nextPlan: like(query) }] });
+  if (groupId) progressAnd.push({ groupId });
+  const skipProgress = Boolean(assigneeId) || priority === "HIGH";
+  // 이슈는 담당 Track(groupId)이 없고 우선순위가 LOW로 고정이라, groupId/assigneeId/우선순위 필터가 걸리면 매칭 불가능해 조회 자체를 생략한다.
+  const skipIssues = Boolean(assigneeId) || Boolean(groupId) || (priority !== undefined && priority !== "LOW");
+  // 회의실 예약은 Track(groupId)도 우선순위도 없는 개념이라, 둘 중 하나라도 필터가 걸리면 매칭 불가능해 조회 자체를 생략한다.
+  const skipMeetings = Boolean(groupId) || priority !== undefined;
+
+  const [events, progress, issues, meetingReservations, options] = await Promise.all([
+    prisma.calendarEvent.findMany({
+      where: { projectId, OR: [{ recurrenceRule: { not: null } }, { AND: eventAnd }] },
+      include: { assignees: { include: { user: true } }, groupTags: { include: { group: true } } },
+    }),
+    skipProgress ? [] : prisma.weeklyProgress.findMany({ where: { week: { projectId }, AND: progressAnd } }),
+    skipIssues ? [] : prisma.issue.findMany({
+      where: {
+        projectId, archivedAt: null, createdAt: { gte: paddedFrom, lte: paddedTo },
+        ...(query ? { OR: [{ title: like(query) }, { description: like(query) }] } : {}),
+      },
+    }),
+    skipMeetings ? [] : listMeetingReservations(projectId, paddedFrom, paddedTo),
+    getCodeOptions(projectId),
+  ]);
+  const meetings = meetingReservations.filter((m) =>
+    (!query || m.purpose.toLowerCase().includes(query.toLowerCase()) || m.roomName.toLowerCase().includes(query.toLowerCase())) &&
+    (!assigneeId || m.userId === assigneeId || m.attendees.some((a) => a.id === assigneeId)));
+  const labels = new Map(options.tracks.map((code) => [code.id, code.label]));
+  const toAssignees = (event: (typeof events)[number]): EventPerson[] => event.assignees.map((a) => (a.user ? { id: a.user.id, name: a.user.name } : { id: a.id, name: a.guestName! }));
+  const toGroupTags = (event: (typeof events)[number]): EventGroupTagEntry[] => event.groupTags.map((t) => ({ id: t.group.id, label: t.group.label }));
+  const recurringIds = events.filter((event) => event.recurrenceRule).map((event) => event.id);
+  const exceptions = recurringIds.length ? await prisma.eventException.findMany({ where: { eventId: { in: recurringIds } } }) : [];
+  const exceptionMap = new Map(exceptions.map((exception) => [`${exception.eventId}:${exception.exceptionDate.toISOString().slice(0, 10)}`, exception]));
+
+  const rows: CalendarEvent[] = [];
+  for (const event of events) {
+    const areaLabel = event.groupId ? labels.get(event.groupId) ?? null : null;
+    if (event.recurrenceRule) {
+      const duration = event.endAt.getTime() - event.startAt.getTime();
+      const occurrences = expandOccurrences(event.recurrenceRule, event.startAt, paddedFrom, paddedTo);
+      for (const occStart of occurrences) {
+        const occDateKey = occStart.toISOString().slice(0, 10);
+        const exception = exceptionMap.get(`${event.id}:${occDateKey}`);
+        if (exception?.type === "DELETED") continue;
+        const override = (exception?.type === "MODIFIED" ? (exception.overrideData as OverrideData | null) : null) ?? {};
+        const occStartAt = override.startAt ? new Date(override.startAt) : occStart;
+        const occEndAt = override.endAt ? new Date(override.endAt) : new Date(occStart.getTime() + duration);
+        const start = parts(occStartAt.toISOString()), end = parts(occEndAt.toISOString());
+        if (!(start.date <= to && end.date >= from)) continue;
+        const overrideAreaLabel = override.groupId !== undefined ? (override.groupId ? labels.get(override.groupId) ?? null : null) : areaLabel;
+        rows.push({ id: `${event.id}::${occDateKey}`, masterId: event.id, source: "schedule", title: override.title ?? event.title, description: override.description ?? event.description, eventType: override.eventType ?? event.eventType, startAt: occStartAt.toISOString(), endAt: occEndAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: override.allDay ?? event.allDay, areaCodeId: override.groupId !== undefined ? override.groupId : event.groupId, areaLabel: overrideAreaLabel, location: override.location ?? event.location, priority: override.priority ?? event.priority, isMilestone: override.isMilestone ?? event.isMilestone, isRecurring: true, occurrenceDate: occDateKey, recurrenceSummary: describeRecurrence(event.recurrenceRule), assignees: toAssignees(event), groupTags: toGroupTags(event), editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null });
+      }
+    } else {
+      const start = parts(event.startAt.toISOString()), end = parts(event.endAt.toISOString());
+      if (start.date <= to && end.date >= from) rows.push({ id: event.id, masterId: event.id, source: "schedule", title: event.title, description: event.description, eventType: event.eventType, startAt: event.startAt.toISOString(), endAt: event.endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: event.allDay, areaCodeId: event.groupId, areaLabel, location: event.location, priority: event.priority, isMilestone: event.isMilestone, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: toAssignees(event), groupTags: toGroupTags(event), editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null });
+    }
+  }
+  for (const row of progress) {
+    const planTargetDate = row.planTargetDate?.toISOString().slice(0, 10) ?? null, nextTargetDate = row.nextTargetDate?.toISOString().slice(0, 10) ?? null;
+    if (planTargetDate && inRange(planTargetDate, from, to)) rows.push({ id: row.id, masterId: row.id, source: "progress", title: row.taskName, description: row.planDetail, eventType: "milestone", startAt: `${planTargetDate}T00:00:00.000Z`, endAt: `${planTargetDate}T00:00:00.000Z`, date: planTargetDate, startTime: "", endTime: "", allDay: true, areaCodeId: row.groupId, areaLabel: labels.get(row.groupId) ?? null, location: "", priority: "MEDIUM", isMilestone: true, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/weekly-progress?edit=${row.id}` });
+    if (nextTargetDate && inRange(nextTargetDate, from, to)) rows.push({ id: row.id, masterId: row.id, source: "next_plan", title: row.taskName, description: row.nextPlan, eventType: "work", startAt: `${nextTargetDate}T00:00:00.000Z`, endAt: `${nextTargetDate}T00:00:00.000Z`, date: nextTargetDate, startTime: "", endTime: "", allDay: true, areaCodeId: row.groupId, areaLabel: labels.get(row.groupId) ?? null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/weekly-progress?edit=${row.id}` });
+  }
+  for (const issue of issues) {
+    const date = parts(issue.createdAt.toISOString());
+    if (inRange(date.date, from, to)) rows.push({ id: issue.id, masterId: issue.id, source: "issue", title: issue.title, description: issue.description, eventType: "other", startAt: issue.createdAt.toISOString(), endAt: issue.createdAt.toISOString(), date: date.date, startTime: date.time, endTime: date.time, allDay: false, areaCodeId: null, areaLabel: null, location: "", priority: "LOW", isMilestone: false, isRecurring: false, occurrenceDate: null, recurrenceSummary: null, assignees: [], groupTags: [], editable: false, sourceUrl: `/issues/${issue.id}` });
+  }
+  for (const meeting of meetings) {
+    const start = parts(meeting.startAt), end = parts(meeting.endAt);
+    const attendeePeople: EventPerson[] = [{ id: meeting.userId, name: meeting.userName }, ...meeting.attendees.map((a) => ({ id: a.id, name: a.name }))];
+    const uniqueAttendees = [...new Map(attendeePeople.map((p) => [p.id, p])).values()];
+    if (start.date <= to && end.date >= from) rows.push({ id: meeting.id, masterId: meeting.id, source: "meeting", title: meeting.purpose, description: meeting.purpose, eventType: "meeting", startAt: meeting.startAt, endAt: meeting.endAt, date: start.date, startTime: start.time, endTime: end.time, allDay: false, areaCodeId: null, areaLabel: meeting.roomName, location: meeting.roomName, priority: "MEDIUM", isMilestone: false, isRecurring: meeting.recurring, occurrenceDate: null, recurrenceSummary: null, assignees: uniqueAttendees, groupTags: [], editable: false, sourceUrl: "/meetrooms" });
+  }
+  return rows.sort((a, b) => a.startAt.localeCompare(b.startAt));
+}
+
+export async function getCalendarEvent(projectId: string, id: string, viewerUserId?: string) {
+  const { masterId, occurrenceDate } = parseCompositeId(id);
+  const prisma = getPrisma();
+  const event = await prisma.calendarEvent.findUnique({ where: { id: masterId }, include: { assignees: { include: { user: true } }, groupTags: { include: { group: true } } } });
+  if (!event || event.projectId !== projectId) return null;
+  const options = await getCodeOptions(projectId), labels = new Map(options.tracks.map((code) => [code.id, code.label]));
+  const assignees: EventPerson[] = event.assignees.map((a) => (a.user ? { id: a.user.id, name: a.user.name } : { id: a.id, name: a.guestName! }));
+  const groupTags: EventGroupTagEntry[] = event.groupTags.map((t) => ({ id: t.group.id, label: t.group.label }));
+
+  if (occurrenceDate && event.recurrenceRule) {
+    const exception = await prisma.eventException.findUnique({ where: { eventId_exceptionDate: { eventId: masterId, exceptionDate: new Date(occurrenceDate) } } });
+    const override = (exception?.type === "MODIFIED" ? (exception.overrideData as OverrideData | null) : null) ?? {};
+    const duration = event.endAt.getTime() - event.startAt.getTime();
+    const timeOfDay = event.startAt.toISOString().slice(11);
+    const naturalStart = new Date(`${occurrenceDate}T${timeOfDay}`);
+    const startAt = override.startAt ? new Date(override.startAt) : naturalStart;
+    const endAt = override.endAt ? new Date(override.endAt) : new Date(naturalStart.getTime() + duration);
+    const start = parts(startAt.toISOString()), end = parts(endAt.toISOString());
+    const groupId = override.groupId !== undefined ? override.groupId : event.groupId;
+    return { id, masterId, source: "schedule", title: override.title ?? event.title, description: override.description ?? event.description, eventType: override.eventType ?? event.eventType, startAt: startAt.toISOString(), endAt: endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: override.allDay ?? event.allDay, areaCodeId: groupId, areaLabel: groupId ? labels.get(groupId) ?? null : null, location: override.location ?? event.location, priority: override.priority ?? event.priority, isMilestone: override.isMilestone ?? event.isMilestone, isRecurring: true, occurrenceDate, recurrenceSummary: describeRecurrence(event.recurrenceRule), assignees, groupTags, editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null } satisfies CalendarEvent;
+  }
+  const start = parts(event.startAt.toISOString()), end = parts(event.endAt.toISOString());
+  return { id: event.id, masterId: event.id, source: "schedule", title: event.title, description: event.description, eventType: event.eventType, startAt: event.startAt.toISOString(), endAt: event.endAt.toISOString(), date: start.date, startTime: start.time, endTime: end.time, allDay: event.allDay, areaCodeId: event.groupId, areaLabel: event.groupId ? labels.get(event.groupId) ?? null : null, location: event.location, priority: event.priority, isMilestone: event.isMilestone, isRecurring: Boolean(event.recurrenceRule), occurrenceDate: null, recurrenceSummary: event.recurrenceRule ? describeRecurrence(event.recurrenceRule) : null, assignees, groupTags, editable: canManageCalendarEvent(event.createdBy, viewerUserId), sourceUrl: null } satisfies CalendarEvent;
+}
+
+export async function createCalendarEvent(projectId: string, userId: string, input: unknown) {
+  await assertManager(projectId, userId);
+  const data = eventSchema.parse(input);
+  const recurrenceRule = data.recurrence ? buildRecurrenceRule(data.recurrence as RecurrenceInput) : null;
+  const assigneeIds = [...new Set(data.assigneeIds)];
+  const prisma = getPrisma();
+  const event = await prisma.$transaction(async (tx) => {
+    const event = await tx.calendarEvent.create({ data: { projectId, title: data.title, description: data.description, eventType: data.eventType, startAt: new Date(data.startAt), endAt: new Date(data.endAt), allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone, recurrenceRule, createdBy: userId } });
+    if (assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...assigneeIds.map((assigneeId) => ({ eventId: event.id, userId: assigneeId })), ...data.assigneeNames.map((guestName) => ({ eventId: event.id, guestName }))] });
+    if (data.groupTagIds.length) await tx.eventGroupTag.createMany({ data: data.groupTagIds.map((groupId) => ({ eventId: event.id, groupId })) });
+    const receiverIds = assigneeIds.filter((assigneeId) => assigneeId !== userId);
+    if (receiverIds.length) {
+      const systemPayload = calendarInvitationPayload(event) as Prisma.InputJsonValue;
+      await tx.message.createMany({
+        data: receiverIds.map((receiverId) => ({ senderId: userId, receiverId, messageType: "CALENDAR_INVITATION" as const, calendarEventId: event.id, systemPayload })),
+        skipDuplicates: true,
+      });
+    }
+    return event;
+  });
+  await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_INSERT", "calendar_events", event.id, null, event);
+  return { id: event.id };
+}
+
+export async function updateCalendarEvent(projectId: string, id: string, userId: string, input: unknown, scope: "all" | "single" = "all") {
+  await assertManager(projectId, userId);
+  const { masterId, occurrenceDate } = parseCompositeId(id);
+  const prisma = getPrisma();
+  const before = await prisma.calendarEvent.findUnique({ where: { id: masterId } });
+  if (!before || before.projectId !== projectId) return undefined;
+  if (!canManageCalendarEvent(before.createdBy, userId)) throw new DomainError("FORBIDDEN", "일정 등록자만 수정할 수 있습니다.");
+  const data = eventSchema.parse(input);
+
+  if (scope === "single" && occurrenceDate) {
+    const overrideData: OverrideData = { title: data.title, description: data.description, eventType: data.eventType, startAt: data.startAt, endAt: data.endAt, allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone };
+    const exception = await prisma.eventException.upsert({
+      where: { eventId_exceptionDate: { eventId: masterId, exceptionDate: new Date(occurrenceDate) } },
+      create: { eventId: masterId, exceptionDate: new Date(occurrenceDate), type: "MODIFIED", overrideData: overrideData as Prisma.InputJsonValue },
+      update: { type: "MODIFIED", overrideData: overrideData as Prisma.InputJsonValue },
+    });
+    await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_EXCEPTION_UPSERT", "event_exceptions", exception.id, null, exception);
+    return { id };
+  }
+  const recurrenceRule = data.recurrence ? buildRecurrenceRule(data.recurrence as RecurrenceInput) : null;
+  const assigneeIds = [...new Set(data.assigneeIds)];
+  const updated = await prisma.$transaction(async (tx) => {
+    const previousAssignees = await tx.eventAssignee.findMany({ where: { eventId: masterId, userId: { not: null } }, select: { userId: true } });
+    const previousAssigneeIds = new Set(previousAssignees.flatMap((assignee) => assignee.userId ? [assignee.userId] : []));
+    const updated = await tx.calendarEvent.update({ where: { id: masterId }, data: { title: data.title, description: data.description, eventType: data.eventType, startAt: new Date(data.startAt), endAt: new Date(data.endAt), allDay: data.allDay, groupId: data.areaCodeId, location: data.location, priority: data.priority, isMilestone: data.isMilestone, recurrenceRule, updatedBy: userId, version: { increment: 1 } } });
+    await tx.eventAssignee.deleteMany({ where: { eventId: masterId } });
+    if (assigneeIds.length || data.assigneeNames.length) await tx.eventAssignee.createMany({ data: [...assigneeIds.map((assigneeId) => ({ eventId: masterId, userId: assigneeId })), ...data.assigneeNames.map((guestName) => ({ eventId: masterId, guestName }))] });
+    await tx.eventGroupTag.deleteMany({ where: { eventId: masterId } });
+    if (data.groupTagIds.length) await tx.eventGroupTag.createMany({ data: data.groupTagIds.map((groupId) => ({ eventId: masterId, groupId })) });
+    const receiverIds = assigneeIds.filter((assigneeId) => assigneeId !== userId);
+    const systemPayload = calendarInvitationPayload(updated) as Prisma.InputJsonValue;
+    if (receiverIds.length) await tx.message.updateMany({ where: { calendarEventId: masterId, messageType: "CALENDAR_INVITATION", receiverId: { in: receiverIds } }, data: { systemPayload } });
+    await tx.message.deleteMany({ where: { calendarEventId: masterId, messageType: "CALENDAR_INVITATION", isRead: false, ...(receiverIds.length ? { receiverId: { notIn: receiverIds } } : {}) } });
+    const addedReceiverIds = receiverIds.filter((receiverId) => !previousAssigneeIds.has(receiverId));
+    for (const receiverId of addedReceiverIds) {
+      await tx.message.upsert({
+        where: { calendarEventId_receiverId: { calendarEventId: masterId, receiverId } },
+        create: { senderId: userId, receiverId, messageType: "CALENDAR_INVITATION", calendarEventId: masterId, systemPayload },
+        update: { senderId: userId, messageType: "CALENDAR_INVITATION", systemPayload, isRead: false },
+      });
+    }
+    return updated;
+  });
+  await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_UPDATE", "calendar_events", masterId, before, updated);
+  return { id: masterId };
+}
+
+export async function deleteCalendarEvent(projectId: string, id: string, userId: string, scope: "all" | "single" = "all") {
+  await assertManager(projectId, userId);
+  const { masterId, occurrenceDate } = parseCompositeId(id);
+  const prisma = getPrisma();
+  const before = await prisma.calendarEvent.findUnique({ where: { id: masterId } });
+  if (!before || before.projectId !== projectId) return undefined;
+  if (!canManageCalendarEvent(before.createdBy, userId)) throw new DomainError("FORBIDDEN", "일정 등록자만 삭제할 수 있습니다.");
+
+  let exception: EventException | null = null;
+  if (scope === "single" && occurrenceDate && before.recurrenceRule) {
+    exception = await prisma.eventException.upsert({
+      where: { eventId_exceptionDate: { eventId: masterId, exceptionDate: new Date(occurrenceDate) } },
+      create: { eventId: masterId, exceptionDate: new Date(occurrenceDate), type: "DELETED" },
+      update: { type: "DELETED", overrideData: undefined },
+    });
+    await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_EXCEPTION_DELETE", "event_exceptions", exception.id, null, { occurrenceDate });
+  } else {
+    await prisma.$transaction(async (tx) => {
+      await tx.message.deleteMany({ where: { calendarEventId: masterId, messageType: "CALENDAR_INVITATION" } });
+      await tx.calendarEvent.delete({ where: { id: masterId } });
+    });
+    await writeAuditLog(projectId, userId, "CALENDAR_EVENTS_DELETE", "calendar_events", masterId, before, null);
+  }
+  return { id: masterId };
+}
+
+export async function searchCalendarEvents(projectId: string, filters: CalendarSearchFilters, viewerUserId?: string): Promise<CalendarEvent[]> {
+  const from = filters.from ?? new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10);
+  const to = filters.to ?? new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+  const events = await listCalendarEvents(projectId, from, to, filters, viewerUserId);
+  // DB에서 좁히지 못하는 반복 일정 회차(예외 override 적용 후 값)를 최종적으로 걸러낸다.
+  const query = filters.q?.trim().toLocaleLowerCase("ko");
+  return events.filter((event) =>
+    (!query || `${event.title} ${event.description} ${event.location}`.toLocaleLowerCase("ko").includes(query)) &&
+    (!filters.priority || event.priority === filters.priority) &&
+    (!filters.groupId || event.areaCodeId === filters.groupId || event.groupTags.some((tag) => tag.id === filters.groupId)) &&
+    (!filters.assigneeId || event.assignees.some((assignee) => assignee.id === filters.assigneeId)),
+  );
+}
+
+export async function listMilestones(projectId: string): Promise<MilestoneEntry[]> {
+  const prisma = getPrisma();
+  const [events, project] = await Promise.all([
+    prisma.calendarEvent.findMany({ where: { projectId, OR: [{ isMilestone: true }, { priority: "HIGH" }] } }),
+    prisma.project.findUnique({ where: { id: projectId } }),
+  ]);
+  const todayKey = calendarTodayKey();
+  const today = new Date(`${todayKey}T00:00:00+09:00`);
+  const dayDiff = (dateKey: string) => calendarDayDifference(dateKey, todayKey);
+  const rows: MilestoneEntry[] = [];
+  for (const event of events) {
+    if (event.recurrenceRule) {
+      const [next] = expandOccurrences(event.recurrenceRule, event.startAt, today, new Date(today.getTime() + 365 * 86_400_000));
+      if (!next) continue;
+      const date = calendarDateKey(next);
+      rows.push({ id: `${event.id}::${date}`, title: event.title, date, kind: "event", daysUntil: dayDiff(date), sourceUrl: null });
+    } else {
+      const date = calendarDateKey(event.startAt);
+      rows.push({ id: event.id, title: event.title, date, kind: "event", daysUntil: dayDiff(date), sourceUrl: null });
+    }
+  }
+  if (project) {
+    const openDates: [string, Date | null][] = project.openMethod === "phased" ? [["1차 오픈", project.firstOpenDate], ["2차 오픈", project.secondOpenDate]] : [["오픈일", project.goLiveDate]];
+    for (const [label, value] of openDates) if (value) {
+      const date = calendarDateKey(value);
+      rows.push({ id: `project-${label}`, title: `${project.name} ${label}`, date, kind: "project", daysUntil: dayDiff(date), sourceUrl: "/project-settings" });
+    }
+  }
+  return rows.sort((a, b) => a.date.localeCompare(b.date));
+}

@@ -1,0 +1,54 @@
+import { WbsStageChart } from "@/components/WbsStageChart";
+import type { WbsStats } from "@/lib/server/wbs";
+
+const pct = (value: number) => Math.round(value * 100);
+const fmt = (value: number) => value.toLocaleString("ko-KR");
+
+export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
+  const { overall, itemCount, delayRate, delayedCount, delayTrackedCount, stages } = stats;
+  const overallDelayed = delayedCount > 0;
+  return <>
+    <header className="topbar"><div><h1>WBS 통계</h1><p>전체 공정율 및 Stage별 계획·실적·지연 현황 · 총 {fmt(itemCount)}건</p></div></header>
+    <div className="content">
+      <section className="kpi-grid">
+        <div className="kpi"><span>전체 목표(today)</span><strong>{pct(overall.planned)}%</strong><small>계획 공정율</small></div>
+        <div className="kpi"><span>전체 실적</span><strong>{pct(overall.actual)}%</strong><small>실적 공정율</small></div>
+        <div className="kpi"><span>전체 진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}%</strong><small>실적/계획</small></div>
+        <div className="kpi"><span>전체 지연율</span><strong className={delayRate > 0 ? "critical" : undefined}>{pct(delayRate)}%</strong><small>지연 {fmt(delayedCount)}/{fmt(delayTrackedCount)}건</small></div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head"><h2>Stage별 공정율</h2><span>{stages.length}개 Stage · 총 {fmt(itemCount)}건</span></div>
+        {stages.length ? <>
+          <WbsStageChart stages={stages} />
+          <div className="table-wrap"><table><thead><tr><th>Stage</th><th data-numeric>Task 건수</th><th data-numeric>계획건수</th><th data-numeric>실적건수</th><th data-numeric>공정율</th><th data-numeric>계획</th><th data-numeric>실적</th><th data-numeric>지연건수</th><th data-numeric>지연율</th><th>상태</th></tr></thead>
+            <tbody>{stages.map((stage) => <tr key={stage.stage}>
+              <td>{stage.stage}</td>
+              <td data-numeric>{fmt(stage.itemCount)}건</td>
+              <td data-numeric>{fmt(stage.plannedCount)}건</td>
+              <td data-numeric>{fmt(stage.actualCount)}건</td>
+              <td data-numeric>{stage.scheduleProgress}%</td>
+              <td data-numeric>{pct(stage.planned)}%</td>
+              <td data-numeric>{pct(stage.actual)}%</td>
+              <td data-numeric>{fmt(stage.delayedCount)}건</td>
+              <td data-numeric className={stage.delayRate > 0 ? "critical" : undefined}>{pct(stage.delayRate)}%</td>
+              <td>{stage.delayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
+            </tr>)}</tbody>
+            <tfoot><tr className="totals-row">
+              <td>합계</td>
+              <td data-numeric>{fmt(itemCount)}건</td>
+              <td data-numeric>{fmt(stats.plannedCount)}건</td>
+              <td data-numeric>{fmt(stats.actualCount)}건</td>
+              <td data-numeric>{stats.scheduleProgress}%</td>
+              <td data-numeric>{pct(overall.planned)}%</td>
+              <td data-numeric>{pct(overall.actual)}%</td>
+              <td data-numeric>{fmt(delayedCount)}건</td>
+              <td data-numeric className={delayRate > 0 ? "critical" : undefined}>{pct(delayRate)}%</td>
+              <td>{overallDelayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
+            </tr></tfoot>
+          </table></div>
+        </> : <div className="empty">진척관리 대상(leaf) 항목이 없습니다.</div>}
+      </section>
+    </div>
+  </>;
+}

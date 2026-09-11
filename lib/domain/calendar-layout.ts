@@ -1,0 +1,85 @@
+export const CALENDAR_START_MINUTES = 9 * 60;
+export const CALENDAR_END_MINUTES = 18 * 60;
+export const CALENDAR_SLOT_MINUTES = 30;
+export const CALENDAR_ROW_HEIGHT = 36;
+
+export function calendarDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export function calendarTodayKey(now: Date = new Date()) {
+  return calendarDateKey(now);
+}
+
+export function calendarDayDifference(dateKey: string, baseDateKey: string) {
+  const dayNumber = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return Date.UTC(year, month - 1, day) / 86_400_000;
+  };
+  return dayNumber(dateKey) - dayNumber(baseDateKey);
+}
+
+function minutes(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+export function calendarTimePlacement(
+  startTime: string,
+  durationMinutes: number,
+  startMinutes: number = CALENDAR_START_MINUTES,
+  endMinutes: number = CALENDAR_END_MINUTES,
+  slotMinutes: number = CALENDAR_SLOT_MINUTES,
+) {
+  const rawStart = minutes(startTime);
+  const visibleStart = Math.min(Math.max(rawStart, startMinutes), endMinutes - slotMinutes);
+  const slot = Math.floor(visibleStart / slotMinutes) * slotMinutes;
+  const visibleEnd = Math.min(Math.max(rawStart + Math.max(durationMinutes, slotMinutes), visibleStart + slotMinutes), endMinutes);
+  const pixelsPerMinute = CALENDAR_ROW_HEIGHT / slotMinutes;
+  return {
+    slot,
+    offsetPx: (visibleStart - slot) * pixelsPerMinute,
+    heightPx: Math.max(CALENDAR_ROW_HEIGHT, (visibleEnd - visibleStart) * pixelsPerMinute),
+  };
+}
+
+export type CalendarOverlapItem = { id: string; startTime: string; durationMinutes: number };
+export type CalendarOverlapPlacement = { column: number; columnCount: number };
+
+export function calendarOverlapLayout(items: CalendarOverlapItem[]) {
+  const sorted = items.map((item) => {
+    const start = minutes(item.startTime);
+    return { ...item, start, end: start + Math.max(item.durationMinutes, CALENDAR_SLOT_MINUTES) };
+  }).sort((a, b) => a.start - b.start || b.end - a.end || a.id.localeCompare(b.id));
+  const result: Record<string, CalendarOverlapPlacement> = {};
+  let active: Array<{ end: number; column: number }> = [];
+  let clusterIds: string[] = [];
+  let clusterColumnCount = 0;
+
+  const finishCluster = () => {
+    for (const id of clusterIds) result[id].columnCount = clusterColumnCount;
+    clusterIds = [];
+    clusterColumnCount = 0;
+  };
+
+  for (const item of sorted) {
+    active = active.filter((entry) => entry.end > item.start);
+    if (active.length === 0 && clusterIds.length > 0) finishCluster();
+    const occupied = new Set(active.map((entry) => entry.column));
+    let column = 0;
+    while (occupied.has(column)) column += 1;
+    result[item.id] = { column, columnCount: 1 };
+    clusterIds.push(item.id);
+    active.push({ end: item.end, column });
+    clusterColumnCount = Math.max(clusterColumnCount, column + 1);
+  }
+  if (clusterIds.length > 0) finishCluster();
+  return result;
+}
