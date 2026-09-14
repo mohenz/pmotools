@@ -10,12 +10,9 @@
 
 ```powershell
 npm run db:local:start
-npx prisma migrate deploy
-npx prisma db seed
-npm run dev
-```
+npx prThis is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-`http://localhost:3020/meetrooms`에서 이용할 수 있습니다. DB 상태 확인과 중지는 각각 `npm run db:local:status`, `npm run db:local:stop`을 사용합니다.
+Testing Gitea deployment.rooms`에서 이용할 수 있습니다. DB 상태 확인과 중지는 각각 `npm run db:local:status`, `npm run db:local:stop`을 사용합니다.
 
 프로젝트 이슈·리스크와 PMO 업무를 통합 관리하는 웹 애플리케이션입니다.
 
