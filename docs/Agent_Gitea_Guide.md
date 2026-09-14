@@ -8,8 +8,25 @@
 
 외부 에이전트가 동작 중인 환경(Windows/Linux)에는 반드시 `git` 클라이언트가 설치되어 있어야 하며, 시스템 `PATH`에 등록되어 있어야 합니다.
 
+### Git 클라이언트 설치 가이드 (Client-side)
+외부 환경에 Git이 설치되어 있지 않은 경우, 아래 명령어를 통해 설치할 수 있습니다.
+
+- **Windows (PowerShell)**
+  ```powershell
+  # Winget을 이용한 설치 (권장)
+  winget install --id Git.Git -e --source winget
+  ```
+- **Linux (Ubuntu/Debian)**
+  ```bash
+  sudo apt-get update
+  sudo apt-get install -y git
+  ```
+- **Linux (CentOS/RHEL)**
+  ```bash
+  sudo yum install -y git
+  ```
 ### Gitea 서버 접속 정보
-- **저장소 URL**: `http://<이 서버의 IP 주소>:3000/PMO/pmotools.git`
+- **저장소 URL**: `http://10.147.147.145:3000/PMO/pmotools.git`
   - *(참고: IP 주소는 인트라넷 IP를 사용하거나, 사내 DNS가 할당된 도메인을 사용하십시오.)*
 - **접속 계정 (Agent 전용)**: `pmoadmin` / `adminadmin`
   - *(보안 상 Agent 전용 계정 발급이 필요할 경우, Gitea 관리자 페이지에서 신규 계정을 생성 후 사용)*
@@ -23,7 +40,7 @@
 
 ### Step 1. 저장소 클론 (Clone)
 ```bash
-git clone http://pmoadmin:adminadmin@<이 서버의 IP 주소>:3000/PMO/pmotools.git
+git clone http://pmoadmin:adminadmin@10.147.147.145:3000/PMO/pmotools.git
 cd pmotools
 ```
 
