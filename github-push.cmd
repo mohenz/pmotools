@@ -1,5 +1,5 @@
 @echo off
-echo [PMO] GitHub Push Process Started
+echo [PMO] pmotools (Frontend) GitHub Push Process Started
 echo ========================================
 
 cd /d "%~dp0"
@@ -16,8 +16,20 @@ git add .
 git commit -m "%commitMsg%"
 echo.
 
-echo [3/3] Pushing to Remote Repository...
-git push origin master
+echo [3/3] Pushing to Remote Repository (GitHub) with Direct Token...
+echo ========================================
+echo Notice: We will use direct token authentication to bypass Credential Manager.
+echo Please generate your PAT (Personal Access Token) starting with 'ghp_'.
+echo ========================================
+set /p gitToken="Enter your GitHub PAT (Input will be visible): "
+
+if "%gitToken%"=="" (
+    echo [ERROR] Token cannot be empty. Aborting.
+    pause
+    exit /b 1
+)
+
+git push https://mohenz:%gitToken%@github.com/mohenz/pmotools.git HEAD
 
 echo.
 echo ========================================
