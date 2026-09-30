@@ -147,22 +147,22 @@ async function main() {
     skipDuplicates: true,
   });
 
-  await prisma.commonCodeGroup.upsert({
+  const categoryGroup = await prisma.commonCodeGroup.upsert({
     where: { projectId_code: { projectId: PROJECT_ID, code: "category" } },
     update: {},
     create: { id: CATEGORY_GROUP_ID, projectId: PROJECT_ID, code: "category", label: "유형", description: "이슈·리스크 분류 유형", sortOrder: 1, isSystem: true },
   });
-  await prisma.commonCodeGroup.upsert({
+  const escalationGroup = await prisma.commonCodeGroup.upsert({
     where: { projectId_code: { projectId: PROJECT_ID, code: "escalation_level" } },
     update: {},
     create: { id: ESCALATION_GROUP_ID, projectId: PROJECT_ID, code: "escalation_level", label: "에스컬레이션 레벨", description: "확률×영향 점수별 보고 수준", sortOrder: 3, isSystem: true },
   });
-  await prisma.commonCodeGroup.upsert({
+  const issueTypeGroup = await prisma.commonCodeGroup.upsert({
     where: { projectId_code: { projectId: PROJECT_ID, code: "issue_type" } },
     update: {},
     create: { id: ISSUE_TYPE_GROUP_ID, projectId: PROJECT_ID, code: "issue_type", label: "이슈구분", description: "이슈관리 이슈구분 공통코드", sortOrder: 4, isSystem: true },
   });
-  await prisma.commonCodeGroup.upsert({
+  const reportLineGroup = await prisma.commonCodeGroup.upsert({
     where: { projectId_code: { projectId: PROJECT_ID, code: "report_line" } },
     update: {},
     create: { id: REPORT_LINE_GROUP_ID, projectId: PROJECT_ID, code: "report_line", label: "보고라인", description: "이슈관리 에스컬레이션 보고라인 공통코드", sortOrder: 5, isSystem: true },
@@ -170,26 +170,26 @@ async function main() {
 
   await prisma.commonCode.createMany({
     data: [
-      { id: CATEGORY_CODE_IDS.schedule, projectId: PROJECT_ID, groupId: CATEGORY_GROUP_ID, groupCode: "category", code: "schedule", label: "일정", sortOrder: 1 },
-      { id: CATEGORY_CODE_IDS.cost, projectId: PROJECT_ID, groupId: CATEGORY_GROUP_ID, groupCode: "category", code: "cost", label: "비용", sortOrder: 2 },
-      { id: CATEGORY_CODE_IDS.quality, projectId: PROJECT_ID, groupId: CATEGORY_GROUP_ID, groupCode: "category", code: "quality", label: "품질", sortOrder: 3 },
-      { id: CATEGORY_CODE_IDS.organization, projectId: PROJECT_ID, groupId: CATEGORY_GROUP_ID, groupCode: "category", code: "organization", label: "조직/정치", sortOrder: 4 },
-      { id: CATEGORY_CODE_IDS.contract, projectId: PROJECT_ID, groupId: CATEGORY_GROUP_ID, groupCode: "category", code: "contract", label: "계약", sortOrder: 5 },
-      { id: CATEGORY_CODE_IDS.reputation, projectId: PROJECT_ID, groupId: CATEGORY_GROUP_ID, groupCode: "category", code: "reputation", label: "대외 평판", sortOrder: 6 },
-      { id: ESCALATION_CODE_IDS.pm, projectId: PROJECT_ID, groupId: ESCALATION_GROUP_ID, groupCode: "escalation_level", code: "pm", label: "PM 레벨", sortOrder: 1, minScore: 1 },
-      { id: ESCALATION_CODE_IDS.departmentHead, projectId: PROJECT_ID, groupId: ESCALATION_GROUP_ID, groupCode: "escalation_level", code: "department_head", label: "본부장 레벨", sortOrder: 2, minScore: 4 },
-      { id: ESCALATION_CODE_IDS.cLevel, projectId: PROJECT_ID, groupId: ESCALATION_GROUP_ID, groupCode: "escalation_level", code: "c_level", label: "C-Level 레벨", sortOrder: 3, minScore: 7 },
-      { id: ISSUE_TYPE_CODE_IDS.scope, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "scope", label: "범위", sortOrder: 1 },
-      { id: ISSUE_TYPE_CODE_IDS.schedule, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "schedule", label: "일정", sortOrder: 2 },
-      { id: ISSUE_TYPE_CODE_IDS.resource, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "resource", label: "자원", sortOrder: 3 },
-      { id: ISSUE_TYPE_CODE_IDS.quality, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "quality", label: "품질", sortOrder: 4 },
-      { id: ISSUE_TYPE_CODE_IDS.communication, projectId: PROJECT_ID, groupId: ISSUE_TYPE_GROUP_ID, groupCode: "issue_type", code: "communication", label: "소통", sortOrder: 5 },
-      { id: REPORT_LINE_CODE_IDS.teamLead, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "team_lead", label: "팀장", sortOrder: 1 },
-      { id: REPORT_LINE_CODE_IDS.divisionHead, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "division_head", label: "사업부장", sortOrder: 2 },
-      { id: REPORT_LINE_CODE_IDS.ceo, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "ceo", label: "대표이사", sortOrder: 3 },
-      { id: REPORT_LINE_CODE_IDS.clientPmo, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "client_pmo", label: "고객사PMO", sortOrder: 4 },
-      { id: REPORT_LINE_CODE_IDS.clientTeamLead, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "client_team_lead", label: "고객사팀장", sortOrder: 5 },
-      { id: REPORT_LINE_CODE_IDS.clientExecutive, projectId: PROJECT_ID, groupId: REPORT_LINE_GROUP_ID, groupCode: "report_line", code: "client_executive", label: "고객사임원", sortOrder: 6 },
+      { id: CATEGORY_CODE_IDS.schedule, projectId: PROJECT_ID, groupId: categoryGroup.id, groupCode: "category", code: "schedule", label: "일정", sortOrder: 1 },
+      { id: CATEGORY_CODE_IDS.cost, projectId: PROJECT_ID, groupId: categoryGroup.id, groupCode: "category", code: "cost", label: "비용", sortOrder: 2 },
+      { id: CATEGORY_CODE_IDS.quality, projectId: PROJECT_ID, groupId: categoryGroup.id, groupCode: "category", code: "quality", label: "품질", sortOrder: 3 },
+      { id: CATEGORY_CODE_IDS.organization, projectId: PROJECT_ID, groupId: categoryGroup.id, groupCode: "category", code: "organization", label: "조직/정치", sortOrder: 4 },
+      { id: CATEGORY_CODE_IDS.contract, projectId: PROJECT_ID, groupId: categoryGroup.id, groupCode: "category", code: "contract", label: "계약", sortOrder: 5 },
+      { id: CATEGORY_CODE_IDS.reputation, projectId: PROJECT_ID, groupId: categoryGroup.id, groupCode: "category", code: "reputation", label: "대외 평판", sortOrder: 6 },
+      { id: ESCALATION_CODE_IDS.pm, projectId: PROJECT_ID, groupId: escalationGroup.id, groupCode: "escalation_level", code: "pm", label: "PM 레벨", sortOrder: 1, minScore: 1 },
+      { id: ESCALATION_CODE_IDS.departmentHead, projectId: PROJECT_ID, groupId: escalationGroup.id, groupCode: "escalation_level", code: "department_head", label: "본부장 레벨", sortOrder: 2, minScore: 4 },
+      { id: ESCALATION_CODE_IDS.cLevel, projectId: PROJECT_ID, groupId: escalationGroup.id, groupCode: "escalation_level", code: "c_level", label: "C-Level 레벨", sortOrder: 3, minScore: 7 },
+      { id: ISSUE_TYPE_CODE_IDS.scope, projectId: PROJECT_ID, groupId: issueTypeGroup.id, groupCode: "issue_type", code: "scope", label: "범위", sortOrder: 1 },
+      { id: ISSUE_TYPE_CODE_IDS.schedule, projectId: PROJECT_ID, groupId: issueTypeGroup.id, groupCode: "issue_type", code: "schedule", label: "일정", sortOrder: 2 },
+      { id: ISSUE_TYPE_CODE_IDS.resource, projectId: PROJECT_ID, groupId: issueTypeGroup.id, groupCode: "issue_type", code: "resource", label: "자원", sortOrder: 3 },
+      { id: ISSUE_TYPE_CODE_IDS.quality, projectId: PROJECT_ID, groupId: issueTypeGroup.id, groupCode: "issue_type", code: "quality", label: "품질", sortOrder: 4 },
+      { id: ISSUE_TYPE_CODE_IDS.communication, projectId: PROJECT_ID, groupId: issueTypeGroup.id, groupCode: "issue_type", code: "communication", label: "소통", sortOrder: 5 },
+      { id: REPORT_LINE_CODE_IDS.teamLead, projectId: PROJECT_ID, groupId: reportLineGroup.id, groupCode: "report_line", code: "team_lead", label: "팀장", sortOrder: 1 },
+      { id: REPORT_LINE_CODE_IDS.divisionHead, projectId: PROJECT_ID, groupId: reportLineGroup.id, groupCode: "report_line", code: "division_head", label: "사업부장", sortOrder: 2 },
+      { id: REPORT_LINE_CODE_IDS.ceo, projectId: PROJECT_ID, groupId: reportLineGroup.id, groupCode: "report_line", code: "ceo", label: "대표이사", sortOrder: 3 },
+      { id: REPORT_LINE_CODE_IDS.clientPmo, projectId: PROJECT_ID, groupId: reportLineGroup.id, groupCode: "report_line", code: "client_pmo", label: "고객사PMO", sortOrder: 4 },
+      { id: REPORT_LINE_CODE_IDS.clientTeamLead, projectId: PROJECT_ID, groupId: reportLineGroup.id, groupCode: "report_line", code: "client_team_lead", label: "고객사팀장", sortOrder: 5 },
+      { id: REPORT_LINE_CODE_IDS.clientExecutive, projectId: PROJECT_ID, groupId: reportLineGroup.id, groupCode: "report_line", code: "client_executive", label: "고객사임원", sortOrder: 6 },
     ],
     skipDuplicates: true,
   });

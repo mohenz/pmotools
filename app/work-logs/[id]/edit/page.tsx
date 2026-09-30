@@ -12,5 +12,5 @@ export default async function EditWorkLogPage({ params }: { params: Promise<{ id
   const [detail, options, wbsOptions] = await Promise.all([getWorkLogDetail(projectId, id, userId), getCodeOptions(projectId), listWbsTaskOptionsForOwner(projectId, userId)]);
   if (!detail) notFound();
   if (!detail.editable) redirect(`/work-logs/${id}`);
-  return <WorkLogFormScreen mode="edit" groups={options.tracks} assigneeName={detail.assigneeName} detail={detail} wbsOptions={wbsOptions} />;
+  return <WorkLogFormScreen mode="edit" groups={options.tracks} deliverableExtensions={options.deliverableExtensions} assigneeName={detail.assigneeName} detail={detail} wbsOptions={wbsOptions} />;
 }

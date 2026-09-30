@@ -1,5 +1,23 @@
+import { requireAdminContext } from "@/lib/server/context";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { LoginImageUploader } from "@/components/LoginImageUploader";
 
-export default function SystemSettingsPage() {
-  return <><header className="topbar"><div><h1>시스템 설정</h1><p>PMOTOOLS의 화면 표시 방식을 설정합니다.</p></div></header><div className="content settings-content"><ThemeSelector /></div></>;
+export const dynamic = "force-dynamic";
+
+export default async function SystemSettingsPage() {
+  await requireAdminContext();
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <h1>시스템 설정</h1>
+          <p>PMOTOOLS의 화면 표시 방식을 설정합니다.</p>
+        </div>
+      </header>
+      <div className="content settings-content">
+        <ThemeSelector />
+        <LoginImageUploader />
+      </div>
+    </>
+  );
 }

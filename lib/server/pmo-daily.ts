@@ -1,11 +1,12 @@
 import "server-only";
 
 import { z } from "zod";
-import { delayedTaskCount, delayedTaskRate, overallProgress, scheduleProgress } from "@/lib/domain/pmo-daily";
+import { dailyTaskState, delayedTaskCount, delayedTaskRate, overallProgress, scheduleProgress, shiftBusinessDay, type DailyTaskState } from "@/lib/domain/pmo-daily";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { assertWorkModuleGroup } from "@/lib/server/groups";
-import { getWbsDailyTaskCounts, getWbsDueTodayIncompleteTasks } from "@/lib/server/wbs";
+import { getWbsDailyTaskCounts, getWbsDueTodayIncompleteTasks, listWbsItems, loadHolidaySet, loadOwnerGroupLabels, ownerGroupLabelOf } from "@/lib/server/wbs";
+import { listCalendarEvents } from "@/lib/server/calendar";
 import { DomainError } from "@/lib/server/errors";
 
 const percent = z.number().int().min(0).max(100);
@@ -138,3 +139,58 @@ export async function archivePmoDelayedTask(projectId: string, userId: string, i
 }
 
 export type PmoDailyDashboard = Awaited<ReturnType<typeof getPmoDailyDashboard>>;
+
+export type PmoHomeTask = { id: string; code: string; name: string; ownerName: string | null; startDate: string | null; dueDate: string | null; state: DailyTaskState; delayDays: number | null };
+export type PmoHomeDay = { key: "yesterday" | "today" | "tomorrow"; label: string; date: string; starting: PmoHomeTask[]; ending: PmoHomeTask[] };
+export type PmoHomeMeeting = { id: string; source: "schedule" | "meeting"; title: string; allDay: boolean; startTime: string; endTime: string; location: string; isMilestone: boolean; priority: string; attendees: string[]; href: string };
+export type PmoHomeMeetingDay = { key: "today" | "tomorrow"; label: string; date: string; meetings: PmoHomeMeeting[] };
+
+// 캘린더 화면과 같은 기준(KST 시작일~종료일 포함)으로, 여러 날에 걸친 일정은 걸친 날마다 보여준다.
+const kstDate = (iso: string) => new Date(Date.parse(iso) + 9 * 3_600_000).toISOString().slice(0, 10);
+
+// PMO Daily 대시보드(/pmo-daily/dashboard) — 저장 스냅샷이 아니라 WBS·캘린더·회의실·이슈의 현재 데이터를 기준일(KST 오늘)로 집계한다.
+// 대상 TASK는 공정현황·지연 TASK와 같은 기준으로 leaf(진도관리대상) 항목만 본다.
+export async function getPmoDailyHomeDashboard(projectId: string, today: string) {
+  // 내일(다음 영업일)을 알아야 캘린더 조회 범위가 정해지므로 휴일만 먼저 읽는다.
+  const holidays = await loadHolidaySet(projectId);
+  const tomorrow = shiftBusinessDay(today, 1, holidays);
+  const [items, { groupLabelByOwner }, events, issues] = await Promise.all([
+    listWbsItems(projectId), loadOwnerGroupLabels(projectId),
+    listCalendarEvents(projectId, today, tomorrow),
+    getPrisma().issue.findMany({ where: { projectId, archivedAt: null, status: { not: "CLOSED" } }, include: { category: true, owner: { select: { name: true } } }, orderBy: [{ occurredAt: "desc" }, { seq: "desc" }] }),
+  ]);
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  const leaves = items.filter((item) => !parentIds.has(item.id)).map((item) => ({ item, state: dailyTaskState(today, item) }));
+  const toTask = ({ item, state }: (typeof leaves)[number]): PmoHomeTask => ({ id: item.id, code: item.code, name: item.name, ownerName: item.ownerName, startDate: item.startDate, dueDate: item.dueDate, state, delayDays: item.delayDays });
+
+  const days: PmoHomeDay[] = ([["yesterday", "어제", shiftBusinessDay(today, -1, holidays)], ["today", "오늘", today], ["tomorrow", "내일", tomorrow]] as const)
+    .map(([key, label, date]) => ({ key, label, date, starting: leaves.filter(({ item }) => item.startDate === date).map(toTask), ending: leaves.filter(({ item }) => item.dueDate === date).map(toTask) }));
+
+  const delayedByGroup = new Map<string, PmoHomeTask[]>();
+  for (const leaf of leaves.filter(({ state }) => state === "delayed")) {
+    const group = ownerGroupLabelOf(leaf.item, groupLabelByOwner);
+    delayedByGroup.set(group, [...(delayedByGroup.get(group) ?? []), toTask(leaf)]);
+  }
+
+  return {
+    today,
+    taskSummary: {
+      inProgress: leaves.filter(({ state }) => state === "in_progress").length,
+      // 종료 = 오늘 실적종료일이 찍힌 TASK. 누적 완료 건수는 PMO Daily 공정현황(완료 TASK)에서 본다.
+      doneToday: leaves.filter(({ item }) => item.actualDueDate === today).length,
+      delayed: leaves.filter(({ state }) => state === "delayed").length,
+    },
+    days,
+    meetingDays: ([["today", "오늘", today], ["tomorrow", "내일", tomorrow]] as const).map(([key, label, date]): PmoHomeMeetingDay => ({
+      key, label, date,
+      meetings: events
+        .filter((event) => (event.source === "schedule" || event.source === "meeting") && event.date <= date && kstDate(event.endAt) >= date)
+        .map((event) => ({ id: event.id, source: event.source as "schedule" | "meeting", title: event.title, allDay: event.allDay, startTime: event.startTime, endTime: event.endTime, location: event.location, isMilestone: event.isMilestone, priority: event.priority, attendees: event.assignees.map((person) => person.name), href: event.source === "meeting" ? "/meetrooms" : "/calendar" })),
+    })),
+    delayedGroups: [...delayedByGroup.entries()]
+      .map(([groupLabel, tasks]) => ({ groupLabel, tasks: tasks.sort((a, b) => (b.delayDays ?? 0) - (a.delayDays ?? 0) || a.code.localeCompare(b.code)) }))
+      .sort((a, b) => b.tasks.length - a.tasks.length || a.groupLabel.localeCompare(b.groupLabel, "ko")),
+    issues: issues.map((issue) => ({ id: issue.id, displayId: issue.displayId, title: issue.title, categoryLabel: issue.category.label, importance: issue.importance, status: issue.status, ownerName: issue.owner?.name ?? issue.ownerName ?? null, occurredAt: isoDate(issue.occurredAt), dueAt: issue.dueAt ? isoDate(issue.dueAt) : null })),
+  };
+}
+export type PmoDailyHomeDashboard = Awaited<ReturnType<typeof getPmoDailyHomeDashboard>>;

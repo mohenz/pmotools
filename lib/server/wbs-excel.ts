@@ -5,7 +5,7 @@ import { codeFromPath, levelOf, pathFromCode, sortKeyFromCode } from "@/lib/doma
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { wbsTag } from "@/lib/server/cache-tags";
-import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns, listWbsWorkGroups, loadHolidaySet, delayCompletionFields } from "@/lib/server/wbs";
+import { WBS_EXCEL_HEADERS, WBS_EXCEL_ROLE_NAMES, listWbsItemsExcelColumns, listWbsWorkGroups, loadHolidaySet, delayCompletionFields, invalidateWbsTreeCache } from "@/lib/server/wbs";
 
 const HEADER_LIST: readonly string[] = WBS_EXCEL_HEADERS;
 
@@ -469,6 +469,7 @@ export async function applyWbsImport(projectId: string, userId: string, buffer: 
     rows: resultRows,
   };
   await writeAuditLog(projectId, userId, "WBS_EXCEL_IMPORT_PATCH", "wbs_items", projectId, null, result.counts);
+  invalidateWbsTreeCache(projectId);
   revalidateTag(wbsTag(projectId));
   return { report, result };
 }

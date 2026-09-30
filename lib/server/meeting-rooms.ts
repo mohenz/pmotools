@@ -164,15 +164,87 @@ function recurringPattern(data: z.infer<typeof recurringSchema>): RecurringPatte
   if (data.patternType === "MONTHLY") { if (!data.dayOfMonth) throw new DomainError("INVALID_CODE", "반복 일자를 선택해 주세요."); return { patternType: "MONTHLY", patternDetail: { dayOfMonth: data.dayOfMonth } }; }
   return { patternType: "DAILY", patternDetail: {} };
 }
+function patternFromRow(row: { patternType: string; patternDetail: unknown }): RecurringPatternInput {
+  const detail = row.patternDetail as { daysOfWeek?: number[]; dayOfMonth?: number };
+  if (row.patternType === "WEEKLY") return { patternType: "WEEKLY", patternDetail: { daysOfWeek: detail.daysOfWeek ?? [] } };
+  if (row.patternType === "MONTHLY") return { patternType: "MONTHLY", patternDetail: { dayOfMonth: detail.dayOfMonth ?? 0 } };
+  return { patternType: "DAILY", patternDetail: {} };
+}
+// 일반 사용자의 정기예약 "신청"에만 적용되는 업무시간 규칙 (09:00~19:00, 30분 단위).
+function assertRecurringTime(startMinutes: number, endMinutes: number) {
+  if (startMinutes < MEETING_DAY_START || endMinutes > MEETING_DAY_END || startMinutes >= endMinutes || startMinutes % MEETING_SLOT_MINUTES || endMinutes % MEETING_SLOT_MINUTES) throw new DomainError("INVALID_CODE", "반복 시간은 09:00~19:00 사이 30분 단위여야 합니다.");
+}
+// 정기예약 "신청"에만 적용되는 기간 규칙 (최대 1년).
+function assertRecurringPeriod(periodStart: string, periodEnd: string, pattern: RecurringPatternInput) {
+  const dates = enumerateRecurringDates(periodStart, periodEnd, pattern);
+  if (!dates.length || dates.length > 366) throw new DomainError("INVALID_CODE", "적용 기간과 반복 규칙을 확인해 주세요.");
+  if ((new Date(`${periodEnd}T00:00:00Z`).getTime() - new Date(`${periodStart}T00:00:00Z`).getTime()) / 86_400_000 > 366) throw new DomainError("INVALID_CODE", "정기예약 적용 기간은 최대 1년입니다.");
+  return dates;
+}
+// 관리자의 정기예약 "관리(변경)"는 업무시간·1년 제한 등 신청자용 정책 제약을 받지 않는다 —
+// 하루 범위를 벗어나지 않는지, 시작이 종료보다 빠른지 등 구조적으로 말이 되는지만 검증한다.
+function assertRecurringTimeManaged(startMinutes: number, endMinutes: number) {
+  if (!Number.isInteger(startMinutes) || !Number.isInteger(endMinutes) || startMinutes < 0 || endMinutes > 24 * 60 || startMinutes >= endMinutes) throw new DomainError("INVALID_CODE", "시작 시간은 종료 시간보다 빠르며 하루(00:00~24:00) 범위 안이어야 합니다.");
+}
+function assertRecurringPeriodManaged(periodStart: string, periodEnd: string, pattern: RecurringPatternInput) {
+  const dates = enumerateRecurringDates(periodStart, periodEnd, pattern);
+  if (!dates.length) throw new DomainError("INVALID_CODE", "적용 기간과 반복 규칙을 확인해 주세요.");
+  if (dates.length > 3660) throw new DomainError("INVALID_CODE", "반복 일정이 너무 많습니다. 기간을 나누어 등록해 주세요.");
+  return dates;
+}
+// 정기예약 승인/변경 시 패턴에 맞는 개별 회의실 예약(MeetingReservation)을 일괄 생성한다.
+async function createRecurringInstances(tx: Prisma.TransactionClient, projectId: string, actorId: string, recurringId: string, roomId: string, applicantId: string, purpose: string, dates: string[], startMinutes: number, endMinutes: number) {
+  const instances = dates.map((date) => ({ startAt: seoulDateTime(date, startMinutes), endAt: seoulDateTime(date, endMinutes) }));
+  for (const item of instances) await assertNoConflict(tx, roomId, item.startAt, item.endAt);
+  for (const item of instances) {
+    const row = await tx.meetingReservation.create({ data: { projectId, roomId, userId: applicantId, recurringId, startAt: item.startAt, endAt: item.endAt, purpose } });
+    await tx.meetingReservationChangeLog.create({ data: { reservationId: row.id, actorId, action: "CREATE", afterStart: row.startAt, afterEnd: row.endAt } });
+  }
+}
+// 정기예약 변경/삭제 시 이미 생성된 개별 예약을 취소하고 초대 메시지를 정리한다.
+async function cancelRecurringInstances(tx: Prisma.TransactionClient, actorId: string, recurringId: string) {
+  const rows = await tx.meetingReservation.findMany({ where: { recurringId, status: "CONFIRMED" } });
+  for (const row of rows) {
+    await tx.meetingReservation.update({ where: { id: row.id }, data: { status: "CANCELLED" } });
+    await tx.meetingReservationChangeLog.create({ data: { reservationId: row.id, actorId, action: "CANCEL", beforeStart: row.startAt, beforeEnd: row.endAt } });
+    await tx.message.deleteMany({ where: { meetingReservationId: row.id, messageType: "MEETING_INVITATION" } });
+  }
+}
 export async function createRecurringMeeting(projectId: string, userId: string, input: unknown) {
   const data = recurringSchema.parse(input), pattern = recurringPattern(data); await assertRoomAvailable(projectId, data.roomId);
-  if (data.startMinutes < MEETING_DAY_START || data.endMinutes > MEETING_DAY_END || data.startMinutes >= data.endMinutes || data.startMinutes % MEETING_SLOT_MINUTES || data.endMinutes % MEETING_SLOT_MINUTES) throw new DomainError("INVALID_CODE", "반복 시간은 09:00~19:00 사이 30분 단위여야 합니다.");
-  const dates = enumerateRecurringDates(data.periodStart, data.periodEnd, pattern); if (!dates.length || dates.length > 366) throw new DomainError("INVALID_CODE", "적용 기간과 반복 규칙을 확인해 주세요.");
-  if ((new Date(`${data.periodEnd}T00:00:00Z`).getTime() - new Date(`${data.periodStart}T00:00:00Z`).getTime()) / 86_400_000 > 366) throw new DomainError("INVALID_CODE", "정기예약 적용 기간은 최대 1년입니다.");
+  assertRecurringTime(data.startMinutes, data.endMinutes);
+  assertRecurringPeriod(data.periodStart, data.periodEnd, pattern);
   return getPrisma().recurringMeetingReservation.create({ data: { projectId, roomId: data.roomId, applicantId: userId, patternType: data.patternType, patternDetail: pattern.patternDetail, startMinutes: data.startMinutes, endMinutes: data.endMinutes, periodStart: new Date(`${data.periodStart}T00:00:00Z`), periodEnd: new Date(`${data.periodEnd}T00:00:00Z`), purpose: data.purpose } });
 }
 export async function listRecurringMeetings(projectId: string, userId: string, isAdmin: boolean) {
   return getPrisma().recurringMeetingReservation.findMany({ where: { projectId, ...(isAdmin ? {} : { applicantId: userId }) }, include: { room: true, applicant: { select: { name: true, department: true } } }, orderBy: { createdAt: "desc" } });
+}
+
+export type RecurringMeetingFilters = { status?: string; roomId?: string; applicantId?: string; page?: number; pageSize?: number };
+
+// 정기예약 관리 화면 전용 — 상태/회의실/신청자 검색과 표준 페이징을 지원한다.
+export async function listRecurringMeetingsPaged(projectId: string, filters: RecurringMeetingFilters = {}) {
+  const statusValues = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"];
+  // 삭제(CANCELLED)된 정기예약은 기본 목록에서는 숨기고, "삭제" 상태로 직접 조회할 때만 보여준다.
+  const where = {
+    projectId,
+    ...(filters.status && statusValues.includes(filters.status) ? { status: filters.status as "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" } : { status: { not: "CANCELLED" as const } }),
+    ...(filters.roomId ? { roomId: filters.roomId } : {}),
+    ...(filters.applicantId ? { applicantId: filters.applicantId } : {}),
+  };
+  const prisma = getPrisma();
+  const total = await prisma.recurringMeetingReservation.count({ where });
+  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, filters.page ?? 1));
+  const rows = await prisma.recurringMeetingReservation.findMany({ where, include: { room: true, applicant: { select: { name: true, department: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize });
+  return { rows, total, page, pageSize, totalPages };
+}
+
+// 정기예약 관리 화면의 "신청자" 검색 옵션 — 실제로 신청 이력이 있는 사용자만 노출한다.
+export async function listRecurringMeetingApplicants(projectId: string) {
+  const rows = await getPrisma().recurringMeetingReservation.findMany({ where: { projectId }, distinct: ["applicantId"], select: { applicant: { select: { id: true, name: true, department: true } } }, orderBy: { applicantId: "asc" } });
+  return rows.map((row) => row.applicant).sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 export async function reviewRecurringMeeting(projectId: string, actorId: string, id: string, action: "approve" | "reject", reason?: string) {
   await assertManager(projectId, actorId); const prisma = getPrisma();
@@ -181,15 +253,43 @@ export async function reviewRecurringMeeting(projectId: string, actorId: string,
     if (!rows.length) throw new DomainError("NOT_FOUND", "정기예약 신청을 찾을 수 없습니다.");
     const request = await tx.recurringMeetingReservation.findUniqueOrThrow({ where: { id } }); if (request.status !== "PENDING") throw new DomainError("INVALID_STATE", "이미 처리된 신청입니다.");
     if (action === "reject") { if (!reason?.trim()) throw new DomainError("INVALID_CODE", "반려 사유를 입력해 주세요."); return tx.recurringMeetingReservation.update({ where: { id }, data: { status: "REJECTED", reviewedBy: actorId, reviewedAt: new Date(), rejectReason: reason.trim() } }); }
-    const detail = request.patternDetail as { daysOfWeek?: number[]; dayOfMonth?: number };
-    let pattern: RecurringPatternInput;
-    if (request.patternType === "WEEKLY") pattern = { patternType: "WEEKLY", patternDetail: { daysOfWeek: detail.daysOfWeek ?? [] } };
-    else if (request.patternType === "MONTHLY") pattern = { patternType: "MONTHLY", patternDetail: { dayOfMonth: detail.dayOfMonth ?? 0 } };
-    else pattern = { patternType: "DAILY", patternDetail: {} };
+    const pattern = patternFromRow(request);
     const dates = enumerateRecurringDates(request.periodStart.toISOString().slice(0, 10), request.periodEnd.toISOString().slice(0, 10), pattern);
-    const instances = dates.map((date) => ({ startAt: seoulDateTime(date, request.startMinutes), endAt: seoulDateTime(date, request.endMinutes) }));
-    for (const item of instances) await assertNoConflict(tx, request.roomId, item.startAt, item.endAt);
-    for (const item of instances) { const row = await tx.meetingReservation.create({ data: { projectId, roomId: request.roomId, userId: request.applicantId, recurringId: id, startAt: item.startAt, endAt: item.endAt, purpose: request.purpose } }); await tx.meetingReservationChangeLog.create({ data: { reservationId: row.id, actorId, action: "CREATE", afterStart: row.startAt, afterEnd: row.endAt } }); }
+    await createRecurringInstances(tx, projectId, actorId, id, request.roomId, request.applicantId, request.purpose, dates, request.startMinutes, request.endMinutes);
     return tx.recurringMeetingReservation.update({ where: { id }, data: { status: "APPROVED", reviewedBy: actorId, reviewedAt: new Date() } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+}
+export async function updateRecurringMeeting(projectId: string, actorId: string, id: string, input: unknown) {
+  await assertManager(projectId, actorId);
+  const data = recurringSchema.parse(input), pattern = recurringPattern(data);
+  await assertRoomAvailable(projectId, data.roomId);
+  assertRecurringTimeManaged(data.startMinutes, data.endMinutes);
+  const dates = assertRecurringPeriodManaged(data.periodStart, data.periodEnd, pattern);
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM recurring_meeting_reservations WHERE id=${id} AND "projectId"=${projectId} FOR UPDATE`;
+    if (!rows.length) throw new DomainError("NOT_FOUND", "정기예약을 찾을 수 없습니다.");
+    const current = await tx.recurringMeetingReservation.findUniqueOrThrow({ where: { id } });
+    if (current.status !== "PENDING" && current.status !== "APPROVED") throw new DomainError("INVALID_STATE", "반려 또는 삭제된 정기예약은 변경할 수 없습니다.");
+    if (current.status === "APPROVED") {
+      await cancelRecurringInstances(tx, actorId, id);
+      await createRecurringInstances(tx, projectId, actorId, id, data.roomId, current.applicantId, data.purpose, dates, data.startMinutes, data.endMinutes);
+    }
+    const updated = await tx.recurringMeetingReservation.update({ where: { id }, data: { roomId: data.roomId, patternType: data.patternType, patternDetail: pattern.patternDetail, startMinutes: data.startMinutes, endMinutes: data.endMinutes, periodStart: new Date(`${data.periodStart}T00:00:00Z`), periodEnd: new Date(`${data.periodEnd}T00:00:00Z`), purpose: data.purpose } });
+    await writeAuditLog(projectId, actorId, "RECURRING_MEETING_UPDATE", "recurring_meeting_reservations", id, current, updated);
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+}
+export async function deleteRecurringMeeting(projectId: string, actorId: string, id: string) {
+  await assertManager(projectId, actorId); const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM recurring_meeting_reservations WHERE id=${id} AND "projectId"=${projectId} FOR UPDATE`;
+    if (!rows.length) throw new DomainError("NOT_FOUND", "정기예약을 찾을 수 없습니다.");
+    const current = await tx.recurringMeetingReservation.findUniqueOrThrow({ where: { id } });
+    if (current.status === "CANCELLED") return current;
+    if (current.status === "APPROVED") await cancelRecurringInstances(tx, actorId, id);
+    const updated = await tx.recurringMeetingReservation.update({ where: { id }, data: { status: "CANCELLED" } });
+    await writeAuditLog(projectId, actorId, "RECURRING_MEETING_DELETE", "recurring_meeting_reservations", id, current, updated);
+    return updated;
+  });
 }

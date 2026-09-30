@@ -1,7 +1,7 @@
 "use client";
 
 import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Legend, LinearScale, Tooltip, type ChartType, type LegendItem } from "chart.js";
-import { cssVar, themeColor, useThemedChart } from "@/components/chart-theme";
+import { cssVar, isDarkTheme, themeColor, useThemedChart } from "@/components/chart-theme";
 
 type CenterTextOptions = { text: string; subtext?: string; color: string; subColor: string; font: string };
 declare module "chart.js" {
@@ -109,46 +109,259 @@ export function WbsProgressChart({ stages }: { stages: WbsStageProgress[] }) {
   return <div className="domain-chart" style={{ height: DOMAIN_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`Stage별 계획 대비 실적 막대 그래프, ${stages.length}개 Stage`} /></div>;
 }
 
-// 완료·진행중·지연을 한 막대에 이어 붙여(누적) 한 줄로 보여준다.
+function drawRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | number[]) {
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    const radii = typeof r === "number" ? [r, r, r, r] : [r[0] || 0, r[1] || 0, r[2] || 0, r[3] || 0];
+    const [tl, tr, br, bl] = radii;
+    ctx.beginPath();
+    ctx.moveTo(x + tl, y);
+    ctx.lineTo(x + w - tr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + tr);
+    ctx.lineTo(x + w, y + h - br);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+    ctx.lineTo(x + bl, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - bl);
+    ctx.lineTo(x, y + tl);
+    ctx.quadraticCurveTo(x, y, x + tl, y);
+    ctx.closePath();
+  }
+}
+
+// 나의 WBS 현황: 10% 단위(10-Segment Block)로 채워지는 chart.js 기반 게이지형 배터리 그래프
 export function WbsOwnerStatusChart({ completed, inProgress, delayed }: { completed: number; inProgress: number; delayed: number }) {
   const canvasRef = useThemedChart((canvas) => {
-    const foreground = themeColor("--foreground", "#ffffff"), muted = themeColor("--muted-foreground", "#d4d4d4"), border = cssVar("--border"), card = cssVar("--card");
-    const success = cssVar("--chart-success"), plannedColor = cssVar("--chart-planned"), destructive = cssVar("--chart-destructive");
+    const isDark = isDarkTheme();
+    const foreground = themeColor("--foreground", "#ffffff");
+    const muted = themeColor("--muted-foreground", "#94a3b8");
+    const border = cssVar("--border");
+    const card = cssVar("--card");
+    const mono = cssVar("--font-mono");
+    const success = cssVar("--chart-success") || "#22c55e";
+    const plannedColor = cssVar("--chart-planned") || "#3b82f6";
+    const destructive = cssVar("--chart-destructive") || "#ef4444";
+    const casingBorder = isDark ? "#64748b" : "#94a3b8";
+    const casingBg = isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)";
+    const emptyCellBg = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)";
+    const emptyCellBorder = isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.1)";
+
+    const total = completed + inProgress + delayed;
+    const maxVal = Math.max(total, 1);
+    const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // 10칸(10% 단위) 중 각 상태별 할당 칸 수 연산
+    let compCells = total > 0 ? Math.round((completed / total) * 10) : 0;
+    if (completed > 0 && compCells === 0) compCells = 1;
+    let delCells = total > 0 ? Math.round((delayed / total) * 10) : 0;
+    if (delayed > 0 && delCells === 0) delCells = 1;
+    let progCells = total > 0 ? Math.round((inProgress / total) * 10) : 0;
+    if (inProgress > 0 && progCells === 0) progCells = 1;
+
+    while (compCells + progCells + delCells > 10) {
+      if (progCells > 1) progCells--;
+      else if (delCells > 1) delCells--;
+      else if (compCells > 1) compCells--;
+      else break;
+    }
+
+    const batteryPlugin = {
+      id: "tenSegmentBattery",
+      afterDatasetsDraw(chart: Chart) {
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return;
+        const yScale = chart.scales.y;
+        if (!yScale) return;
+        const yCenter = yScale.getPixelForValue(0);
+        const bodyHeight = 44;
+        const bodyTop = yCenter - bodyHeight / 2;
+        const bodyLeft = chartArea.left;
+        const bodyWidth = chartArea.right - chartArea.left;
+
+        ctx.save();
+
+        // 1. 배터리 본체 쉘 배경
+        ctx.beginPath();
+        drawRoundRect(ctx, bodyLeft, bodyTop, bodyWidth, bodyHeight, 8);
+        ctx.fillStyle = casingBg;
+        ctx.fill();
+
+        // 2. 우측 양극 단자 캡 (Terminal Cap)
+        const tipWidth = 8;
+        const tipHeight = 20;
+        const tipX = chartArea.right + 2;
+        const tipY = yCenter - tipHeight / 2;
+        ctx.beginPath();
+        drawRoundRect(ctx, tipX, tipY, tipWidth, tipHeight, [0, 4, 4, 0]);
+        ctx.fillStyle = casingBorder;
+        ctx.fill();
+
+        // 3. 10% 단위 10개 독립 세그먼트 셀 (10-Segment Cells) 렌더링
+        const NUM_CELLS = 10;
+        const padX = 6;
+        const padY = 5;
+        const innerX = bodyLeft + padX;
+        const innerY = bodyTop + padY;
+        const innerW = bodyWidth - padX * 2;
+        const innerH = bodyHeight - padY * 2;
+        const gap = innerW > 600 ? 4 : 3;
+        const cellW = (innerW - gap * (NUM_CELLS - 1)) / NUM_CELLS;
+
+        for (let i = 0; i < NUM_CELLS; i++) {
+          const cX = innerX + i * (cellW + gap);
+          const cY = innerY;
+          const isFirst = i === 0;
+          const isLast = i === NUM_CELLS - 1;
+          const radii: number[] = isFirst ? [4, 2, 2, 4] : isLast ? [2, 4, 4, 2] : [2, 2, 2, 2];
+
+          // 상태별 셀 색상 결정
+          let cellColor: string;
+          let isFilled = false;
+          if (i < compCells) {
+            cellColor = success;
+            isFilled = true;
+          } else if (i < compCells + progCells) {
+            cellColor = plannedColor;
+            isFilled = true;
+          } else if (i < compCells + progCells + delCells) {
+            cellColor = destructive;
+            isFilled = true;
+          } else {
+            cellColor = emptyCellBg;
+            isFilled = false;
+          }
+
+          // 셀 그리기
+          ctx.beginPath();
+          drawRoundRect(ctx, cX, cY, cellW, innerH, radii);
+          ctx.fillStyle = cellColor;
+          ctx.fill();
+
+          if (!isFilled) {
+            // 빈 셀은 옅은 테두리 선으로 10칸 슬롯 형태 유지
+            ctx.strokeStyle = emptyCellBorder;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          } else {
+            // 채워진 셀에 미세한 상단 입체 하이라이트 부여
+            ctx.save();
+            ctx.beginPath();
+            drawRoundRect(ctx, cX, cY, cellW, Math.max(3, innerH * 0.3), [radii[0], radii[1], 0, 0]);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        // 4. 배터리 본체 외곽 테두리 (2.5px 둥근 모서리)
+        ctx.beginPath();
+        drawRoundRect(ctx, bodyLeft, bodyTop, bodyWidth, bodyHeight, 8);
+        ctx.strokeStyle = casingBorder;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // 5. 중앙 충전율(%) 및 건수 텍스트 오버레이 (고대비 배지 처리)
+        const centerX = bodyLeft + bodyWidth / 2;
+        const text = total > 0 ? `${completionPct}% (${completed}/${total}건)` : "0% (0건)";
+        ctx.font = `700 13px ${mono || "ui-monospace, monospace"}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        // 텍스트 배경 섀도우를 주어 블록 색상 위에서도 100% 선명하게 읽히도록 보장
+        ctx.shadowColor = isDark ? "rgba(0, 0, 0, 0.9)" : "rgba(255, 255, 255, 0.95)";
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = foreground;
+        ctx.fillText(text, centerX, yCenter);
+
+        ctx.restore();
+      },
+    };
+
     return new Chart(canvas, {
       type: "bar",
       data: {
         labels: [""],
         datasets: [
-          { label: "완료", data: [completed], backgroundColor: success, maxBarThickness: 48 },
-          { label: "진행중", data: [inProgress], backgroundColor: plannedColor, maxBarThickness: 48 },
-          { label: "지연", data: [delayed], backgroundColor: destructive, maxBarThickness: 48 },
+          // 기본 바는 투명하게 처리하여 10개 세그먼트 셀이 돋보이게 하고, Chart.js 툴팁/범례 인터랙션 유지
+          { label: "완료", data: [completed], backgroundColor: "transparent", barThickness: 34 },
+          { label: "진행중", data: [inProgress], backgroundColor: "transparent", barThickness: 34 },
+          { label: "지연", data: [delayed], backgroundColor: "transparent", barThickness: 34 },
         ],
       },
+      plugins: [batteryPlugin],
       options: {
         indexAxis: "y",
-        responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        layout: {
+          padding: {
+            left: 12,
+            right: 28, // 우측 배터리 캡을 위한 여백 확보
+            top: 14,
+            bottom: 6,
+          },
+        },
         scales: {
-          x: { stacked: true, beginAtZero: true, grid: { color: border }, ticks: { color: muted, precision: 0, font: { size: 10 } } },
-          y: { stacked: true, grid: { display: false }, ticks: { display: false } },
+          x: {
+            stacked: true,
+            min: 0,
+            max: maxVal,
+            grid: { display: false },
+            ticks: { display: false },
+            border: { display: false },
+          },
+          y: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { display: false },
+            border: { display: false },
+          },
         },
         plugins: {
           legend: {
             position: "bottom",
             labels: {
-              color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect", font: { size: 11 },
+              color: foreground,
+              boxWidth: 10,
+              boxHeight: 10,
+              usePointStyle: true,
+              pointStyle: "rect",
+              font: { size: 11 },
               generateLabels: () => [
-                { text: `완료 ${completed}건`, fillStyle: success, strokeStyle: success, fontColor: foreground, pointStyle: "rect", index: 0 },
-                { text: `진행중 ${inProgress}건`, fillStyle: plannedColor, strokeStyle: plannedColor, fontColor: foreground, pointStyle: "rect", index: 1 },
-                { text: `지연 ${delayed}건`, fillStyle: destructive, strokeStyle: destructive, fontColor: foreground, pointStyle: "rect", index: 2 },
+                { text: `완료 ${completed}건 (${compCells * 10}%)`, fillStyle: success, strokeStyle: success, fontColor: foreground, pointStyle: "rect", index: 0 },
+                { text: `진행중 ${inProgress}건 (${progCells * 10}%)`, fillStyle: plannedColor, strokeStyle: plannedColor, fontColor: foreground, pointStyle: "rect", index: 1 },
+                { text: `지연 ${delayed}건 (${delCells * 10}%)`, fillStyle: destructive, strokeStyle: destructive, fontColor: foreground, pointStyle: "rect", index: 2 },
               ],
             },
           },
-          tooltip: { backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}건` } },
+          tooltip: {
+            backgroundColor: card,
+            titleColor: foreground,
+            bodyColor: foreground,
+            borderColor: border,
+            borderWidth: 1,
+            padding: 8,
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}건 (${total > 0 ? Math.round(((ctx.parsed.x as number) / total) * 100) : 0}%)`,
+            },
+          },
         },
       },
     });
   }, [completed, inProgress, delayed]);
-  return <div className="domain-chart" style={{ height: MY_WBS_STATUS_CHART_HEIGHT }}><canvas ref={canvasRef} role="img" aria-label={`나의 WBS 현황 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건, 하나의 막대에 표시`} /></div>;
+
+  const total = completed + inProgress + delayed;
+  const pctText = total > 0 ? Math.round((completed / total) * 100) : 0;
+  return (
+    <div className="domain-chart" style={{ height: MY_WBS_STATUS_CHART_HEIGHT }}>
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={`나의 WBS 현황 10단계 게이지 배터리 그래프: 완료 ${completed}건, 진행중 ${inProgress}건, 지연 ${delayed}건, 충전율 ${pctText}%`}
+      />
+    </div>
+  );
 }
 
 export function ManagementBandChart({ red, yellow, green }: { red: number; yellow: number; green: number }) {

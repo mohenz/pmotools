@@ -1,6 +1,8 @@
+import React from "react";
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
-import { WBS_ITEM_STATUSES } from "@/lib/domain/wbs";
+import { WbsExcludeCompletedToggle } from "@/components/WbsExcludeCompletedToggle";
+import { CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, WBS_ITEM_STATUSES } from "@/lib/domain/wbs";
 import { WBS_EXCEL_HEADERS as HEADERS, WBS_EXCEL_ROLE_NAMES } from "@/lib/server/wbs";
 import type { WbsExcelListResult } from "@/lib/server/wbs";
 
@@ -22,8 +24,26 @@ type Filters = {
   actualStartDateFrom: string; actualStartDateTo: string; actualDueDateFrom: string; actualDueDateTo: string;
   delayed: "" | "y" | "n";
   stage: string; status: "" | "not_started" | "in_progress" | "completed" | "on_hold";
+  excludeCompleted: boolean;
+  cp?: boolean; cpMinWorkingDays?: number;
 };
-function queryString(filters: Filters, overrides: Record<string, string | number | undefined> = {}) { const p = new URLSearchParams(); Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => { if (value != null && value !== "" && !(key === "page" && value === 1) && !(key === "pageSize" && value === 10)) p.set(key, String(value)); }); return p.toString(); }
+function queryString(filters: Filters, overrides: Record<string, string | number | boolean | undefined> = {}) {
+  const p = new URLSearchParams();
+  Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => {
+    if (value != null && value !== "" && !(key === "page" && value === 1) && !(key === "pageSize" && value === 50)) {
+      if (key === "excludeCompleted") {
+        p.set(key, value ? "y" : "n");
+      } else if (key === "cp") {
+        if (value) p.set(key, "y");
+      } else if (key === "cpMinWorkingDays") {
+        // 서버가 공통코드에서 매번 다시 읽는 값이라 URL에 싣지 않는다.
+      } else {
+        p.set(key, String(value));
+      }
+    }
+  });
+  return p.toString();
+}
 
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
 const pct = (value: number | null) => (value === null ? "" : `${Math.round(value * 100)}%`);
@@ -31,6 +51,7 @@ const pct = (value: number | null) => (value === null ? "" : `${Math.round(value
 const displayHeader = (header: string) => header.replace("(입력불필요)", "").replace("(진도관리대상-4레벨)", "");
 
 export function WbsListScreen({ result, filters }: { result: WbsExcelListResult; filters: Filters }) {
+  const cpMinWorkingDays = filters.cpMinWorkingDays ?? CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS;
   const pageLinkCount = Math.min(10, result.totalPages);
   const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
   const pageNumbers = Array.from({ length: pageLinkCount }, (_, index) => firstPage + index);
@@ -41,13 +62,15 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
         <details className="wbs-filter-panel" open>
           <summary>검색조건</summary>
           <form className="filters inline-filter" method="get">
-            {filters.pageSize !== 10 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
+            {filters.pageSize !== 50 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
             <div className="filter-row">
               <input name="q" defaultValue={filters.q} placeholder="Task 코드·이름 검색" aria-label="Task 검색" />
               <input name="assignee" defaultValue={filters.assignee} placeholder="담당자 검색" aria-label="담당자 검색" />
               <select name="delayed" defaultValue={filters.delayed} aria-label="지연여부"><option value="">전체 지연여부</option><option value="y">지연</option><option value="n">정상</option></select>
-              <input name="stage" defaultValue={filters.stage} placeholder="Stage 검색" aria-label="Stage 검색" />
+              <select name="stage" defaultValue={filters.stage} aria-label="Stage 검색"><option value="">전체 Stage</option>{result.stages?.map((stage) => <option value={stage} key={stage}>{stage}</option>)}</select>
               <select name="status" defaultValue={filters.status} aria-label="상태"><option value="">전체 상태</option>{WBS_ITEM_STATUSES.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}</select>
+              <WbsExcludeCompletedToggle defaultChecked={filters.excludeCompleted} key={String(filters.excludeCompleted)} />
+              <label className="wbs-exclude-completed-toggle" title={`계획소요일(영업일)이 ${cpMinWorkingDays}일 이상인 Task만 작업기간이 긴 순으로 조회`}><input type="checkbox" name="cp" value="y" defaultChecked={filters.cp} aria-label="CP 대상만 조회" /><span>CP 대상({cpMinWorkingDays}일 이상)</span></label>
             </div>
             <div className="filter-row filter-row-dates">
               <fieldset className="wbs-date-range"><legend>계획시작일</legend><input type="date" name="startDateFrom" defaultValue={filters.startDateFrom} aria-label="계획시작일 시작일" /><span>~</span><input type="date" name="startDateTo" defaultValue={filters.startDateTo} aria-label="계획시작일 종료일" /></fieldset>
@@ -56,7 +79,6 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
               <fieldset className="wbs-date-range"><legend>실적종료일</legend><input type="date" name="actualDueDateFrom" defaultValue={filters.actualDueDateFrom} aria-label="실적종료일 시작일" /><span>~</span><input type="date" name="actualDueDateTo" defaultValue={filters.actualDueDateTo} aria-label="실적종료일 종료일" /></fieldset>
               <button className="button secondary" type="submit">조회</button>
               <Link className="button ghost" href="/wbs">초기화</Link>
-              <Link className="button primary filter-primary-action" href="/wbs/new">+ 신규 등록</Link>
             </div>
           </form>
         </details>
@@ -87,7 +109,7 @@ export function WbsListScreen({ result, filters }: { result: WbsExcelListResult;
             <td>{item.isDelayed ? <span className="badge band-red">지연</span> : ""}</td>
           </ClickableTableRow>)}</tbody></table></div> : <div className="empty">등록된 WBS 항목이 없습니다.</div>}
       </section>
-      {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동"><form className="page-size-form" method="get">{filters.q && <input type="hidden" name="q" value={filters.q} />}{filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}{filters.startDateFrom && <input type="hidden" name="startDateFrom" value={filters.startDateFrom} />}{filters.startDateTo && <input type="hidden" name="startDateTo" value={filters.startDateTo} />}{filters.dueDateFrom && <input type="hidden" name="dueDateFrom" value={filters.dueDateFrom} />}{filters.dueDateTo && <input type="hidden" name="dueDateTo" value={filters.dueDateTo} />}{filters.actualStartDateFrom && <input type="hidden" name="actualStartDateFrom" value={filters.actualStartDateFrom} />}{filters.actualStartDateTo && <input type="hidden" name="actualStartDateTo" value={filters.actualStartDateTo} />}{filters.actualDueDateFrom && <input type="hidden" name="actualDueDateFrom" value={filters.actualDueDateFrom} />}{filters.actualDueDateTo && <input type="hidden" name="actualDueDateTo" value={filters.actualDueDateTo} />}{filters.delayed && <input type="hidden" name="delayed" value={filters.delayed} />}{filters.stage && <input type="hidden" name="stage" value={filters.stage} />}{filters.status && <input type="hidden" name="status" value={filters.status} />}<label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="10">10개</option><option value="20">20개</option><option value="40">40개</option><option value="60">60개</option><option value="80">80개</option><option value="100">100개</option><option value="all">전체</option></select></label><button className="button secondary" type="submit">적용</button></form><div className="page-links">{result.page > 1 && <Link href={`/wbs?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}{pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/wbs?${queryString(filters, { page })}`} key={page}>{page}</Link>)}{result.page < result.totalPages && <Link href={`/wbs?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}</div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}
+      {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동"><form className="page-size-form" method="get">{filters.q && <input type="hidden" name="q" value={filters.q} />}{filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}{filters.startDateFrom && <input type="hidden" name="startDateFrom" value={filters.startDateFrom} />}{filters.startDateTo && <input type="hidden" name="startDateTo" value={filters.startDateTo} />}{filters.dueDateFrom && <input type="hidden" name="dueDateFrom" value={filters.dueDateFrom} />}{filters.dueDateTo && <input type="hidden" name="dueDateTo" value={filters.dueDateTo} />}{filters.actualStartDateFrom && <input type="hidden" name="actualStartDateFrom" value={filters.actualStartDateFrom} />}{filters.actualStartDateTo && <input type="hidden" name="actualStartDateTo" value={filters.actualStartDateTo} />}{filters.actualDueDateFrom && <input type="hidden" name="actualDueDateFrom" value={filters.actualDueDateFrom} />}{filters.actualDueDateTo && <input type="hidden" name="actualDueDateTo" value={filters.actualDueDateTo} />}{filters.delayed && <input type="hidden" name="delayed" value={filters.delayed} />}{filters.stage && <input type="hidden" name="stage" value={filters.stage} />}{filters.status && <input type="hidden" name="status" value={filters.status} />}<input type="hidden" name="excludeCompleted" value={filters.excludeCompleted ? "y" : "n"} />{filters.cp && <input type="hidden" name="cp" value="y" />}<label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="50">50개</option><option value="100">100개</option><option value="200">200개</option></select></label><button className="button secondary" type="submit">적용</button></form><div className="page-links">{result.page > 1 && <Link href={`/wbs?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}{pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/wbs?${queryString(filters, { page })}`} key={page}>{page}</Link>)}{result.page < result.totalPages && <Link href={`/wbs?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}</div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}
     </div>
   </>;
 }

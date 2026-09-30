@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayCompletion, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
+import { actualProgress, childPath, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayCompletion, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
 
 describe("nextSegment", () => {
   it("starts a fresh sibling group at 0001", () => {
@@ -194,5 +194,24 @@ describe("rollupProgress", () => {
     const result = rollupProgress([{ weight: 0, planned: 1, actual: 1 }, { weight: 2, planned: 0.4, actual: 0.2 }]);
     expect(result.planned).toBeCloseTo(0.4);
     expect(result.actual).toBeCloseTo(0.2);
+  });
+});
+
+describe("CP 대상 조회", () => {
+  it("parses the common code threshold with a 5-day fallback", () => {
+    expect(parseCriticalPathMinWorkingDays("7")).toBe(7);
+    expect(parseCriticalPathMinWorkingDays(" 10 ")).toBe(10);
+    expect(parseCriticalPathMinWorkingDays(undefined)).toBe(5);
+    expect(parseCriticalPathMinWorkingDays("")).toBe(5);
+    expect(parseCriticalPathMinWorkingDays("5일")).toBe(5);
+    expect(parseCriticalPathMinWorkingDays("0")).toBe(5);
+    expect(parseCriticalPathMinWorkingDays("2.5")).toBe(5);
+  });
+
+  it("targets leaf tasks whose planned working days reach the threshold", () => {
+    expect(isCriticalPathTarget({ isLeaf: true, workingDays: 5 }, 5)).toBe(true);
+    expect(isCriticalPathTarget({ isLeaf: true, workingDays: 4 }, 5)).toBe(false);
+    expect(isCriticalPathTarget({ isLeaf: true, workingDays: null }, 5)).toBe(false);
+    expect(isCriticalPathTarget({ isLeaf: false, workingDays: 30 }, 5)).toBe(false);
   });
 });

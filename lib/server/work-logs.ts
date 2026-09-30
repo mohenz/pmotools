@@ -17,6 +17,8 @@ const workLogBaseSchema = z.object({
   wbsNumber: z.string().trim().max(100).default(""),
   status: statusSchema,
   workContent: z.string().trim().min(1).max(5000),
+  deliverableName: z.string().trim().max(200).default(""),
+  deliverableExtensionCodeId: z.union([z.string().uuid(), z.literal("")]).default(""),
   referenceContent: z.string().trim().max(5000).default(""),
   notes: z.string().trim().max(2000).default(""),
 });
@@ -42,7 +44,7 @@ export async function getWorkLogManagementOptions(projectId: string, userId: str
     select: { id: true, code: true, label: true },
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
   });
-  if (!groups.length) throw new DomainError("FORBIDDEN", "업무일지 관리 권한이 없습니다.");
+  if (!groups.length) throw new DomainError("FORBIDDEN", "WBS상세내용 관리 권한이 없습니다.");
   const groupIds = groups.map((group) => group.id);
   const assignees = await getPrisma().user.findMany({
     where: { deletedAt: null, groupMemberships: { some: { groupId: { in: groupIds } } } },
@@ -68,6 +70,12 @@ export async function listManagedWorkLogs(projectId: string, userId: string, fil
 async function assertWorkGroup(projectId: string, groupId: string) {
   const group = await getPrisma().groups.findFirst({ where: { id: groupId, projectId, groupType: "WORK_MODULE", isActive: true }, select: { id: true } });
   if (!group) throw new DomainError("INVALID_CODE", "유효한 업무그룹을 선택해 주세요.");
+}
+
+async function assertDeliverableExtensionCode(projectId: string, codeId: string) {
+  if (!codeId) return;
+  const code = await getPrisma().commonCode.findUnique({ where: { id: codeId } });
+  if (!code || code.projectId !== projectId || code.groupCode !== "deliverable_extension" || !code.isActive) throw new DomainError("INVALID_CODE", "선택한 산출물 확장자 공통코드를 사용할 수 없습니다.");
 }
 
 export async function getWorkLogIdentity(projectId: string, userId: string) {
@@ -110,7 +118,7 @@ export async function listWorkLogs(projectId: string, filters: WorkLogFilters = 
 }
 
 export async function getWorkLogDetail(projectId: string, id: string, viewerUserId: string) {
-  const row = await getPrisma().workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } }, include: { group: true, assignee: true } });
+  const row = await getPrisma().workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } }, include: { group: true, assignee: true, deliverableExtensionCode: true } });
   if (!row) return null;
   const role = await getMemberRole(projectId, viewerUserId);
   const canView = canViewWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) });
@@ -119,19 +127,20 @@ export async function getWorkLogDetail(projectId: string, id: string, viewerUser
   const wbsItem = WBS_CODE_RE.test(row.wbsNumber)
     ? await getPrisma().wbsItem.findFirst({ where: { projectId, path: pathFromCode(row.wbsNumber), archivedAt: null }, select: { id: true } })
     : null;
-  return { id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, assigneeUserId: row.assignee.userId, wbsNumber: row.wbsNumber, wbsItemId: wbsItem?.id ?? null, status: row.status, workContent: row.workContent, referenceContent: row.referenceContent, notes: row.notes, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), editable: row.assigneeId === viewerUserId, deletable: canDeleteWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) }) };
+  return { id: row.id, displayId: row.displayId, workDate: isoDate(row.workDate), groupId: row.groupId, groupLabel: row.group.label, assigneeId: row.assigneeId, assigneeName: row.assignee.name, assigneeUserId: row.assignee.userId, wbsNumber: row.wbsNumber, wbsItemId: wbsItem?.id ?? null, status: row.status, workContent: row.workContent, deliverableName: row.deliverableName ?? "", deliverableExtensionCodeId: row.deliverableExtensionCodeId ?? "", deliverableExtensionCode: row.deliverableExtensionCode?.code ?? "", referenceContent: row.referenceContent, notes: row.notes, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), editable: row.assigneeId === viewerUserId, deletable: canDeleteWorkLog({ viewerUserId, assigneeId: row.assigneeId, groupLeaderId: row.group.leaderId, manager: isManagerRole(role) }) };
 }
 
 export async function createWorkLog(projectId: string, userId: string, input: unknown) {
   const data = createWorkLogSchema.parse(input);
   const identity = await getWorkLogIdentity(projectId, userId);
   if (!identity.group) throw new DomainError("INVALID_CODE", "사용자 관리에서 업무그룹을 먼저 지정해 주세요.");
-  if (data.groupId !== identity.group.id) throw new DomainError("FORBIDDEN", "본인에게 지정된 업무그룹으로만 업무일지를 작성할 수 있습니다.");
+  if (data.groupId !== identity.group.id) throw new DomainError("FORBIDDEN", "본인에게 지정된 업무그룹으로만 WBS상세내용을 작성할 수 있습니다.");
   await assertWorkGroup(projectId, data.groupId);
+  await assertDeliverableExtensionCode(projectId, data.deliverableExtensionCodeId);
   const prisma = getPrisma();
   const row = await prisma.$transaction(async (tx) => {
     const sequence = await tx.workLogSequence.upsert({ where: { projectId }, create: { projectId, value: 1 }, update: { value: { increment: 1 } } });
-    return tx.workLog.create({ data: { displayId: `WL-${data.workDate.slice(0, 4)}-${String(sequence.value).padStart(6, "0")}`, projectId, assigneeId: userId, workDate: dateValue(data.workDate), groupId: data.groupId, wbsNumber: data.wbsNumber, status: data.status, workContent: data.workContent, referenceContent: data.referenceContent, notes: data.notes } });
+    return tx.workLog.create({ data: { displayId: `WL-${data.workDate.slice(0, 4)}-${String(sequence.value).padStart(6, "0")}`, projectId, assigneeId: userId, workDate: dateValue(data.workDate), groupId: data.groupId, wbsNumber: data.wbsNumber, status: data.status, workContent: data.workContent, deliverableName: data.deliverableName || null, deliverableExtensionCodeId: data.deliverableExtensionCodeId || null, referenceContent: data.referenceContent, notes: data.notes } });
   });
   await writeAuditLog(projectId, userId, "WORK_LOG_INSERT", "work_logs", row.id, null, { displayId: row.displayId, workDate: data.workDate });
   return { id: row.id, displayId: row.displayId };
@@ -140,12 +149,13 @@ export async function createWorkLog(projectId: string, userId: string, input: un
 export async function updateWorkLog(projectId: string, userId: string, id: string, input: unknown) {
   const data = updateWorkLogSchema.parse(input);
   await assertWorkGroup(projectId, data.groupId);
+  await assertDeliverableExtensionCode(projectId, data.deliverableExtensionCodeId);
   const prisma = getPrisma();
   const current = await prisma.workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } } });
-  if (!current) throw new DomainError("NOT_FOUND", "업무일지를 찾을 수 없습니다.");
-  if (current.assigneeId !== userId) throw new DomainError("FORBIDDEN", "본인이 작성한 업무일지만 수정할 수 있습니다.");
+  if (!current) throw new DomainError("NOT_FOUND", "WBS상세내용을 찾을 수 없습니다.");
+  if (current.assigneeId !== userId) throw new DomainError("FORBIDDEN", "본인이 작성한 WBS상세내용만 수정할 수 있습니다.");
   if (current.version !== data.version) throw new DomainError("VERSION_CONFLICT", "다른 화면에서 먼저 수정했습니다. 다시 확인해 주세요.");
-  const row = await prisma.workLog.update({ where: { id }, data: { workDate: dateValue(data.workDate), groupId: data.groupId, wbsNumber: data.wbsNumber, status: data.status, workContent: data.workContent, referenceContent: data.referenceContent, notes: data.notes, version: { increment: 1 } } });
+  const row = await prisma.workLog.update({ where: { id }, data: { workDate: dateValue(data.workDate), groupId: data.groupId, wbsNumber: data.wbsNumber, status: data.status, workContent: data.workContent, deliverableName: data.deliverableName || null, deliverableExtensionCodeId: data.deliverableExtensionCodeId || null, referenceContent: data.referenceContent, notes: data.notes, version: { increment: 1 } } });
   await writeAuditLog(projectId, userId, "WORK_LOG_UPDATE", "work_logs", row.id, current, data);
   return { id: row.id, version: row.version };
 }
@@ -154,9 +164,9 @@ export async function deleteWorkLog(projectId: string, userId: string, id: strin
   const data = deleteWorkLogSchema.parse(input);
   const prisma = getPrisma();
   const current = await prisma.workLog.findFirst({ where: { id, projectId, status: { not: "DELETED" } }, include: { group: { select: { leaderId: true } } } });
-  if (!current) throw new DomainError("NOT_FOUND", "업무일지를 찾을 수 없습니다.");
+  if (!current) throw new DomainError("NOT_FOUND", "WBS상세내용을 찾을 수 없습니다.");
   const role = await getMemberRole(projectId, userId);
-  if (!canDeleteWorkLog({ viewerUserId: userId, assigneeId: current.assigneeId, groupLeaderId: current.group.leaderId, manager: isManagerRole(role) })) throw new DomainError("FORBIDDEN", "업무일지 삭제 권한이 없습니다.");
+  if (!canDeleteWorkLog({ viewerUserId: userId, assigneeId: current.assigneeId, groupLeaderId: current.group.leaderId, manager: isManagerRole(role) })) throw new DomainError("FORBIDDEN", "WBS상세내용 삭제 권한이 없습니다.");
   if (current.version !== data.version) throw new DomainError("VERSION_CONFLICT", "다른 화면에서 먼저 수정했습니다. 다시 확인해 주세요.");
   const row = await prisma.workLog.update({ where: { id }, data: { status: "DELETED", version: { increment: 1 } } });
   await writeAuditLog(projectId, userId, "WORK_LOG_DELETE", "work_logs", id, { status: current.status, version: current.version }, { status: row.status, version: row.version });

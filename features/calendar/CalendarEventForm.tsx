@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { CommonCode } from "@/lib/server/common-codes";
 import type { CalendarEvent } from "@/lib/server/calendar";
 import type { ProjectMemberOption } from "@/lib/server/users";
@@ -12,8 +13,9 @@ function localInput(value: string | undefined, fallback: string) { if (!value) r
 function shifted(value: string, milliseconds: number) { const date = new Date(value); if (Number.isNaN(date.getTime())) return value; date.setTime(date.getTime() + milliseconds); const pad = (n: number) => String(n).padStart(2, "0"); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; }
 
 function plusOneHour(time: string) { const [h, m] = time.split(":").map(Number); const total = (h * 60 + m + 60) % 1440; return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; }
+function fmtKst(iso: string | null | undefined) { if (!iso) return "-"; return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso)); }
 
-export function CalendarEventForm({ areas, members, event, selectedDate, selectedTime, returnUrl, canWrite = true }: { areas: CommonCode[]; members: ProjectMemberOption[]; event?: CalendarEvent | null; selectedDate: string; selectedTime?: string; returnUrl: string; canWrite?: boolean }) {
+export function CalendarEventForm({ areas, members, event, selectedDate, selectedTime, returnUrl, canWrite = true, minuteHref }: { areas: CommonCode[]; members: ProjectMemberOption[]; event?: CalendarEvent | null; selectedDate: string; selectedTime?: string; returnUrl: string; canWrite?: boolean; minuteHref?: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const startTime = selectedTime ?? "09:00";
@@ -82,12 +84,19 @@ export function CalendarEventForm({ areas, members, event, selectedDate, selecte
     </div>
     <label className="toggle calendar-all-day"><input name="allDay" type="checkbox" defaultChecked={event?.allDay} /> 종일 일정</label>
     <label>설명<textarea name="description" rows={2} defaultValue={event?.description} /></label>
+    {event && (
+      <div className="form-grid triple">
+        <label className="readonly-field">등록자<span>{event.creatorName ?? "-"}</span></label>
+        <label className="readonly-field">등록일자<span>{fmtKst(event.createdAt)}</span></label>
+      </div>
+    )}
     </fieldset>
     <WarningDialog message={message} onClose={() => setMessage("")} />
     <div className="topbar-actions">
       {canWrite && <button className="button primary" disabled={pending}>{pending ? "저장 중…" : event ? "일정 수정" : "일정 등록"}</button>}
       {event && <button className="button secondary" type="button" onClick={() => router.push(returnUrl)}>{canWrite ? "수정 취소" : "닫기"}</button>}
       {event && canWrite && <button className="button secondary" type="button" onClick={remove} disabled={pending}>삭제</button>}
+      {minuteHref && <Link className="button secondary" href={minuteHref}>회의록 작성</Link>}
     </div>
   </form>;
 }

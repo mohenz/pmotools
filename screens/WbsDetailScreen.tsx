@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { WBS_ITEM_STATUS_LABEL } from "@/lib/domain/wbs";
+import { workLogStatusLabel } from "@/lib/domain/work-logs";
 import type { WbsExcelRow, WbsItemDetail } from "@/lib/server/wbs";
 import { WbsHistoryModal } from "@/features/wbs/WbsHistoryModal";
 
@@ -8,7 +9,7 @@ function percent(value: number | null) {
 }
 
 export function WbsDetailScreen({ detail, excelRow, viewer }: { detail: NonNullable<WbsItemDetail>; excelRow: WbsExcelRow | null; viewer: { userId: string; canViewAllWbs: boolean } }) {
-  const { item, parent, children, assignments, deliverable, events } = detail;
+  const { item, parent, children, assignments, deliverable, events, workLogs } = detail;
   const canView = (ownerUserId: string | null) => viewer.canViewAllWbs || ownerUserId === viewer.userId;
   return <>
     <header className="topbar"><div><p className="mono">{item.displayId} · {item.code}</p><h1>{item.name}</h1></div></header>
@@ -67,6 +68,34 @@ export function WbsDetailScreen({ detail, excelRow, viewer }: { detail: NonNulla
             </tbody>
           </table></div> : <div className="empty">등록된 Track이 없습니다.</div>}
         </section>
+
+        {workLogs && workLogs.length > 0 && <section className="panel compact">
+          <div className="panel-head"><h2>WBS상세내용</h2><span>{workLogs.length}건</span></div>
+          <div className="table-wrap"><table>
+            <thead>
+              <tr>
+                <th>번호</th>
+                <th>업무일자</th>
+                <th>업무그룹</th>
+                <th>담당자</th>
+                <th>진행상태</th>
+                <th>업무내용</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workLogs.map((log) => <tr key={log.id}>
+                <td className="mono"><Link className="table-link" href={`/work-logs/${log.id}`}>{log.displayId}</Link></td>
+                <td>{log.workDate}</td>
+                <td>{log.groupLabel}</td>
+                <td>{log.assigneeName}</td>
+                <td><span className={`badge ${log.status === "COMPLETED" ? "band-green" : "band-yellow"}`}>{workLogStatusLabel(log.status)}</span></td>
+                <td className="prewrap title-cell">{log.workContent}</td>
+                <td className="prewrap">{log.notes || "-"}</td>
+              </tr>)}
+            </tbody>
+          </table></div>
+        </section>}
 
         <article className="panel compact detail-summary">
           <div className="panel-head"><h2>산출물 검수</h2>{deliverable?.isOfficial && <span className="badge">공식</span>}</div>

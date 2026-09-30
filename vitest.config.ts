@@ -4,6 +4,9 @@ import { configDefaults, defineConfig } from "vitest/config";
 const root = fileURLToPath(new URL("./", import.meta.url));
 
 export default defineConfig({
+  esbuild: {
+    jsx: "automatic",
+  },
   test: {
     exclude: [...configDefaults.exclude, "tests-e2e/**", "tests-jest/**"],
     alias: [

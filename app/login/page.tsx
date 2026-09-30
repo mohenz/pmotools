@@ -8,21 +8,41 @@ import { PublicReadOnlyModal } from "@/components/PublicReadOnlyModal";
 import { WarningDialog } from "@/components/WarningDialog";
 
 const SAVED_USER_ID_KEY = "pmotools:savedUserId";
+const SAVED_PROJECT_CODE_KEY = "pmotools:savedProjectCode";
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const [idleNotice, setIdleNotice] = useState("");
   const [userId, setUserId] = useState("");
+  const [projectCode, setProjectCode] = useState("");
   const [rememberUserId, setRememberUserId] = useState(false);
+  const [projects, setProjects] = useState<{ code: string; name: string }[]>([]);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SAVED_USER_ID_KEY);
       if (saved) { setUserId(saved); setRememberUserId(true); }
     } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
-    if (params.get("reason") === "idle") setMessage("30분 동안 활동이 없어 자동으로 로그아웃되었습니다.");
+    if (params.get("reason") === "idle") {
+      setIdleNotice("1시간 동안 활동이 없어 자동으로 로그아웃되었습니다.");
+      // 안내를 한 번 보여준 뒤에는 URL에서 reason을 지워, 이 화면을 새로고침하거나
+      // 다시 방문해도 예전 로그아웃 사유가 계속 뜨지 않도록 한다.
+      router.replace("/login", { scroll: false });
+    }
+    fetch("/api/v1/public/projects")
+      .then((res) => res.json())
+      .then((payload) => {
+        const list: { code: string; name: string }[] = Array.isArray(payload?.data) ? payload.data : [];
+        setProjects(list);
+        try {
+          const savedProject = localStorage.getItem(SAVED_PROJECT_CODE_KEY);
+          if (savedProject && list.some((p) => p.code === savedProject)) setProjectCode(savedProject);
+        } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
+      })
+      .catch(() => setProjects([]));
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -33,16 +53,18 @@ function LoginForm() {
     const result = await signIn("credentials", {
       userId,
       password: String(data.get("password") ?? ""),
+      projectCode,
       redirect: false,
     });
     setPending(false);
     if (result?.error) {
-      setMessage("아이디 또는 비밀번호가 일치하지 않습니다.");
+      setMessage("아이디, 비밀번호 또는 선택한 프로젝트가 일치하지 않습니다.");
       return;
     }
     try {
       if (rememberUserId) localStorage.setItem(SAVED_USER_ID_KEY, userId);
       else localStorage.removeItem(SAVED_USER_ID_KEY);
+      localStorage.setItem(SAVED_PROJECT_CODE_KEY, projectCode);
     } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
     router.push(params.get("callbackUrl") ?? "/portfolio");
     router.refresh();
@@ -50,6 +72,14 @@ function LoginForm() {
 
   return (
     <form className="auth-form" onSubmit={submit}>
+      {idleNotice && <p className="auth-notice" role="status">{idleNotice}</p>}
+      <label>
+        프로젝트
+        <select name="projectCode" required value={projectCode} onChange={(event) => setProjectCode(event.target.value)}>
+          <option value="" disabled>프로젝트를 선택하세요</option>
+          {projects.map((project) => <option value={project.code} key={project.code}>{project.name}</option>)}
+        </select>
+      </label>
       <label>아이디<input name="userId" autoComplete="username" placeholder="아이디 입력" required maxLength={50} value={userId} onChange={(event) => setUserId(event.target.value)} /></label>
       <label>비밀번호<input name="password" type="password" autoComplete="current-password" placeholder="••••••••" required maxLength={100} /></label>
       <label className="toggle auth-remember"><input type="checkbox" checked={rememberUserId} onChange={(event) => setRememberUserId(event.target.checked)} /> 아이디 저장</label>
@@ -61,23 +91,38 @@ function LoginForm() {
 
 export default function LoginPage() {
   const [publicView, setPublicView] = useState<"calendar" | "meetrooms" | null>(null);
+  const [loginBgUrl, setLoginBgUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/v1/settings/login-image")
+      .then((res) => res.json())
+      .then((data) => { setLoginBgUrl(data.url ?? "/login-bg.png"); })
+      .catch(() => { setLoginBgUrl("/login-bg.png"); });
+  }, []);
   return (
-    <div className="auth-center">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <img src="/pmotools-logo-login.png" alt="PMOTOOLS" />
-        </div>
-        <div className="auth-divider" />
-        <Suspense fallback={null}>
-          <LoginForm />
-        </Suspense>
-        <div className="auth-footer-links">
-          <Link href="/signup">회원가입</Link>
-          <Link href="/reset-password">비밀번호 초기화</Link>
-        </div>
-        <div className="public-view-links" aria-label="로그인 없이 조회">
-          <button type="button" onClick={() => setPublicView("calendar")}>캘린더 조회</button>
-          <button type="button" onClick={() => setPublicView("meetrooms")}>회의실 예약현황 조회</button>
+    <div className="auth-split-layout">
+      {/* 왼쪽: 이미지 패널 (70%) */}
+      <div className="auth-image-panel" aria-hidden="true">
+        {loginBgUrl && <img src={loginBgUrl} alt="" className="auth-image-panel__img" />}
+      </div>
+      {/* 오른쪽: 로그인 패널 (30%) */}
+      <div className="auth-login-panel">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <img src="/pmotools-logo-login.png" alt="PMOTOOLS" />
+          </div>
+          <div className="auth-divider" />
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
+          <div className="auth-footer-links">
+            <Link href="/signup">회원가입</Link>
+            <Link href="/reset-password">비밀번호 초기화</Link>
+          </div>
+          <div className="public-view-links" aria-label="로그인 없이 조회">
+            <button type="button" onClick={() => setPublicView("calendar")}>캘린더 조회</button>
+            <button type="button" onClick={() => setPublicView("meetrooms")}>회의실 예약현황 조회</button>
+          </div>
         </div>
       </div>
       {publicView ? <PublicReadOnlyModal view={publicView} onClose={() => setPublicView(null)} /> : null}

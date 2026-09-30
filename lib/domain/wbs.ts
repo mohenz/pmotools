@@ -150,3 +150,19 @@ export function rollupProgress(inputs: WbsRollupInput[]): WbsRollup {
   const actual = inputs.reduce((sum, i) => sum + i.weight * i.actual, 0) / totalWeight;
   return { planned, actual, progressIndex: progressIndex(actual, planned) };
 }
+
+// ---------------------------------------------------------------------------
+// CP(Critical Path) 대상 조회 — 선후행 관계 없이 계획 작업기간(영업일)이 기준일수 이상인 leaf Task를 CP 대상으로 본다.
+// 기준일수는 공통코드(CRITICAL_PATH / MIN_WORKING_DAYS)의 명칭 값이며, 없거나 양의 정수가 아니면 기본 5일이다.
+// ---------------------------------------------------------------------------
+
+export const CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS = 5;
+
+export function parseCriticalPathMinWorkingDays(label: string | null | undefined): number {
+  const value = Number(label?.trim());
+  return Number.isInteger(value) && value > 0 ? value : CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS;
+}
+
+export function isCriticalPathTarget(item: { isLeaf: boolean; workingDays: number | null }, minWorkingDays: number): boolean {
+  return item.isLeaf && item.workingDays !== null && item.workingDays >= minWorkingDays;
+}

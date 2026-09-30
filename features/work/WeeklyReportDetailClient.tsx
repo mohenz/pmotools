@@ -29,6 +29,31 @@ export function WeeklyReportDetailClient({ detail }: { detail: WeeklyReportDetai
     finally { setPending(false); }
   }
 
+  const reportsWithStatus = detail.reports.map((report) => {
+    const hasAch = Boolean(report.achievements && report.achievements.trim());
+    const hasPlan = Boolean(report.nextPlan && report.nextPlan.trim());
+    let status: "completed" | "in_progress" | "pending" = "pending";
+    let statusLabel = "미작성";
+    if (hasAch && hasPlan) {
+      status = "completed";
+      statusLabel = "완료";
+    } else if (hasAch || hasPlan) {
+      status = "in_progress";
+      statusLabel = "작성 중";
+    }
+    return { ...report, status, statusLabel };
+  });
+
+  function scrollToReport(areaCodeId: string) {
+    const el = document.getElementById(`report-${areaCodeId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("highlight-row");
+      setTimeout(() => el.classList.remove("highlight-row"), 2000);
+    }
+  }
+
+  // 가로 1개 라인 수평 표 구성
   return <>
     <section className="panel weekly-report-summary">
       <div><span>실적 기간</span><strong>{detail.actualStart} ~ {detail.actualEnd}</strong></div>
@@ -36,11 +61,49 @@ export function WeeklyReportDetailClient({ detail }: { detail: WeeklyReportDetai
       <div><span>작성 현황</span><strong>{detail.completedCount} / {detail.moduleCount}개 모듈</strong></div>
       <div><span>상태</span><strong className={`weekly-status ${detail.status}`}>{detail.status === "closed" ? "PM 확인 완료" : "작성 중"}</strong></div>
     </section>
+
+    <section className="panel weekly-module-status-panel">
+      <div className="table-wrap horizontal-status-wrap">
+        <table className="weekly-module-horizontal-table">
+          <thead>
+            <tr>
+              <th className="th-fixed-label">업무영역</th>
+              {reportsWithStatus.map((item) => (
+                <th key={item.id} className="module-col-header">
+                  <button
+                    type="button"
+                    className="module-jump-button"
+                    onClick={() => scrollToReport(item.areaCodeId)}
+                    title={`${item.areaLabel} 상세 보기`}
+                  >
+                    {item.areaLabel}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th className="th-fixed-label">작성상태</th>
+              {reportsWithStatus.map((item) => (
+                <td key={item.id} className="module-col-status">
+                  <span className={`module-status-badge ${item.status}`}>
+                    <span className="status-dot" aria-hidden="true" />
+                    {item.statusLabel}
+                  </span>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section className="panel weekly-report-detail-panel">
       <div className="table-wrap">
         <table className="weekly-report-table">
           <thead><tr><th>업무그룹</th><th>실적</th><th>계획</th><th>이슈 및 요청사항</th></tr></thead>
-          <tbody>{detail.reports.map((report) => <tr key={report.id}>
+          <tbody>{detail.reports.map((report) => <tr key={report.id} id={`report-${report.areaCodeId}`} className="weekly-report-row">
             <th><Link href={`/weekly-reports/${detail.id}/reports/${report.areaCodeId}/edit`}>{report.areaLabel}</Link>{report.canEdit && <small>클릭하여 작성·수정</small>}</th>
             <td>{report.achievements || <span className="empty-value">미입력</span>}</td>
             <td>{report.nextPlan || <span className="empty-value">미입력</span>}</td>

@@ -1,5 +1,5 @@
 export const PUBLIC_VIEW_PATHS = ["/calendar", "/meetrooms"] as const;
-export const PUBLIC_READ_APIS = ["/api/v1/meeting-reservations"] as const;
+export const PUBLIC_READ_APIS = ["/api/v1/meeting-reservations", "/api/v1/public/projects"] as const;
 
 export function isPublicViewPath(pathname: string) {
   return PUBLIC_VIEW_PATHS.some((path) => path === pathname);

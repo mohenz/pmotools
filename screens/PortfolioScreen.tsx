@@ -26,18 +26,22 @@ function invitationLocation(invitation: InvitationSummary) {
   return invitation.meetingInvitation?.roomName ?? "";
 }
 
-export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations }: {
+export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations, role }: {
   wbsStats: WbsStats;
   myWbsStatus: WbsOwnerStatus;
   panelPrefs: PortfolioPanelRow[];
   invitations: InvitationSummary[];
+  role?: string;
 }) {
+  const isManager = !role || role === "ADMIN" || role === "OPERATOR" || role === "SUPER_ADMIN";
   const isPanelVisible = (key: string) => panelPrefs.find((panel) => panel.key === key)?.visible ?? true;
-  const showInvitations = isPanelVisible("invitations");
-  const showWbsProgress = isPanelVisible("wbs-progress");
+  const showInvitations = isPanelVisible("invitations") && invitations.length > 0;
+  const showWbsProgress = isManager && isPanelVisible("wbs-progress");
   const showMyWbsStatus = isPanelVisible("my-wbs-status");
+  const showWbsTasks = isPanelVisible("my-wbs-tasks");
   const unreadInvitations = invitations.filter((invitation) => !invitation.isRead).length;
   const recentInvitations = invitations.slice(0, 5);
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
   // 미완료 Task를 먼저 보여주되, 전부 완료된 담당자라도 목록이 비지 않도록 완료 건도 뒤이어 채운다.
   const myTasks = [...(myWbsStatus?.items ?? [])]
     .sort((a, b) => {
@@ -46,10 +50,14 @@ export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations
       return (a.dueDate ?? "9999-99-99").localeCompare(b.dueDate ?? "9999-99-99");
     })
     .slice(0, 8);
-  const myLeafItems = (myWbsStatus?.items ?? []).filter((item) => item.isLeaf);
-  const myCompleted = myLeafItems.filter((item) => item.actualProgress >= 1).length;
-  const myDelayed = myLeafItems.filter((item) => item.isDelayed && item.actualProgress < 1).length;
-  const myInProgress = myLeafItems.length - myCompleted - myDelayed;
+  const myItems = myWbsStatus?.items ?? [];
+  const myLeafItems = myItems.filter((item) => item.isLeaf);
+  // 담당 작업 중 leaf 항목이 있으면 우선 집계하되, PM/PL처럼 상위 요약·마일스톤 Task만 할당받은 경우에도
+  // 담당 작업이 그래프에 정상 반영되도록 fallback(전체 담당 Task) 처리한다.
+  const myTargetItems = myLeafItems.length > 0 ? myLeafItems : myItems;
+  const myCompleted = myTargetItems.filter((item) => item.actualProgress >= 1).length;
+  const myDelayed = myTargetItems.filter((item) => item.isDelayed && item.actualProgress < 1).length;
+  const myInProgress = myTargetItems.length - myCompleted - myDelayed;
   return <>
     <div className="content">
       {showInvitations && <section className="panel">
@@ -79,31 +87,34 @@ export function PortfolioScreen({ wbsStats, myWbsStatus, panelPrefs, invitations
         </Link>}
 
         {showMyWbsStatus && <Link href={myWbsStatus ? `/wbs/by-owner/${myWbsStatus.owner.loginId}` : "/wbs"} className="panel domain-summary">
-          <div className="panel-head"><h2>나의 WBS 현황</h2><span>{fmt(myLeafItems.length)}건</span></div>
+          <div className="panel-head"><h2>나의 WBS 현황</h2><span>{fmt(myTargetItems.length)}건</span></div>
           <WbsOwnerStatusChart completed={myCompleted} inProgress={myInProgress} delayed={myDelayed} />
           <p className="domain-summary-foot">진척율 <strong>{myWbsStatus ? pct(myWbsStatus.overall.progressIndex) : 0}%</strong></p>
         </Link>}
       </section>}
 
-      <section className="panel">
+      {showWbsTasks && <section className="panel">
         <div className="panel-head">
           <h2>나의 WBS Task</h2>
           <span>{myWbsStatus ? `담당 ${fmt(myWbsStatus.items.length)}건 · 진척율 ${pct(myWbsStatus.overall.progressIndex)}%` : "담당 Task 없음"}</span>
         </div>
         {myTasks.length ? <div className="table-wrap"><table>
-          <thead><tr><th>Task</th><th>Task Description</th><th>Stage</th><th>DueDate</th><th>목표</th><th>실적</th><th>진척율</th></tr></thead>
-          <tbody>{myTasks.map((item) => <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} key={item.id}>
-            <td className="mono">{item.code}</td>
-            <td className="title-cell"><Link className="table-link" href={`/wbs/${item.id}`}>{item.name}</Link></td>
-            <td>{item.stage ?? ""}</td>
-            <td>{dot(item.dueDate)}</td>
-            <td>{pctOrDash(item.plannedProgress)}</td>
-            <td>{pctOrDash(item.actualProgress)}</td>
-            <td>{pctOrDash(item.progressIndex)}</td>
-          </ClickableTableRow>)}</tbody>
+          <thead><tr><th>Task</th><th>Task Description</th><th>Stage</th><th>계획종료일</th><th>목표</th><th>실적</th><th>진척율</th></tr></thead>
+          <tbody>{myTasks.map((item) => {
+            const isHighlight = Boolean(item.dueDate && item.dueDate <= todayStr && (!item.actualDueDate || item.actualDueDate.trim() === ""));
+            return <ClickableTableRow href={`/wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} className={isHighlight ? "high-risk-row" : undefined} key={item.id}>
+              <td className="mono">{item.code}</td>
+              <td className="title-cell"><Link className="table-link" href={`/wbs/${item.id}`}>{item.name}</Link></td>
+              <td>{item.stage ?? ""}</td>
+              <td>{dot(item.dueDate)}</td>
+              <td>{pctOrDash(item.plannedProgress)}</td>
+              <td>{pctOrDash(item.actualProgress)}</td>
+              <td>{pctOrDash(item.progressIndex)}</td>
+            </ClickableTableRow>;
+          })}</tbody>
         </table></div> : <div className="empty">담당 중인 WBS Task가 없습니다.</div>}
         {myWbsStatus && myWbsStatus.items.length > 0 && <Link className="text-button" href={`/wbs/by-owner/${myWbsStatus.owner.loginId}`}>담당 Task 전체 {fmt(myWbsStatus.items.length)}건 보기</Link>}
-      </section>
+      </section>}
     </div>
   </>;
 }

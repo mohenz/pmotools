@@ -7,7 +7,7 @@ const PUBLIC_FILE = /\.(png|jpg|jpeg|svg|webp|ico)$/;
 
 export default auth((request) => {
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((path) => pathname === path) || isPublicViewPath(pathname) || isPublicReadApi(request.method, pathname) || pathname.startsWith("/api/auth") || pathname === "/api/health" || PUBLIC_FILE.test(pathname);
+  const isPublic = PUBLIC_PATHS.some((path) => pathname === path) || isPublicViewPath(pathname) || isPublicReadApi(request.method, pathname) || pathname.startsWith("/api/auth") || pathname === "/api/health" || pathname === "/api/admin/db-export" || ((pathname === "/api/v1/settings/login-image" || pathname === "/api/v1/settings/login-image/file") && request.method === "GET") || PUBLIC_FILE.test(pathname);
   if (isPublic || request.auth) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {

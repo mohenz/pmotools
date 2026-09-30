@@ -42,7 +42,7 @@ export async function actorNameOf(actorId: string | null) {
 }
 
 export async function writeAuditLog(
-  projectId: string,
+  projectId: string | null,
   actorId: string | null,
   action: string,
   targetTable: string | null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { WarningDialog } from "@/components/WarningDialog";
@@ -9,6 +9,14 @@ export default function SignupPage() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const [projects, setProjects] = useState<{ code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/v1/public/projects")
+      .then((res) => res.json())
+      .then((payload) => setProjects(Array.isArray(payload?.data) ? payload.data : []))
+      .catch(() => setProjects([]));
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,6 +31,7 @@ export default function SignupPage() {
         name: String(data.get("name") ?? ""),
         department: String(data.get("department") ?? ""),
         password: String(data.get("password") ?? ""),
+        projectCode: String(data.get("projectCode") ?? ""),
       }),
     });
     const payload = await response.json().catch(() => null);
@@ -47,6 +56,13 @@ export default function SignupPage() {
           <label>아이디<input name="userId" autoComplete="username" placeholder="아이디를 입력하세요" required maxLength={50} /></label>
           <label>이름<input name="name" autoComplete="name" placeholder="이름을 입력하세요" required maxLength={50} /></label>
           <label>회사명<input name="department" autoComplete="organization" placeholder="회사명을 입력하세요" maxLength={100} /></label>
+          <label>
+            가입할 프로젝트
+            <select name="projectCode" required defaultValue="">
+              <option value="" disabled>프로젝트를 선택하세요</option>
+              {projects.map((project) => <option value={project.code} key={project.code}>{project.name} ({project.code})</option>)}
+            </select>
+          </label>
           <label>
             비밀번호<input name="password" type="password" autoComplete="new-password" placeholder="••••••••" required minLength={8} maxLength={100} />
           </label>

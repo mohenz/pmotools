@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
-import { actualProgress, childPath, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
+import { actualProgress, childPath, CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { scheduleProgress } from "@/lib/domain/pmo-daily";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
@@ -139,7 +139,7 @@ function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, st
   const todayStr = dateStr(today)!;
   const startStr = dateStr(start), dueStr = dateStr(due);
   const actualStartStr = dateStr(actualStart), actualDueStr = dateStr(actualDue);
-  const isDelayed = isLeaf && isWbsItemDelayed(todayStr, { plannedStart: startStr, actualStart: actualStartStr, plannedDue: dueStr, actualDue: actualDueStr });
+  const isDelayed = (isLeaf || !!row.ownerUserId) && isWbsItemDelayed(todayStr, { plannedStart: startStr, actualStart: actualStartStr, plannedDue: dueStr, actualDue: actualDueStr });
   // 지연일자 — 이미 지연완료로 확정·저장된 값(row.delayDays)이 있으면 그 값을 쓴다. 아직 완료 전(실적종료일 없음)인데
   // 계획종료일이 지난 진행 중 항목은 저장은 하지 않되(완료 시점에만 확정 저장) 오늘 기준 진행 중인 지연 영업일수를
   // 그때그때 계산해 보여준다 — "지연 중인데 지연일자가 안 보인다"는 문제(2026-09-05)를 막기 위함.
@@ -170,17 +170,79 @@ function toDeliverableRow(deliverable: WbsItemWithRelations["deliverable"]): Wbs
   } satisfies WbsDeliverableRow : null;
 }
 
-// 프로젝트 전체 WBS 트리 — path 오름차순이 곧 전위 순회 순서라 그대로 정렬해 반환한다.
-export async function listWbsItems(projectId: string): Promise<WbsItemRow[]> {
-  const [rows, holidays] = await Promise.all([
-    getPrisma().wbsItem.findMany({ where: { projectId, archivedAt: null }, include: wbsItemInclude, orderBy: { path: "asc" } }),
+// WBS 트리 전체 행 인메모리 캐시 — 실시간 변경(생성·수정·삭제·임포트) 시 즉시 무효화하며,
+// 자정 날짜 변경(todayStr 불일치) 또는 TTL(60초) 경과 시 자동 재계산한다.
+type WbsTreeCacheEntry = {
+  allRows: WbsExcelRow[];
+  todayStr: string;
+  cachedAt: number;
+};
+
+const wbsTreeCache = new Map<string, WbsTreeCacheEntry>();
+const WBS_CACHE_TTL_MS = 60_000;
+
+export function invalidateWbsTreeCache(projectId?: string) {
+  if (projectId) {
+    wbsTreeCache.delete(projectId);
+  } else {
+    wbsTreeCache.clear();
+  }
+}
+
+function revalidateWbs(projectId: string) {
+  invalidateWbsTreeCache(projectId);
+  revalidateTag(wbsTag(projectId));
+}
+
+// assignments의 중복 컬럼 조인을 최소화하고, 인메모리 캐시를 통해 초고속으로 반환한다.
+async function loadAllWbsExcelRows(projectId: string, today: Date): Promise<WbsExcelRow[]> {
+  const [project, rows, holidays] = await Promise.all([
+    getPrisma().project.findUnique({ where: { id: projectId }, select: { code: true } }),
+    getPrisma().wbsItem.findMany({
+      where: { projectId, archivedAt: null },
+      include: {
+        owner: true,
+        group: true,
+        assignments: { select: { progressPercent: true, group: { select: { label: true } } } },
+        deliverable: { include: { reviewer: true } },
+      },
+      orderBy: { path: "asc" },
+    }),
     loadHolidaySet(projectId),
   ]);
-  // Stage(엑셀 E열) = 최상위(레벨1) 조상의 이름 — 별도 저장 없이 path의 첫 세그먼트로 즉석 조회한다.
   const nameByPath = new Map(rows.map((row) => [row.path, row.name]));
   const parentIds = new Set(rows.filter((row) => row.parentId).map((row) => row.parentId!));
+  return rows.map((row, index) => {
+    const roleByLabel = new Map(row.assignments.map((a) => [a.group?.label ?? "", a]));
+    const isLeaf = !parentIds.has(row.id);
+    return {
+      ...toRow(row as unknown as WbsItemWithRelations, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null, isLeaf),
+      projectCode: project?.code ?? "", sequenceNo: String(index + 1).padStart(4, "0"), isLeaf,
+      deliverable: toDeliverableRow(row.deliverable as unknown as WbsItemWithRelations["deliverable"]),
+      roles: WBS_EXCEL_ROLE_NAMES.map((role) => {
+        const assignment = roleByLabel.get(role);
+        return { role, hasPermission: !!assignment, progressPercent: assignment?.progressPercent ?? 0 } satisfies WbsRoleColumn;
+      }),
+    } satisfies WbsExcelRow;
+  });
+}
+
+export async function getAllWbsExcelRows(projectId: string): Promise<WbsExcelRow[]> {
   const today = new Date();
-  return rows.map((row) => toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null, !parentIds.has(row.id)));
+  const todayStr = dateStr(today)!;
+  const now = Date.now();
+  const cached = wbsTreeCache.get(projectId);
+  if (cached && cached.todayStr === todayStr && now - cached.cachedAt < WBS_CACHE_TTL_MS) {
+    return cached.allRows;
+  }
+  const allRows = await loadAllWbsExcelRows(projectId, today);
+  wbsTreeCache.set(projectId, { allRows, todayStr, cachedAt: now });
+  return allRows;
+}
+
+// 프로젝트 전체 WBS 트리 — 캐시된 전체 행 반환
+export async function listWbsItems(projectId: string): Promise<WbsItemRow[]> {
+  return getAllWbsExcelRows(projectId);
 }
 
 export type WbsListFilters = {
@@ -189,36 +251,16 @@ export type WbsListFilters = {
   actualStartDateFrom?: string; actualStartDateTo?: string; actualDueDateFrom?: string; actualDueDateTo?: string;
   delayed?: "" | "y" | "n";
   stage?: string; status?: "" | "not_started" | "in_progress" | "completed" | "on_hold";
-  // 자유 텍스트 assignee(이름 부분일치)와 달리, 호출자(페이지)가 권한 판단 후 강제로 걸어주는 정확 일치 제한 —
-  // URL 쿼리스트링으로 우회할 수 없도록 이 값은 assignee 필터와 별개로 항상 적용된다.
   ownerUserId?: string;
+  excludeCompleted?: boolean;
+  // CP 대상만 조회 — 계획 작업기간(영업일)이 cpMinWorkingDays 이상인 leaf Task만 남기고 작업기간이 긴 순으로 정렬한다.
+  cp?: boolean; cpMinWorkingDays?: number;
 };
 
-// 엑셀 원본 47개 컬럼(A~AU)을 그대로 담아 반환한다 — 목록 화면의 전체 컬럼 보기, 향후 엑셀 다운로드가 그대로 쓸 형태.
-// 업무일지 목록(listWorkLogs)과 동일한 page/pageSize 페이징 규약을 쓴다. Stage·isLeaf·sequenceNo·정렬SEQ는 트리 전체 기준값이라
-// 검색·페이지 단위로 잘라 계산하면 틀어지므로, 전체 행을 먼저 만든 뒤 검색 필터링→페이지 슬라이스 순으로 처리한다.
+// 엑셀 원본 47개 컬럼(A~AU)을 그대로 담아 반환한다 — 캐시된 전체 행에서 초고속 필터링 및 페이징을 수행한다.
 export async function listWbsItemsExcelColumns(projectId: string, filters: WbsListFilters = {}) {
-  const [project, rows, holidays] = await Promise.all([
-    getPrisma().project.findUnique({ where: { id: projectId }, select: { code: true } }),
-    getPrisma().wbsItem.findMany({ where: { projectId, archivedAt: null }, include: wbsItemInclude, orderBy: { path: "asc" } }),
-    loadHolidaySet(projectId),
-  ]);
-  const nameByPath = new Map(rows.map((row) => [row.path, row.name]));
-  const parentIds = new Set(rows.filter((row) => row.parentId).map((row) => row.parentId!));
-  const today = new Date();
-  const allRows = rows.map((row, index) => {
-    const roleByLabel = new Map(row.assignments.map((a) => [a.group.label, a]));
-    const isLeaf = !parentIds.has(row.id);
-    return {
-      ...toRow(row, holidays, today, nameByPath.get(row.path.split(".")[0]) ?? null, isLeaf),
-      projectCode: project?.code ?? "", sequenceNo: String(index + 1).padStart(4, "0"), isLeaf,
-      deliverable: toDeliverableRow(row.deliverable),
-      roles: WBS_EXCEL_ROLE_NAMES.map((role) => {
-        const assignment = roleByLabel.get(role);
-        return { role, hasPermission: !!assignment, progressPercent: assignment?.progressPercent ?? 0 } satisfies WbsRoleColumn;
-      }),
-    } satisfies WbsExcelRow;
-  });
+  const allRows = await getAllWbsExcelRows(projectId);
+  const stages = Array.from(new Set(allRows.map((row) => row.stage).filter((s): s is string => !!s)));
   const q = filters.q?.trim().toLowerCase() ?? "";
   const assignee = filters.assignee?.trim().toLowerCase() ?? "";
   const startDateFrom = filters.startDateFrom?.trim() ?? "", startDateTo = filters.startDateTo?.trim() ?? "";
@@ -228,6 +270,7 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
   const delayed = filters.delayed ?? "";
   const stage = filters.stage?.trim().toLowerCase() ?? "";
   const status = filters.status ?? "";
+  const excludeCompleted = filters.excludeCompleted ?? false;
   const inRange = (value: string | null, from: string, to: string) => (!from && !to) || (value !== null && (!from || value >= from) && (!to || value <= to));
   const filteredRows = allRows.filter((row) => {
     const matchesQ = !q || row.code.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.displayId.toLowerCase().includes(q);
@@ -240,15 +283,30 @@ export async function listWbsItemsExcelColumns(projectId: string, filters: WbsLi
     const matchesStage = !stage || (row.stage ?? "").toLowerCase().includes(stage);
     const matchesStatus = !status || row.status === status;
     const matchesOwnerUserId = !filters.ownerUserId || row.ownerUserId === filters.ownerUserId;
-    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesDelayed && matchesStage && matchesStatus && matchesOwnerUserId;
+    const isCompleted = row.actualProgress >= 1 || row.status === "completed";
+    const matchesExcludeCompleted = !excludeCompleted || !isCompleted;
+    const matchesCp = !filters.cp || isCriticalPathTarget(row, filters.cpMinWorkingDays ?? CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS);
+    return matchesQ && matchesAssignee && matchesStartDate && matchesDueDate && matchesActualStartDate && matchesActualDueDate && matchesDelayed && matchesStage && matchesStatus && matchesOwnerUserId && matchesExcludeCompleted && matchesCp;
   });
+  // 정렬은 안정 정렬이라 작업기간이 같으면 원래 WBS 트리 순서(path)를 유지한다.
+  if (filters.cp) filteredRows.sort((a, b) => (b.workingDays ?? 0) - (a.workingDays ?? 0));
   const total = filteredRows.length;
-  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 10));
+  const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(500, Math.max(10, filters.pageSize ?? 50));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(totalPages, Math.max(1, filters.page ?? 1));
-  return { rows: filteredRows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize, totalPages };
+  const rows = pageSize === total ? filteredRows : filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  return { rows, total, page, pageSize, totalPages, stages };
 }
 export type WbsExcelListResult = Awaited<ReturnType<typeof listWbsItemsExcelColumns>>;
+
+export const CRITICAL_PATH_CODE_GROUP = "CRITICAL_PATH";
+export const CRITICAL_PATH_MIN_WORKING_DAYS_CODE = "MIN_WORKING_DAYS";
+
+// 설정 → 공통코드에서 관리하는 CP 기준일수 — 그룹·코드가 비활성이거나 없으면 기본 5일.
+export async function getCriticalPathMinWorkingDays(projectId: string): Promise<number> {
+  const code = await getPrisma().commonCode.findFirst({ where: { projectId, code: CRITICAL_PATH_MIN_WORKING_DAYS_CODE, isActive: true, group: { code: CRITICAL_PATH_CODE_GROUP, isActive: true } }, select: { label: true } });
+  return parseCriticalPathMinWorkingDays(code?.label);
+}
 
 // 작업자별 WBS 현황조회 — 목록 화면의 담당자명 링크(사용자ID를 키로 사용, 사용자ID 자체는 화면에 노출하지 않는다)로 진입한다.
 export async function getWbsOwnerStatus(projectId: string, loginId: string) {
@@ -257,11 +315,14 @@ export async function getWbsOwnerStatus(projectId: string, loginId: string) {
   const { rows } = await listWbsItemsExcelColumns(projectId, { pageSize: "all" });
   const items = rows.filter((row) => row.ownerUserId === member.userId);
   const leaves = items.filter((row) => row.isLeaf);
-  const overall = rollupProgress(leaves.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
+  // 담당 작업 중 leaf 항목이 있으면 우선 집계하되, PM/PL처럼 상위 요약·마일스톤 Task만 할당받은 경우에도
+  // 담당 작업이 그래프와 통계에 정상 반영되도록 fallback(전체 담당 Task) 처리한다.
+  const targetItems = leaves.length > 0 ? leaves : items;
+  const overall = rollupProgress(targetItems.map((row) => ({ weight: row.weight || row.workingDays || 1, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
   // 진척율(실적÷목표)은 오늘 기준 선형보간 목표 대비 페이스 지표라, 마감 전인데 입력된 진도율이
   // 아직 낮은 항목이 있으면 실제 지연(계획종료일 경과 미완료, 또는 지연완료)이 하나도 없어도 100% 밑으로 나올 수 있다.
   // "critical" 강조는 진척율 수치가 아니라 실제 지연 항목 존재 여부로 판단한다(2026-09-10 사용자 요청).
-  const hasDelayed = leaves.some((row) => row.isDelayed);
+  const hasDelayed = targetItems.some((row) => row.isDelayed);
   return { owner: { userId: member.userId, loginId, name: member.user.name }, overall, hasDelayed, items };
 }
 
@@ -334,7 +395,7 @@ export function getWbsStats(projectId: string) {
 // 사용자관리(설정 → 사용자)에서 사용자별로 지정한 업무그룹(Groups/WORK_MODULE)을 WBS 담당자(ownerUserId)를
 // 키로 이어붙인다. WBS 항목 자체의 R&R(지원)(모듈)(WBS 전용 공통코드)과는 별개의 축이라 업무그룹별 통계·지연
 // Task 조회 양쪽에서 함께 쓴다.
-async function loadOwnerGroupLabels(projectId: string) {
+export async function loadOwnerGroupLabels(projectId: string) {
   const members = await getPrisma().projectMember.findMany({ where: { projectId, isActive: true, user: { status: "ACTIVE" } }, include: { user: { include: { groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE" } }, include: { group: true } } } } } });
   const groupLabelByOwner = new Map<string, string>();
   const groupSortKeyByLabel = new Map<string, string>();
@@ -348,7 +409,7 @@ async function loadOwnerGroupLabels(projectId: string) {
   }
   return { groupLabelByOwner, groupSortKeyByLabel };
 }
-function ownerGroupLabelOf(item: { ownerUserId: string | null }, groupLabelByOwner: Map<string, string>) {
+export function ownerGroupLabelOf(item: { ownerUserId: string | null }, groupLabelByOwner: Map<string, string>) {
   return item.ownerUserId ? (groupLabelByOwner.get(item.ownerUserId) ?? "미지정") : "담당자 없음";
 }
 
@@ -584,7 +645,7 @@ export async function resolveWbsOwnerAmbiguity(projectId: string, userId: string
   await prisma.wbsItem.update({ where: { id: wbsItemId }, data: { ownerUserId: data.ownerUserId, ownerNameRaw: "", version: { increment: 1 } } });
   await prisma.wbsItemEvent.create({ data: { wbsItemId, eventType: "edited", actorId: userId, actorName, body: "동명이인 담당자 선택으로 확정" } });
   await writeAuditLog(projectId, userId, "WBS_ITEM_UPDATE", "wbs_items", wbsItemId, before, { ownerUserId: data.ownerUserId });
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { id: wbsItemId, requestId };
 }
 
@@ -593,13 +654,28 @@ export async function getWbsItemDetail(projectId: string, id: string) {
   const item = await prisma.wbsItem.findUnique({ where: { id }, include: wbsItemInclude });
   if (!item || item.projectId !== projectId || item.archivedAt) return null;
   const rootPath = item.path.split(".")[0];
-  const [events, parent, children, stageItem, groups, holidays] = await Promise.all([
+  const itemCode = codeFromPath(item.path);
+  const [events, parent, children, stageItem, groups, holidays, workLogs] = await Promise.all([
     prisma.wbsItemEvent.findMany({ where: { wbsItemId: id }, orderBy: { createdAt: "desc" } }),
     item.parentId ? prisma.wbsItem.findUnique({ where: { id: item.parentId } }) : Promise.resolve(null),
     prisma.wbsItem.findMany({ where: { projectId, parentId: id, archivedAt: null }, orderBy: { path: "asc" } }),
     rootPath === item.path ? Promise.resolve(item) : prisma.wbsItem.findFirst({ where: { projectId, path: rootPath } }),
     listWbsWorkGroups(projectId),
     loadHolidaySet(projectId),
+    prisma.workLog.findMany({
+      where: {
+        projectId,
+        status: { not: "DELETED" },
+        OR: [
+          { wbsNumber: itemCode },
+          { wbsNumber: item.displayId },
+          { wbsNumber: item.id },
+          { wbsNumber: { startsWith: `${itemCode} ` } },
+        ],
+      },
+      include: { group: true, assignee: true },
+      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+    }),
   ]);
   const assignmentByGroup = new Map(item.assignments.map((a) => [a.groupId, a]));
   return {
@@ -616,6 +692,18 @@ export async function getWbsItemDetail(projectId: string, id: string) {
       beforeData: event.beforeData as Record<string, unknown> | null, afterData: event.afterData as Record<string, unknown> | null,
       createdAt: event.createdAt.toISOString(),
     } satisfies WbsItemEventRow)),
+    workLogs: workLogs.map((log) => ({
+      id: log.id,
+      displayId: log.displayId,
+      workDate: dateStr(log.workDate)!,
+      groupId: log.groupId,
+      groupLabel: log.group.label,
+      assigneeId: log.assigneeId,
+      assigneeName: log.assignee.name,
+      status: log.status,
+      workContent: log.workContent,
+      notes: log.notes,
+    })),
   };
 }
 export type WbsItemDetail = Awaited<ReturnType<typeof getWbsItemDetail>>;
@@ -681,7 +769,7 @@ export async function createWbsItem(projectId: string, userId: string, input: un
     return { item, displayId };
   });
   await writeAuditLog(projectId, userId, "WBS_ITEM_INSERT", "wbs_items", item.id, null, { id: item.id, displayId, name: data.name });
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { id: item.id, displayId, version: item.version, requestId };
 }
 
@@ -760,7 +848,7 @@ export async function updateWbsItem(projectId: string, userId: string, id: strin
     return { before, version, moved };
   });
   await writeAuditLog(projectId, userId, "WBS_ITEM_UPDATE", "wbs_items", id, before, { ...data, version, moved });
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { id, version, requestId };
 }
 
@@ -781,7 +869,7 @@ export async function archiveWbsItem(projectId: string, userId: string, id: stri
     return { version };
   });
   await writeAuditLog(projectId, userId, "WBS_ITEM_ARCHIVE", "wbs_items", id, null, { archived: true });
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { id, version, requestId };
 }
 
@@ -794,7 +882,7 @@ export async function resetWbsData(projectId: string, userId: string) {
   const prisma = getPrisma();
   const result = await prisma.wbsItem.updateMany({ where: { projectId, archivedAt: null }, data: { archivedAt: now, version: { increment: 1 } } });
   await writeAuditLog(projectId, userId, "WBS_DATA_RESET", "wbs_items", projectId, null, { archivedCount: result.count });
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { archivedCount: result.count, requestId };
 }
 
@@ -821,7 +909,7 @@ export async function updateWbsAssignments(projectId: string, userId: string, id
     return { version };
   });
   await writeAuditLog(projectId, userId, "WBS_ASSIGNMENT_UPDATE", "wbs_assignments", id, null, { assignments: data.assignments });
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { id, version, requestId };
 }
 
@@ -846,6 +934,6 @@ export async function updateWbsDeliverable(projectId: string, userId: string, id
     return { version };
   });
   await writeAuditLog(projectId, userId, "WBS_DELIVERABLE_UPDATE", "wbs_deliverables", id, null, data);
-  revalidateTag(wbsTag(projectId));
+  revalidateWbs(projectId);
   return { id, version, requestId };
 }

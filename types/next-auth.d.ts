@@ -12,6 +12,7 @@ declare module "next-auth" {
       id: string;
       loginId: string;
       role: "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER";
+      globalRole: "SUPER_ADMIN" | "ADMIN" | "OPERATOR" | "MEMBER";
       projectId: string;
       jobTitle: string | null;
     } & DefaultSession["user"];

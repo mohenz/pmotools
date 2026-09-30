@@ -20,6 +20,11 @@ async function assertAdmin(projectId: string, userId: string) {
   const role = await getMemberRole(projectId, userId);
   if (role !== "ADMIN" && role !== "SUPER_ADMIN") throw new DomainError("FORBIDDEN", "공통코드 설정 권한이 없습니다.");
 }
+
+async function assertPlatformSuperAdmin(userId: string) {
+  const actor = await getPrisma().user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (actor?.role !== "SUPER_ADMIN") throw new DomainError("FORBIDDEN", "플랫폼 공통코드 관리 권한이 없습니다.");
+}
 function metadata(groupCode: string, minScore: number | null | undefined) {
   if (groupCode !== "escalation_level") return null;
   if (minScore == null) throw new DomainError("INVALID_CODE", "에스컬레이션 레벨에는 최소 점수가 필요합니다.");
@@ -58,6 +63,7 @@ async function loadCodeOptions(projectId: string) {
     escalations: codes.filter((code) => code.groupCode === "escalation_level"),
     issueTypes: codes.filter((code) => code.groupCode === "issue_type"),
     reportLines: codes.filter((code) => code.groupCode === "report_line"),
+    deliverableExtensions: codes.filter((code) => code.groupCode === "deliverable_extension"),
   };
 }
 
@@ -105,6 +111,74 @@ export async function createCommonCode(projectId: string, userId: string, input:
   await writeAuditLog(projectId, userId, "COMMON_CODE_INSERT", "common_codes", created.id, null, created);
   revalidateTag(codeOptionsTag(projectId));
   return { code: { id: created.id, groupId: created.groupId, groupCode: created.groupCode, groupLabel: group.label, code: created.code, label: created.label, sortOrder: created.sortOrder, isActive: created.isActive, minScore: created.minScore }, requestId };
+}
+
+// ---------------------------------------------------------------------------
+// 플랫폼 전역 공통코드 (프로젝트 무관, SUPER_ADMIN 전용 — 업무그룹/직무/회사정보 등)
+// ---------------------------------------------------------------------------
+
+export async function listGlobalCommonCodeGroups(): Promise<CommonCodeGroup[]> {
+  const groups = await getPrisma().commonCodeGroup.findMany({ where: { projectId: null }, include: { codes: true } });
+  return groups
+    .map((group) => ({ id: group.id, code: group.code, label: group.label, description: group.description, sortOrder: group.sortOrder, isActive: group.isActive, isSystem: group.isSystem, codeCount: group.codes.length, activeCodeCount: group.codes.filter((code) => code.isActive).length }))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko"));
+}
+
+export async function listGlobalCommonCodes(groupId?: string): Promise<CommonCode[]> {
+  const codes = await getPrisma().commonCode.findMany({ where: { projectId: null, ...(groupId ? { groupId } : {}) }, include: { group: true } });
+  return codes
+    .map((code) => ({ id: code.id, groupId: code.groupId, groupCode: code.groupCode, groupLabel: code.group.label, code: code.code, label: code.label, sortOrder: code.sortOrder, isActive: code.isActive, minScore: code.minScore }))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, "ko"));
+}
+
+export async function createGlobalCommonCodeGroup(userId: string, input: unknown) {
+  const data = createGroupSchema.parse(input), requestId = crypto.randomUUID();
+  await assertPlatformSuperAdmin(userId);
+  const prisma = getPrisma();
+  const existing = await prisma.commonCodeGroup.findFirst({ where: { projectId: null, code: { equals: data.code, mode: "insensitive" } } });
+  if (existing) throw new DomainError("DUPLICATE_CODE", "동일한 그룹 코드가 이미 존재합니다.");
+  const group = await prisma.commonCodeGroup.create({ data: { projectId: null, code: data.code, label: data.label, description: data.description || null, sortOrder: data.sortOrder, isActive: true, isSystem: false } });
+  await writeAuditLog(null, userId, "GLOBAL_GROUP_INSERT", "common_code_groups", group.id, null, group);
+  return { group: { id: group.id, code: group.code, label: group.label, description: group.description, sortOrder: group.sortOrder, isActive: group.isActive, isSystem: group.isSystem, codeCount: 0, activeCodeCount: 0 }, requestId };
+}
+
+export async function updateGlobalCommonCodeGroup(userId: string, groupId: string, input: unknown) {
+  const data = updateGroupSchema.parse(input), requestId = crypto.randomUUID();
+  await assertPlatformSuperAdmin(userId);
+  const prisma = getPrisma();
+  const current = await prisma.commonCodeGroup.findUnique({ where: { id: groupId } });
+  if (!current || current.projectId !== null) throw new DomainError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.");
+  const updated = await prisma.commonCodeGroup.update({ where: { id: groupId }, data: { label: data.label, description: data.description || null, sortOrder: data.sortOrder, isActive: data.isActive } });
+  await writeAuditLog(null, userId, "GLOBAL_GROUP_UPDATE", "common_code_groups", groupId, current, updated);
+  const group = (await listGlobalCommonCodeGroups()).find((row) => row.id === groupId)!;
+  return { group, requestId };
+}
+
+export async function createGlobalCommonCode(userId: string, input: unknown) {
+  const data = createCodeSchema.parse(input), requestId = crypto.randomUUID();
+  await assertPlatformSuperAdmin(userId);
+  const prisma = getPrisma();
+  const group = await prisma.commonCodeGroup.findUnique({ where: { id: data.groupId } });
+  if (!group || group.projectId !== null) throw new DomainError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.");
+  const siblings = await prisma.commonCode.findMany({ where: { groupId: data.groupId } });
+  if (siblings.some((code) => code.code.toLowerCase() === data.code.toLowerCase())) throw new DomainError("DUPLICATE_CODE", "그룹 내 동일한 코드가 이미 존재합니다.");
+  const created = await prisma.commonCode.create({ data: { projectId: null, groupId: data.groupId, groupCode: group.code, code: data.code, label: data.label, sortOrder: data.sortOrder, isActive: true, minScore: null } });
+  await writeAuditLog(null, userId, "GLOBAL_COMMON_CODE_INSERT", "common_codes", created.id, null, created);
+  return { code: { id: created.id, groupId: created.groupId, groupCode: created.groupCode, groupLabel: group.label, code: created.code, label: created.label, sortOrder: created.sortOrder, isActive: created.isActive, minScore: created.minScore }, requestId };
+}
+
+export async function updateGlobalCommonCode(userId: string, codeId: string, input: unknown) {
+  const data = updateCodeSchema.parse(input), requestId = crypto.randomUUID();
+  await assertPlatformSuperAdmin(userId);
+  const prisma = getPrisma();
+  const current = await prisma.commonCode.findUnique({ where: { id: codeId } });
+  if (!current || current.projectId !== null) throw new DomainError("NOT_FOUND", "공통코드를 찾을 수 없습니다.");
+  const siblings = await prisma.commonCode.findMany({ where: { groupId: current.groupId } });
+  if (current.isActive && !data.isActive && siblings.filter((code) => code.isActive && code.id !== codeId).length === 0) throw new DomainError("LAST_ACTIVE_CODE", "그룹에는 하나 이상의 활성 코드가 필요합니다.");
+  const updated = await prisma.commonCode.update({ where: { id: codeId }, data: { label: data.label, sortOrder: data.sortOrder, isActive: data.isActive } });
+  await writeAuditLog(null, userId, "GLOBAL_COMMON_CODE_UPDATE", "common_codes", codeId, current, updated);
+  const group = await prisma.commonCodeGroup.findUnique({ where: { id: current.groupId } });
+  return { code: { id: updated.id, groupId: updated.groupId, groupCode: updated.groupCode, groupLabel: group?.label ?? updated.groupCode, code: updated.code, label: updated.label, sortOrder: updated.sortOrder, isActive: updated.isActive, minScore: updated.minScore }, requestId };
 }
 
 export async function updateCommonCode(projectId: string, userId: string, codeId: string, input: unknown) {
