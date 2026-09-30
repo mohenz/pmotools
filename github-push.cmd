@@ -29,7 +29,7 @@ if "%gitToken%"=="" (
     exit /b 1
 )
 
-git push https://mohenz:%gitToken%@github.com/mohenz/pmotools.git HEAD
+git push https://mohenz:%gitToken%@github.com/mohenz/pmotools.git HEAD:main -f
 
 echo.
 echo ========================================
