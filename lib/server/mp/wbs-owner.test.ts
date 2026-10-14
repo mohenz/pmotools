@@ -160,6 +160,18 @@ vi.mock("@/lib/server/db-pg", () => ({
     holiday: {
       findMany: async () => [],
     },
+    wbsAssignment: {
+      findMany: async () => [],
+    },
+    wbsDeliverable: {
+      findMany: async () => [],
+    },
+    user: {
+      findMany: async () => [],
+    },
+    group: {
+      findMany: async () => [],
+    },
   }),
 }));
 
