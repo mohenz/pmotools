@@ -68,16 +68,23 @@ function InvitationRow({ invitation }: { invitation: InvitationSummary }) {
   </div>;
 }
 
-export function MessagesScreen({ invitations }: { invitations: InvitationSummary[] }) {
+export function MessagesScreen({ result }: { result: import("@/lib/server/messages").InvitationListResult }) {
+  const hrefFor = (page: number) => `/messages?page=${page}`;
+  
   return <>
     <header className="topbar"><div><h1>초청</h1><p>받은 일정·회의실 예약 초청 목록입니다.</p></div></header>
     <div className="content">
       <section className="panel">
-        <div className="panel-head"><h2>받은 초청</h2><span>{invitations.length}건</span></div>
+        <div className="panel-head"><h2>받은 초청</h2><span>총 {result.total}건</span></div>
         <div className="message-list">
-          {invitations.map((invitation) => <InvitationRow invitation={invitation} key={invitation.id} />)}
-          {!invitations.length && <p className="empty">받은 초청이 없습니다.</p>}
+          {result.rows.map((invitation) => <InvitationRow invitation={invitation} key={invitation.id} />)}
+          {!result.rows.length && <p className="empty">받은 초청이 없습니다.</p>}
         </div>
+        <nav className="pagination" aria-label="페이지 이동">
+          {result.page > 1 ? <Link href={hrefFor(result.page - 1)}>이전</Link> : <span className="disabled" aria-disabled="true">이전</span>}
+          <strong>{result.page} / {result.pageCount} 페이지</strong>
+          {result.page < result.pageCount ? <Link href={hrefFor(result.page + 1)}>다음</Link> : <span className="disabled" aria-disabled="true">다음</span>}
+        </nav>
       </section>
     </div>
   </>;

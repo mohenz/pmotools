@@ -9,10 +9,14 @@ export const DEFAULT_MENU_ITEMS = [
   { key: "meeting-minutes", label: "회의록" },
   { key: "issues", label: "이슈 관리" },
   { key: "requirements", label: "요구사항관리" },
+  // 다중 프로젝트 메뉴 — 원본(WBS·WBS상세내용·요구사항관리)과 화면·API·서버 로직을 분리한 복사본(2026-09-29)
+  { key: "wbs2", label: "WBS2" },
+  { key: "work-logs2", label: "WBS상세내용2" },
+  { key: "requirements2", label: "요구사항관리2" },
   { key: "announcements", label: "공지사항" },
   { key: "weekly-reports", label: "위클리리포트" },
-  { key: "weekly-progress", label: "주간실적" },
-  { key: "staff-changes", label: "인력변동" },
+  // 주간실적(weekly-progress)·인력변동(staff-changes)은 사이드바 상위 메뉴에서 제외(2026-09-29 사용자 요청).
+  // 화면·데이터는 그대로 두며 주소 직접 접근과 캘린더의 실적 일정 링크로는 계속 열린다.
   { key: "messages", label: "초청" },
   { key: "manuals", label: "메뉴얼" },
 ] as const;

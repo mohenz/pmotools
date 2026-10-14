@@ -5,8 +5,26 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 
 const projectInfoTag = (projectId: string) => `project-info:${projectId}`;
 
-export type ProjectInformation = { id: string; code: string; name: string; openMethod: "phased" | "big_bang"; startDate: string | null; endDate: string | null; firstOpenDate: string | null; secondOpenDate: string | null; goLiveDate: string | null; durationMonths: number; durationDays: number; customerName: string; vendorName: string; customerPm: string; customerPmoCount: number; vendorPm: string; vendorPmoCount: number; projectGrade: "A" | "B" | "C"; timezone: string; staleBusinessDays: number };
-const schema = z.object({ name: z.string().trim().min(1).max(150), openMethod: z.enum(["phased", "big_bang"]), startDate: z.string().date(), endDate: z.string().date(), firstOpenDate: z.string().date().nullable(), secondOpenDate: z.string().date().nullable(), goLiveDate: z.string().date().nullable(), customerName: z.string().trim().min(1).max(150), vendorName: z.string().trim().min(1).max(150), customerPm: z.string().trim().min(1).max(100), customerPmoCount: z.number().int().min(0).max(999), vendorPm: z.string().trim().min(1).max(100), vendorPmoCount: z.number().int().min(0).max(999), projectGrade: z.enum(["A", "B", "C"]), timezone: z.string().trim().min(1).max(50), staleBusinessDays: z.number().int().min(1).max(30) }).superRefine((d, ctx) => {
+export type ProjectInformation = { id: string; code: string; name: string; isPublic: boolean; openMethod: "phased" | "big_bang"; startDate: string | null; endDate: string | null; firstOpenDate: string | null; secondOpenDate: string | null; goLiveDate: string | null; durationMonths: number; durationDays: number; customerName: string; vendorName: string; customerPm: string; customerPmoCount: number; vendorPm: string; vendorPmoCount: number; projectGrade: "A" | "B" | "C"; timezone: string; staleBusinessDays: number };
+const schema = z.object({
+  name: z.string().trim().min(1).max(150),
+  isPublic: z.boolean().optional(),
+  openMethod: z.enum(["phased", "big_bang"]),
+  startDate: z.string().date(),
+  endDate: z.string().date(),
+  firstOpenDate: z.string().date().nullable(),
+  secondOpenDate: z.string().date().nullable(),
+  goLiveDate: z.string().date().nullable(),
+  customerName: z.string().trim().min(1).max(150),
+  vendorName: z.string().trim().min(1).max(150),
+  customerPm: z.string().trim().min(1).max(100),
+  customerPmoCount: z.number().int().min(0).max(999),
+  vendorPm: z.string().trim().min(1).max(100),
+  vendorPmoCount: z.number().int().min(0).max(999),
+  projectGrade: z.enum(["A", "B", "C"]),
+  timezone: z.string().trim().min(1).max(50),
+  staleBusinessDays: z.number().int().min(1).max(30),
+}).superRefine((d, ctx) => {
   if (d.endDate < d.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "종료일은 시작일 이후여야 합니다." });
   const inPeriod = (date: string | null) => date !== null && date >= d.startDate && date <= d.endDate;
   if (d.openMethod === "phased") {
@@ -31,9 +49,16 @@ function dateStr(value: Date | null) { return value ? value.toISOString().slice(
 async function loadProjectInformation(projectId: string): Promise<ProjectInformation> {
   const project = await getPrisma().project.findUnique({ where: { id: projectId } });
   if (!project) throw new Error("Project not found.");
+  let isPublic = true;
+  try {
+    const pub = await getPrisma().$queryRaw<{ isPublic: boolean }[]>`SELECT "isPublic" FROM projects WHERE id = ${projectId}`;
+    if (pub[0] !== undefined) isPublic = pub[0].isPublic;
+  } catch (e) {
+    console.error("isPublic fetch failed in loadProjectInformation:", e);
+  }
   const startDate = dateStr(project.startDate), endDate = dateStr(project.endDate);
   return {
-    id: project.id, code: project.code, name: project.name, openMethod: project.openMethod, startDate, endDate,
+    id: project.id, code: project.code, name: project.name, isPublic, openMethod: project.openMethod, startDate, endDate,
     firstOpenDate: dateStr(project.firstOpenDate), secondOpenDate: dateStr(project.secondOpenDate), goLiveDate: dateStr(project.goLiveDate),
     ...duration(startDate, endDate),
     customerName: project.customerName, vendorName: project.vendorName, customerPm: project.customerPm, customerPmoCount: project.customerPmoCount,
@@ -62,7 +87,15 @@ export async function updateProjectInformation(projectId: string, input: unknown
       vendorPm: data.vendorPm, vendorPmoCount: data.vendorPmoCount, projectGrade: data.projectGrade, timezone: data.timezone, staleBusinessDays: data.staleBusinessDays,
     },
   });
+  if (data.isPublic !== undefined) {
+    try {
+      await prisma.$executeRaw`UPDATE projects SET "isPublic" = ${data.isPublic} WHERE id = ${projectId}`;
+    } catch (e) {
+      console.error("isPublic update failed:", e);
+    }
+  }
   await writeAuditLog(projectId, null, "PROJECT_UPDATE", "projects", projectId, before, updated);
   revalidateTag(projectInfoTag(projectId));
+  revalidateTag("login-data");
   return getProjectInformation(updated.id);
 }

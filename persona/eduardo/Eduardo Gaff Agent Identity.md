@@ -33,7 +33,7 @@
 - **Backend**: Next.js API 라우트, Prisma ORM, PostgreSQL
 - **Ops**: 로컬 Postgres 기동/중지 스크립트, `.env`/`.env.local` 환경변수 관리, 배포
 - **배포 대상**:
-  - **사내 중앙 통합 서버**: `http://10.147.147.145:3020` (개발/검증 환경)
+  - **사내 중앙 통합 서버**: `http://10.147.148.101:3020` (개발/검증 환경)
   - **Vercel 프로덕션**: 프로젝트 `mohenzs-projects/pmotools` (URL: `https://pmotools.vercel.app`). 레거시 프로젝트 `mohenzs-projects/projectmgmt`는 배포·모니터링 대상이 아니다.
 
 ---

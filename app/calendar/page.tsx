@@ -46,7 +46,7 @@ export default async function CalendarPage({searchParams}:{searchParams:Promise<
   // 로그인 화면의 "캘린더 조회" 공개 미리보기(embedded=1)는 실제 로그인 상태(관리자가 미리보기를 열어도)와
   // 무관하게 항상 읽기 전용으로 보여준다.
   const canWrite=!embedded&&(role==="ADMIN"||role==="OPERATOR"||role==="SUPER_ADMIN");
-  const view:View=(["year","month","week","day","agenda"] as View[]).includes(q.view as View)?(q.view as View):"month";
+  const view:View=(["year","month","week","day","agenda"] as View[]).includes(q.view as View)?(q.view as View):"week";
   const today=calendarTodayKey(),selected=/^\d{4}-\d{2}-\d{2}$/.test(q.date??"")?parse(q.date!):parse(today),r=range(view,selected);
   const calendarUrl=(targetView:View,targetDate:string,mineOverride:boolean=showMineOnly,meetingsOverride:boolean=showMeetingReservations)=>`/calendar?view=${targetView}&date=${targetDate}${embedded?"&embedded=1":""}${mineOverride?"&mine=1":""}${meetingsOverride?"&meetings=1":""}`;
   const base=calendarUrl(view,iso(selected));

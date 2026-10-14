@@ -6,6 +6,7 @@ import { getCodeOptions } from "@/lib/server/common-codes";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { portfolioTag } from "@/lib/server/cache-tags";
+import { resolveRootProjectId } from "@/lib/server/project-access";
 import { assertManager, getMemberRole, isManagerRole } from "@/lib/server/permissions";
 import { calculateWeeklyReportPeriod, inferWeekOfMonth, weeklyReportName } from "@/lib/domain/weekly-reports";
 
@@ -38,15 +39,18 @@ async function loadProjectWeeks(projectId: string): Promise<ProjectWeek[]> {
 }
 
 // 주차 목록은 캘린더·업무 폼 등에서 반복 조회하는 읽기 중심 데이터라 30초 캐시하고, 등록/마감 시 즉시 무효화한다.
-export function listProjectWeeks(projectId: string): Promise<ProjectWeek[]> {
+export async function listProjectWeeks(projectId: string): Promise<ProjectWeek[]> {
+  projectId = await resolveRootProjectId(projectId);
   return unstable_cache(loadProjectWeeks, ["project-weeks"], { tags: [weeksTag(projectId)], revalidate: 30 })(projectId);
 }
 export async function getWorkOptions(projectId: string) {
+  projectId = await resolveRootProjectId(projectId);
   const [weeks, codes] = await Promise.all([listProjectWeeks(projectId), getCodeOptions(projectId)]);
   return { weeks, areas: codes.tracks as CommonCode[] };
 }
 const weekSchema = z.object({ weekKey: z.string().trim().min(7).max(10), label: z.string().trim().min(1).max(50), startDate: z.string().date(), endDate: z.string().date() }).superRefine((d, ctx) => { if (d.endDate < d.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "종료일은 시작일 이후여야 합니다." }); });
 export async function createProjectWeek(projectId: string, input: unknown) {
+  projectId = await resolveRootProjectId(projectId);
   const data = weekSchema.parse(input);
   const prisma = getPrisma();
   const existing = await prisma.week.findFirst({ where: { projectId, weekKey: data.weekKey } });
@@ -57,6 +61,7 @@ export async function createProjectWeek(projectId: string, input: unknown) {
   return { id: week.id, weekKey: week.weekKey, label: week.label, startDate: data.startDate, endDate: data.endDate, status: "open" as const };
 }
 export async function updateProjectWeekStatus(projectId: string, id: string, status: unknown) {
+  projectId = await resolveRootProjectId(projectId);
   const value = z.enum(["open", "closed"]).parse(status);
   const prisma = getPrisma();
   const current = await prisma.week.findUnique({ where: { id } });
@@ -68,6 +73,7 @@ export async function updateProjectWeekStatus(projectId: string, id: string, sta
 }
 const weekEditSchema = z.object({ label: z.string().trim().min(1).max(50), startDate: z.string().date(), endDate: z.string().date() }).superRefine((d, ctx) => { if (d.endDate < d.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "종료일은 시작일 이후여야 합니다." }); });
 export async function updateProjectWeek(projectId: string, id: string, input: unknown) {
+  projectId = await resolveRootProjectId(projectId);
   const data = weekEditSchema.parse(input);
   const prisma = getPrisma();
   const current = await prisma.week.findUnique({ where: { id } });
@@ -78,6 +84,7 @@ export async function updateProjectWeek(projectId: string, id: string, input: un
   return toProjectWeek(updated);
 }
 export async function deleteProjectWeek(projectId: string, id: string) {
+  projectId = await resolveRootProjectId(projectId);
   const prisma = getPrisma();
   const current = await prisma.week.findUnique({ where: { id } });
   if (!current || current.projectId !== projectId) throw new DomainError("NOT_FOUND", "프로젝트 주차를 찾을 수 없습니다.");
@@ -94,6 +101,7 @@ export async function deleteProjectWeek(projectId: string, id: string) {
 }
 export type ActivityLogFilters = { table?: string; targetId?: string; from?: string; to?: string };
 export async function listActivityLogs(projectId: string, filters: ActivityLogFilters = {}): Promise<ActivityLog[]> {
+  projectId = await resolveRootProjectId(projectId);
   const logs = await getPrisma().auditLog.findMany({
     where: {
       projectId,
@@ -107,6 +115,7 @@ export async function listActivityLogs(projectId: string, filters: ActivityLogFi
   return logs.map((log) => ({ id: log.id, action: log.action, actorName: log.actorName, createdAt: log.createdAt.toISOString(), beforeData: log.beforeData as Record<string, unknown> | null, afterData: log.afterData as Record<string, unknown> | null }));
 }
 export async function listAuditTables(projectId: string): Promise<string[]> {
+  projectId = await resolveRootProjectId(projectId);
   const rows = await getPrisma().auditLog.findMany({ where: { projectId }, distinct: ["targetTable"], select: { targetTable: true } });
   return rows.map((row) => row.targetTable).filter((table): table is string => Boolean(table)).sort();
 }
@@ -117,6 +126,7 @@ const weekGroupInclude = { week: true, group: true } as const;
 const weekGroupOrder = [{ week: { startDate: "desc" } }, { group: { sortOrder: "asc" } }] as const;
 
 export async function listWeeklyReports(projectId: string, weekId?: string): Promise<WeeklyReport[]> {
+  projectId = await resolveRootProjectId(projectId);
   const records = await getPrisma().weeklyReport.findMany({ where: weekScope(projectId, weekId), include: weekGroupInclude, orderBy: [...weekGroupOrder] });
   return records.map((row) => ({ id: row.id, weekId: row.weekId, weekLabel: row.week.label, areaCodeId: row.groupId, areaLabel: row.group.label, achievements: row.achievements, nextPlan: row.nextPlan, issues: row.issues, decisions: row.decisions, notes: row.notes, version: row.version }));
 }
@@ -146,6 +156,7 @@ const reportSummary = (week: {
 };
 
 export async function listWeeklyReportSummaries(projectId: string, filters: { q?: string; page?: number; pageSize?: number } = {}): Promise<WeeklyReportListResult> {
+  projectId = await resolveRootProjectId(projectId);
   const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 10));
   const q = filters.q?.trim() ?? "";
   const where = { projectId, reports: { some: {} }, ...(q ? { OR: [{ label: { contains: q, mode: "insensitive" as const } }, { project: { name: { contains: q, mode: "insensitive" as const } } }] } : {}) };
@@ -162,7 +173,9 @@ export async function listWeeklyReportSummaries(projectId: string, filters: { q?
 
 const generationSchema = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12), weekOfMonth: z.number().int().min(1).max(5) });
 export async function generateWeeklyReport(projectId: string, userId: string, input: unknown) {
-  await assertManager(projectId, userId);
+  const originalProjectId = projectId;
+  projectId = await resolveRootProjectId(projectId);
+  await assertManager(originalProjectId, userId);
   const data = generationSchema.parse(input);
   let period;
   try { period = calculateWeeklyReportPeriod(data.year, data.month, data.weekOfMonth); }
@@ -191,10 +204,12 @@ export async function generateWeeklyReport(projectId: string, userId: string, in
 }
 
 export async function getWeeklyReportDetail(projectId: string, userId: string, weekId: string): Promise<WeeklyReportDetail> {
+  const originalProjectId = projectId;
+  projectId = await resolveRootProjectId(projectId);
   const prisma = getPrisma();
   const [week, role, mappings] = await Promise.all([
     prisma.week.findFirst({ where: { id: weekId, projectId, reports: { some: {} } }, include: { project: { select: { name: true } }, reports: { include: { group: true }, orderBy: { group: { sortOrder: "asc" } } } } }),
-    getMemberRole(projectId, userId),
+    getMemberRole(originalProjectId, userId),
     prisma.userGroupMap.findMany({ where: { userId, group: { projectId } }, select: { groupId: true } }),
   ]);
   if (!week) throw new DomainError("NOT_FOUND", "위클리리포트를 찾을 수 없습니다.");
@@ -214,12 +229,14 @@ export async function getWeeklyReportDetail(projectId: string, userId: string, w
 
 const reportSchema = z.object({ weekId: z.string().uuid(), areaCodeId: z.string().uuid(), achievements: z.string().max(2000), nextPlan: z.string().max(2000), issues: z.string().max(2000), decisions: z.string().max(2000).default(""), notes: z.string().max(2000).default("") });
 export async function saveWeeklyReport(projectId: string, userId: string, input: unknown) {
+  const originalProjectId = projectId;
+  projectId = await resolveRootProjectId(projectId);
   const data = reportSchema.parse(input);
   const prisma = getPrisma();
   const [week, group, role, assignment] = await Promise.all([
     prisma.week.findFirst({ where: { id: data.weekId, projectId } }),
     prisma.groups.findFirst({ where: { id: data.areaCodeId, projectId, groupType: "WORK_MODULE" } }),
-    getMemberRole(projectId, userId),
+    getMemberRole(originalProjectId, userId),
     prisma.userGroupMap.findUnique({ where: { userId_groupId: { userId, groupId: data.areaCodeId } } }),
   ]);
   if (!week || !group) throw new DomainError("NOT_FOUND", "리포트 주차 또는 업무그룹을 찾을 수 없습니다.");
@@ -236,7 +253,9 @@ export async function saveWeeklyReport(projectId: string, userId: string, input:
 }
 
 export async function deleteWeeklyReport(projectId: string, userId: string, weekId: string) {
-  await assertManager(projectId, userId);
+  const originalProjectId = projectId;
+  projectId = await resolveRootProjectId(projectId);
+  await assertManager(originalProjectId, userId);
   const prisma = getPrisma();
   const result = await prisma.$transaction(async (tx) => {
     const current = await tx.week.findFirst({
@@ -267,7 +286,9 @@ export async function deleteWeeklyReport(projectId: string, userId: string, week
 }
 
 export async function updateWeeklyReportStatus(projectId: string, userId: string, weekId: string, status: unknown) {
-  await assertManager(projectId, userId);
+  const originalProjectId = projectId;
+  projectId = await resolveRootProjectId(projectId);
+  await assertManager(originalProjectId, userId);
   const value = z.enum(["open", "closed"]).parse(status);
   const prisma = getPrisma();
   const current = await prisma.week.findFirst({ where: { id: weekId, projectId, reports: { some: {} } } });
@@ -279,6 +300,7 @@ export async function updateWeeklyReportStatus(projectId: string, userId: string
 }
 
 export async function listWeeklyProgress(projectId: string, weekId?: string): Promise<ProgressRow[]> {
+  projectId = await resolveRootProjectId(projectId);
   const records = await getPrisma().weeklyProgress.findMany({ where: weekScope(projectId, weekId), include: weekGroupInclude, orderBy: [...weekGroupOrder] });
   const today = new Date().toISOString().slice(0, 10);
   return records.map((row) => {
@@ -288,6 +310,7 @@ export async function listWeeklyProgress(projectId: string, weekId?: string): Pr
 }
 const progressSchema = z.object({ weekId: z.string().uuid(), areaCodeId: z.string().uuid(), taskName: z.string().trim().min(1).max(200), planDetail: z.string().max(10000), planTargetDate: z.string().date().nullable(), actualDetail: z.string().max(10000), actualDate: z.string().date().nullable(), progress: z.number().int().min(0).max(100), nextPlan: z.string().max(10000), nextTargetDate: z.string().date().nullable(), notes: z.string().max(10000) });
 export async function createProgress(projectId: string, userId: string, input: unknown) {
+  projectId = await resolveRootProjectId(projectId);
   const data = progressSchema.parse(input);
   const row = await getPrisma().weeklyProgress.create({ data: { weekId: data.weekId, groupId: data.areaCodeId, taskName: data.taskName, planDetail: data.planDetail, planTargetDate: data.planTargetDate ? new Date(data.planTargetDate) : null, actualDetail: data.actualDetail, actualDate: data.actualDate ? new Date(data.actualDate) : null, progress: data.progress, nextPlan: data.nextPlan, nextTargetDate: data.nextTargetDate ? new Date(data.nextTargetDate) : null, notes: data.notes, createdBy: userId } });
   await writeAuditLog(projectId, userId, "WEEKLY_PROGRESS_INSERT", "weekly_progress", row.id, null, row);
@@ -295,6 +318,7 @@ export async function createProgress(projectId: string, userId: string, input: u
   return { id: row.id };
 }
 export async function updateProgress(projectId: string, id: string, input: unknown) {
+  projectId = await resolveRootProjectId(projectId);
   const data = progressSchema.parse(input);
   const prisma = getPrisma();
   const current = await prisma.weeklyProgress.findUnique({ where: { id } });
@@ -306,11 +330,13 @@ export async function updateProgress(projectId: string, id: string, input: unkno
 }
 
 export async function listStaffChanges(projectId: string, weekId?: string): Promise<StaffChange[]> {
+  projectId = await resolveRootProjectId(projectId);
   const records = await getPrisma().staffChange.findMany({ where: weekScope(projectId, weekId), include: weekGroupInclude, orderBy: [...weekGroupOrder, { changeType: "asc" }] });
   return records.map((row) => ({ id: row.id, weekId: row.weekId, weekLabel: row.week.label, areaCodeId: row.groupId, areaLabel: row.group.label, changeType: row.changeType, currentCount: row.currentCount, nextCount: row.nextCount, notes: row.notes, version: row.version }));
 }
 const staffSchema = z.object({ weekId: z.string().uuid(), areaCodeId: z.string().uuid(), changeType: z.enum(["join", "leave"]), currentCount: z.number().int().min(0), nextCount: z.number().int().min(0), notes: z.string().max(10000) });
 export async function saveStaffChange(projectId: string, userId: string, input: unknown) {
+  projectId = await resolveRootProjectId(projectId);
   const data = staffSchema.parse(input);
   const prisma = getPrisma();
   const existing = await prisma.staffChange.findUnique({ where: { weekId_groupId_changeType: { weekId: data.weekId, groupId: data.areaCodeId, changeType: data.changeType } } });
@@ -344,7 +370,8 @@ async function loadPortfolioDashboard(projectId: string) {
 }
 
 // 통합 대시보드 KPI는 변동 빈도가 낮으므로 15초 캐시한다. 이슈/실적/보고/인력변동 저장 시 revalidateTag로 무효화한다.
-export function getPortfolioDashboard(projectId: string) {
+export async function getPortfolioDashboard(projectId: string) {
+  projectId = await resolveRootProjectId(projectId);
   return unstable_cache(loadPortfolioDashboard, ["portfolio-dashboard"], { tags: [portfolioTag(projectId)], revalidate: 15 })(projectId);
 }
 export type PortfolioDashboard = Awaited<ReturnType<typeof loadPortfolioDashboard>>;

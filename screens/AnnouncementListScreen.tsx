@@ -13,7 +13,7 @@ export function AnnouncementListScreen({ result, q, isManager }: { result: { ann
         {result.announcements.length ? <div className="announcement-list">
           {result.announcements.map((item) => <Link className={`announcement-row${item.isImportant ? " important" : ""}`} href={`/announcements/${item.id}`} key={item.id}>
             <span className="announcement-icon" aria-hidden="true">{item.isImportant ? "!" : "·"}</span>
-            <span className="announcement-main"><span className="announcement-badges">{item.isImportant && <b>중요</b>}{item.audience === "MANAGERS" && <em>관리자·운영자</em>}</span><strong>{item.title}</strong><small>{item.authorName} · {date(item.publishedAt)}</small></span>
+            <span className="announcement-main"><span className="announcement-badges">{item.isImportant && <b>중요</b>}{item.isWorkNotice && <b>작업 알림</b>}{item.audience === "MANAGERS" && <em>관리자·운영자</em>}</span><strong>{item.title}</strong><small>{item.authorName} · {date(item.publishedAt)}</small></span>
             <span className="announcement-views">조회 {item.viewCount}</span>
           </Link>)}
         </div> : <div className="empty">등록된 공지사항이 없습니다.</div>}

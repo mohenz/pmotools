@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatWorkPeriod, workImpactLabel } from "@/lib/domain/work-notice";
 import { useRouter } from "next/navigation";
 import type { AnnouncementDetail } from "@/lib/server/announcements";
 
@@ -17,7 +18,8 @@ export function AnnouncementDetailScreen({ announcement, isManager }: { announce
   return <>
     <header className="topbar"><div><h1>공지사항 상세</h1><p>등록된 안내 내용을 확인합니다.</p></div><div className="topbar-actions"><Link className="button secondary" href="/announcements">목록</Link>{isManager && <><Link className="button secondary" href={`/announcements/${announcement.id}/edit`}>수정</Link><button className="button danger" onClick={remove}>삭제</button></>}</div></header>
     <div className="content announcement-content"><article className="panel announcement-detail">
-      <header>{announcement.isImportant && <span className="badge risk">중요 공지</span>}<h2>{announcement.title}</h2><div><span>{announcement.authorName}</span><span>{dateTime(announcement.publishedAt)}</span><span>조회 {announcement.viewCount}</span></div></header>
+      <header>{announcement.isImportant && <span className="badge risk">중요 공지</span>}{announcement.isWorkNotice && <span className="badge band-yellow">작업 알림</span>}<h2>{announcement.title}</h2><div><span>{announcement.authorName}</span><span>{dateTime(announcement.publishedAt)}</span><span>조회 {announcement.viewCount}</span></div></header>
+      {announcement.isWorkNotice && announcement.workStartAt && announcement.workEndAt && <p className="announcement-work-summary">작업 시간 <strong>{formatWorkPeriod(announcement.workStartAt, announcement.workEndAt)}</strong>{announcement.workImpact && <> · 영향 {workImpactLabel(announcement.workImpact)}</>}{announcement.noticeStartAt && <> · 팝업 안내 {formatWorkPeriod(announcement.noticeStartAt, announcement.workEndAt)}</>}</p>}
       <div className="announcement-body">{announcement.content}</div>
       <footer><span>공지 대상: {announcement.audience === "ALL" ? "전체 사용자" : "관리자·운영자"}</span>{announcement.expiresAt && <span>게시 종료: {dateTime(announcement.expiresAt)}</span>}</footer>
     </article></div>

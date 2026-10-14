@@ -4,5 +4,5 @@ import { listReceivedInvitations } from "@/lib/server/messages";
 
 export async function GET() {
   const { userId } = await getLocalContext();
-  return NextResponse.json({ data: await listReceivedInvitations(userId) });
+  return NextResponse.json({ data: (await listReceivedInvitations(userId)).rows });
 }

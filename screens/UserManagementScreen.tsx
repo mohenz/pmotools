@@ -7,12 +7,14 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { AdminUserListResult, AdminUserRow, GroupRow } from "@/lib/server/admin";
 import type { PasswordResetRequestRow } from "@/lib/server/password-reset-requests";
 import { WarningDialog } from "@/components/WarningDialog";
+import { ProjectAssignment } from "@/features/settings/ProjectAssignment";
 
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: "슈퍼관리자", ADMIN: "관리자", OPERATOR: "운영자", MEMBER: "일반" };
 
 type ProfileDraft = { userId: string; name: string; email: string; department: string; jobTitle: string };
 const emptyCreateDraft = { userId: "", name: "", email: "", department: "", jobTitle: "", role: "MEMBER" };
-type UserFilters = { q: string; page: number; pageSize: number | "all" };
+type UserFilters = { q: string; page: number; pageSize: number | "all"; scope: "all" | "project" };
+type ProjectOption = { id: string; code: string; name: string };
 
 function queryString(filters: UserFilters, overrides: Record<string, string | number | undefined> = {}) {
   const params = new URLSearchParams();
@@ -22,7 +24,7 @@ function queryString(filters: UserFilters, overrides: Record<string, string | nu
   return params.toString();
 }
 
-export function UserManagementScreen({ result, filters, resetRequests, workGroups }: { result: AdminUserListResult; filters: UserFilters; resetRequests: PasswordResetRequestRow[]; workGroups: GroupRow[] }) {
+export function UserManagementScreen({ result, filters, resetRequests, workGroups, projects, viewerIsSuperAdmin }: { result: AdminUserListResult; filters: UserFilters; resetRequests: PasswordResetRequestRow[]; workGroups: GroupRow[]; projects: ProjectOption[]; viewerIsSuperAdmin: boolean }) {
   const { users } = result;
   const pageLinkCount = Math.min(10, result.totalPages);
   const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
@@ -50,6 +52,17 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
   }
   function updateDraft(user: AdminUserRow, field: keyof ProfileDraft, value: string) {
     setDrafts((prev) => ({ ...prev, [user.id]: { ...draftFor(user), [field]: value } }));
+  }
+
+  // 프로젝트 배정 저장 — 성공하면 true(패널 닫기)
+  async function saveProjects(user: AdminUserRow, projectIds: string[]) {
+    setPending(`projects-${user.id}`); setMessage("");
+    const response = await fetch(`/api/v1/admin/users/${user.id}/projects`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectIds }) });
+    const payload = await response.json().catch(() => null);
+    setPending("");
+    if (!response.ok) { setMessage(payload?.error?.message ?? "프로젝트 배정을 저장하지 못했습니다."); return false; }
+    router.refresh();
+    return true;
   }
 
   async function changeRole(user: AdminUserRow, role: string) {
@@ -124,9 +137,10 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
   }
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const value = new FormData(event.currentTarget).get("q");
+    const form = new FormData(event.currentTarget), value = form.get("q");
     const q = value ? String(value) : "";
-    router.push(`/settings/users?${queryString({ ...filters, q, page: 1 })}`);
+    const scope = form.get("scope") === "project" ? "project" : "all";
+    router.push(`/settings/users?${queryString({ ...filters, q, scope, page: 1 })}`);
   }
 
   return <>
@@ -160,6 +174,7 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
       <section className="panel">
         <form className="inline-create" onSubmit={search}>
           <label>아이디·이름 검색<input name="q" defaultValue={filters.q} placeholder="검색어 입력" maxLength={100} /></label>
+          <label>범위<select name="scope" defaultValue={filters.scope}><option value="all">전체 사용자</option><option value="project">현재 프로젝트 배정자</option></select></label>
           <button className="button secondary" type="submit">검색</button>
         </form>
       </section>
@@ -171,19 +186,19 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
           <label>이메일<input type="email" value={createDraft.email} onChange={(event) => setCreateDraft((d) => ({ ...d, email: event.target.value }))} maxLength={100} /></label>
           <label>회사명<input value={createDraft.department} onChange={(event) => setCreateDraft((d) => ({ ...d, department: event.target.value }))} maxLength={100} /></label>
           <label>직무<input value={createDraft.jobTitle} onChange={(event) => setCreateDraft((d) => ({ ...d, jobTitle: event.target.value }))} maxLength={100} /></label>
-          <label>권한
+          <label>계정 역할
             <select value={createDraft.role} onChange={(event) => setCreateDraft((d) => ({ ...d, role: event.target.value }))}>
-              {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+              {Object.entries(ROLE_LABEL).filter(([value]) => viewerIsSuperAdmin || value === "OPERATOR" || value === "MEMBER").map(([value, label]) => <option value={value} key={value}>{label}</option>)}
             </select>
           </label>
           <button className="button primary" type="submit" disabled={pending === "create"}>{pending === "create" ? "등록 중…" : "+ 사용자 등록"}</button>
         </form>
       </section>
       <section className="panel">
-        <div className="panel-head"><h2>사용자 목록</h2><span>{result.total}명</span></div>
+        <div className="panel-head"><h2>사용자 목록</h2><span>{result.total}명 · {filters.scope === "project" ? "현재 프로젝트 배정자" : "전체 사용자"} · 슈퍼관리자·관리자는 모든 프로젝트, 운영자·일반은 배정된 프로젝트만 접근</span></div>
         <div className="table-wrap">
           <table className="dense-table user-management-table">
-            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>업무그룹</th><th>권한</th><th>상태</th><th /></tr></thead>
+            <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>회사명</th><th>직무</th><th>업무그룹</th><th>계정 역할</th><th>배정 프로젝트</th><th>상태</th><th /></tr></thead>
             <tbody>
               {users.map((user) => {
                 const draft = draftFor(user);
@@ -195,10 +210,12 @@ export function UserManagementScreen({ result, filters, resetRequests, workGroup
                   <td><input aria-label={`${user.userId} 직무`} style={{ width: 120 }} value={draft.jobTitle} onChange={(event) => updateDraft(user, "jobTitle", event.target.value)} maxLength={100} /></td>
                   <td><WorkGroupSelector user={user} groups={workGroups} selectedIds={selectedWorkGroups(user)} pending={pending === `groups-${user.id}`} onSave={(groupId) => saveWorkGroups(user, groupId)} /></td>
                   <td>
-                    <select className="user-role-select" aria-label={`${user.userId} 권한`} value={user.role} disabled={pending === `role-${user.id}`} onChange={(event) => changeRole(user, event.target.value)}>
+                    <select className="user-role-select" aria-label={`${user.userId} 계정 역할`} value={user.role} disabled={!viewerIsSuperAdmin || pending === `role-${user.id}`} title={viewerIsSuperAdmin ? "모든 프로젝트에 공통 적용되는 계정 역할" : "계정 역할은 슈퍼관리자만 변경할 수 있습니다"} onChange={(event) => changeRole(user, event.target.value)}>
                       {Object.entries(ROLE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                     </select>
+                    {user.legacyProjectRole && user.legacyProjectRole !== user.role && <small className="legacy-role" title="계정 역할 통일 이전 이 프로젝트에서의 역할(참고용)">이전: {ROLE_LABEL[user.legacyProjectRole]}</small>}
                   </td>
+                  <td><ProjectAssignment key={user.assignedProjects.map((p) => p.id).join()} label={user.userId} role={user.role} projects={projects} assignedIds={user.assignedProjects.map((p) => p.id)} pending={pending === `projects-${user.id}`} onSave={(ids) => saveProjects(user, ids)} /></td>
                   <td><span className={`badge ${user.status === "LOCKED" ? "issue" : "level-pm"}`}>{user.status === "LOCKED" ? "잠김" : "정상"}</span></td>
                   <td className="topbar-actions">
                     <AlertDialog.Root>

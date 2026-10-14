@@ -6,6 +6,7 @@ import { calendarInvitationContent, parseCalendarInvitationPayload, type Calenda
 import { meetingInvitationContent, parseMeetingInvitationPayload, type MeetingInvitationPayload } from "@/lib/domain/meeting-invitations";
 
 export type InvitationSummary = { id: string; senderName: string; senderUserId: string; isRead: boolean; createdAt: string; messageType: "CALENDAR_INVITATION" | "MEETING_INVITATION"; calendarEventId: string | null; calendarInvitation: CalendarInvitationPayload | null; meetingReservationId: string | null; meetingInvitation: MeetingInvitationPayload | null };
+export type InvitationListResult = { total: number; page: number; pageCount: number; rows: InvitationSummary[] };
 
 function messageEncryptionKey() {
   const secret = process.env.MESSAGE_ENCRYPTION_KEY ?? process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
@@ -13,24 +14,39 @@ function messageEncryptionKey() {
   return `pmotools-message-v1:${secret}`;
 }
 
-export async function listReceivedInvitations(userId: string): Promise<InvitationSummary[]> {
-  const messages = await getPrisma().message.findMany({
-    where: { receiverId: userId, messageType: { in: ["CALENDAR_INVITATION", "MEETING_INVITATION"] } },
-    include: { sender: { select: { name: true, userId: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-  return messages.map((m) => ({
-    id: m.id,
-    senderName: m.sender.name,
-    senderUserId: m.sender.userId,
-    isRead: m.isRead,
-    createdAt: m.createdAt.toISOString(),
-    messageType: m.messageType as "CALENDAR_INVITATION" | "MEETING_INVITATION",
-    calendarEventId: m.calendarEventId,
-    calendarInvitation: m.messageType === "CALENDAR_INVITATION" ? parseCalendarInvitationPayload(m.systemPayload) : null,
-    meetingReservationId: m.meetingReservationId,
-    meetingInvitation: m.messageType === "MEETING_INVITATION" ? parseMeetingInvitationPayload(m.systemPayload) : null,
-  }));
+export async function listReceivedInvitations(userId: string, filters: { page?: number; pageSize?: number } = {}): Promise<InvitationListResult> {
+  const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
+  const page = Math.max(1, filters.page ?? 1);
+  const where: any = { receiverId: userId, messageType: { in: ["CALENDAR_INVITATION", "MEETING_INVITATION"] } };
+
+  const [total, messages] = await Promise.all([
+    getPrisma().message.count({ where }),
+    getPrisma().message.findMany({
+      where,
+      include: { sender: { select: { name: true, userId: true } } },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    })
+  ]);
+
+  return {
+    total,
+    page,
+    pageCount: Math.ceil(total / pageSize) || 1,
+    rows: (messages as any[]).map((m) => ({
+      id: m.id,
+      senderName: m.sender?.name ?? "",
+      senderUserId: m.sender?.userId ?? "",
+      isRead: m.isRead,
+      createdAt: m.createdAt.toISOString(),
+      messageType: m.messageType as "CALENDAR_INVITATION" | "MEETING_INVITATION",
+      calendarEventId: m.calendarEventId,
+      calendarInvitation: m.messageType === "CALENDAR_INVITATION" ? parseCalendarInvitationPayload(m.systemPayload) : null,
+      meetingReservationId: m.meetingReservationId,
+      meetingInvitation: m.messageType === "MEETING_INVITATION" ? parseMeetingInvitationPayload(m.systemPayload) : null,
+    }))
+  };
 }
 
 export async function unreadMessageCount(userId: string): Promise<number> {

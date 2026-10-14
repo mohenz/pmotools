@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AnnouncementDetail } from "@/lib/server/announcements";
 import { WarningDialog } from "@/components/WarningDialog";
+import { WORK_NOTICE_IMPACTS, toKoreaDateTimeInput } from "@/lib/domain/work-notice";
 
 function inputDate(value: string | null | undefined) { if (!value) return ""; return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date(value)); }
 
@@ -13,11 +14,13 @@ export function AnnouncementFormScreen({ announcement }: { announcement?: Announ
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showOnDashboard, setShowOnDashboard] = useState(announcement?.showOnDashboard ?? false);
+  const [isWorkNotice, setIsWorkNotice] = useState(announcement?.isWorkNotice ?? false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError("");
     const form = new FormData(event.currentTarget);
     const response = await fetch(announcement ? `/api/v1/announcements/${announcement.id}` : "/api/v1/announcements", { method: announcement ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       title: form.get("title"), content: form.get("content"), audience: form.get("audience"), isImportant: form.get("isImportant") === "on", showOnDashboard: form.get("showOnDashboard") === "on", dashboardVisibleTo: form.get("dashboardVisibleTo") || null, publishedAt: form.get("publishedAt") || undefined, expiresAt: form.get("expiresAt") || null,
+      isWorkNotice, noticeStartAt: form.get("noticeStartAt") || null, workStartAt: form.get("workStartAt") || null, workEndAt: form.get("workEndAt") || null, workImpact: form.get("workImpact") || null,
     }) });
     if (!response.ok) { const body = await response.json().catch(() => null); setError(body?.error?.message ?? "저장하지 못했습니다."); setSaving(false); return; }
     const body = await response.json(); router.push(`/announcements/${body.data.id}`); router.refresh();
@@ -29,7 +32,12 @@ export function AnnouncementFormScreen({ announcement }: { announcement?: Announ
       <label>내용<textarea name="content" required maxLength={30000} rows={14} defaultValue={announcement?.content ?? ""} placeholder="공지 내용을 입력하세요" /></label>
       <div className="form-grid"><label>공지 대상<select name="audience" defaultValue={announcement?.audience ?? "ALL"}><option value="ALL">전체 사용자</option><option value="MANAGERS">관리자·운영자</option></select></label><label>게시 시작일<input type="date" name="publishedAt" defaultValue={inputDate(announcement?.publishedAt)} /></label></div>
       <div className="form-grid"><label>게시 종료일<input type="date" name="expiresAt" defaultValue={inputDate(announcement?.expiresAt)} /></label><label>메인 노출 종료일<input type="date" name="dashboardVisibleTo" disabled={!showOnDashboard} defaultValue={inputDate(announcement?.dashboardVisibleTo)} /></label></div>
-      <div className="announcement-options"><label><input type="checkbox" name="isImportant" defaultChecked={announcement?.isImportant} /> 중요 공지로 상단 고정</label><label><input type="checkbox" name="showOnDashboard" checked={showOnDashboard} onChange={(event) => setShowOnDashboard(event.target.checked)} /> 메인 화면 노출</label></div>
+      <div className="announcement-options"><label><input type="checkbox" name="isImportant" defaultChecked={announcement?.isImportant} /> 중요 공지로 상단 고정</label><label><input type="checkbox" name="showOnDashboard" checked={showOnDashboard} onChange={(event) => setShowOnDashboard(event.target.checked)} /> 메인 화면 노출</label><label><input type="checkbox" checked={isWorkNotice} onChange={(event) => setIsWorkNotice(event.target.checked)} /> 작업 알림(로그인 후 팝업)</label></div>
+      {isWorkNotice && <fieldset className="announcement-work-fields">
+        <legend>작업 알림 — 안내 시작부터 작업 종료까지 로그인 후 팝업으로 표시(사용자는 &apos;오늘 하루 보지 않기&apos; 가능)</legend>
+        <div className="form-grid"><label>안내 시작<input type="datetime-local" name="noticeStartAt" required defaultValue={toKoreaDateTimeInput(announcement?.noticeStartAt)} /></label><label>영향<select name="workImpact" defaultValue={announcement?.workImpact ?? "OUTAGE"}>{WORK_NOTICE_IMPACTS.map((impact) => <option key={impact.value} value={impact.value}>{impact.label}</option>)}</select></label></div>
+        <div className="form-grid"><label>작업 시작<input type="datetime-local" name="workStartAt" required defaultValue={toKoreaDateTimeInput(announcement?.workStartAt)} /></label><label>작업 종료<input type="datetime-local" name="workEndAt" required defaultValue={toKoreaDateTimeInput(announcement?.workEndAt)} /></label></div>
+      </fieldset>}
       <WarningDialog message={error} onClose={() => setError("")} />
       <div className="form-actions"><Link className="button secondary" href={announcement ? `/announcements/${announcement.id}` : "/announcements"}>취소</Link><button className="button primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button></div>
     </form></section></div>

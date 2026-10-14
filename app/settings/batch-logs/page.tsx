@@ -38,7 +38,7 @@ export default async function BatchLogsPage() {
                   </td>
                 </tr>
               ) : (
-                logs.map(log => (
+                logs.map((log: any) => (
                   <tr key={log.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                     <td style={{ padding: '12px', fontWeight: 600 }}>{log.jobName}</td>
                     <td style={{ padding: '12px' }}>

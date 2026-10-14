@@ -24,3 +24,14 @@ docs/project_setting.md
 .windsurf/
 skills-lock.json
 scratch/
+scratch*.js
+
+# SonarQube 분석 산출물·로컬 로그·엑셀 잠금 파일 (2026-10-01)
+.scannerwork/
+dev3020*.log
+~$*
+# 비밀정보(토큰·계정·DB 비밀번호)가 들어 있는 로컬 전용 파일 — 커밋 금지 (2026-10-01)
+sonar-project.properties
+scripts/create-token.ps1
+scripts/fetch-metrics.ps1
+scripts/test-remote-db.ts

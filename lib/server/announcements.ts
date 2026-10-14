@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { assertManager, getMemberRole, isManagerRole } from "@/lib/server/permissions";
+import { parseKoreaDateTime, validateWorkNoticeTimes } from "@/lib/domain/work-notice";
 
 const announcementSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -14,7 +15,22 @@ const announcementSchema = z.object({
   dashboardVisibleTo: z.string().trim().nullable().optional(),
   publishedAt: z.string().trim().optional(),
   expiresAt: z.string().trim().nullable().optional(),
+  // 작업 알림(2026-10-01) — 시각은 한국 시간 datetime-local("YYYY-MM-DDTHH:mm")
+  isWorkNotice: z.boolean().default(false),
+  noticeStartAt: z.string().trim().nullable().optional(),
+  workStartAt: z.string().trim().nullable().optional(),
+  workEndAt: z.string().trim().nullable().optional(),
+  workImpact: z.enum(["OUTAGE", "PARTIAL", "NONE"]).nullable().optional(),
 });
+
+/** 작업 알림 컬럼 — 작업 알림이 아니면 모두 비운다. 시각 순서가 맞지 않으면 오류. */
+function workNoticeColumns(data: z.infer<typeof announcementSchema>) {
+  if (!data.isWorkNotice) return { isWorkNotice: false, noticeStartAt: null, workStartAt: null, workEndAt: null, workImpact: null };
+  const noticeStartAt = parseKoreaDateTime(data.noticeStartAt), workStartAt = parseKoreaDateTime(data.workStartAt), workEndAt = parseKoreaDateTime(data.workEndAt);
+  const problem = validateWorkNoticeTimes(noticeStartAt, workStartAt, workEndAt);
+  if (problem) throw new DomainError("INVALID_CODE", problem);
+  return { isWorkNotice: true, noticeStartAt, workStartAt, workEndAt, workImpact: data.workImpact ?? "OUTAGE" };
+}
 
 function optionalDate(value: string | null | undefined, endOfDay = false) {
   if (!value) return null;
@@ -23,8 +39,9 @@ function optionalDate(value: string | null | undefined, endOfDay = false) {
   return date;
 }
 
-function toRow(row: { id: string; title: string; audience: "ALL" | "MANAGERS"; isImportant: boolean; showOnDashboard: boolean; dashboardVisibleTo: Date | null; publishedAt: Date; expiresAt: Date | null; viewCount: number; createdAt: Date; updatedAt: Date; author: { name: string } }) {
-  return { ...row, authorName: row.author.name, publishedAt: row.publishedAt.toISOString(), expiresAt: row.expiresAt?.toISOString() ?? null, dashboardVisibleTo: row.dashboardVisibleTo?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), author: undefined };
+function toRow(row: { id: string; title: string; audience: "ALL" | "MANAGERS"; isImportant: boolean; showOnDashboard: boolean; dashboardVisibleTo: Date | null; publishedAt: Date; expiresAt: Date | null; viewCount: number; createdAt: Date; updatedAt: Date; author: { name: string }; isWorkNotice: boolean; noticeStartAt: Date | null; workStartAt: Date | null; workEndAt: Date | null; workImpact: "OUTAGE" | "PARTIAL" | "NONE" | null }) {
+  return { ...row, authorName: row.author.name, publishedAt: row.publishedAt.toISOString(), expiresAt: row.expiresAt?.toISOString() ?? null, dashboardVisibleTo: row.dashboardVisibleTo?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), author: undefined,
+    noticeStartAt: row.noticeStartAt?.toISOString() ?? null, workStartAt: row.workStartAt?.toISOString() ?? null, workEndAt: row.workEndAt?.toISOString() ?? null };
 }
 
 export type AnnouncementRow = ReturnType<typeof toRow>;
@@ -68,6 +85,7 @@ export async function createAnnouncement(projectId: string, actorId: string, inp
     isImportant: data.isImportant, showOnDashboard: data.showOnDashboard,
     dashboardVisibleTo: data.showOnDashboard ? optionalDate(data.dashboardVisibleTo, true) : null,
     publishedAt: optionalDate(data.publishedAt) ?? new Date(), expiresAt: optionalDate(data.expiresAt, true),
+    ...workNoticeColumns(data),
   } });
   await writeAuditLog(projectId, actorId, "ANNOUNCEMENT_INSERT", "announcements", created.id, null, { title: created.title });
   return { id: created.id };
@@ -83,6 +101,7 @@ export async function updateAnnouncement(projectId: string, actorId: string, id:
     updatedById: actorId, title: data.title, content: data.content, audience: data.audience, isImportant: data.isImportant,
     showOnDashboard: data.showOnDashboard, dashboardVisibleTo: data.showOnDashboard ? optionalDate(data.dashboardVisibleTo, true) : null,
     publishedAt: optionalDate(data.publishedAt) ?? before.publishedAt, expiresAt: optionalDate(data.expiresAt, true),
+    ...workNoticeColumns(data),
   } });
   await writeAuditLog(projectId, actorId, "ANNOUNCEMENT_UPDATE", "announcements", id, { title: before.title }, { title: data.title });
   return { id };
@@ -96,4 +115,18 @@ export async function deleteAnnouncement(projectId: string, actorId: string, id:
   await prisma.announcement.update({ where: { id }, data: { deletedAt: new Date(), updatedById: actorId } });
   await writeAuditLog(projectId, actorId, "ANNOUNCEMENT_DELETE", "announcements", id, { title: before.title }, null);
   return { id };
+}
+
+export type ActiveWorkNotice = { id: string; title: string; content: string; noticeStartAt: string; workStartAt: string; workEndAt: string; workImpact: "OUTAGE" | "PARTIAL" | "NONE" | null };
+
+/** 로그인 후 팝업용 — 안내 시작 ≤ 지금 < 작업 종료인 작업 알림(공지 대상 권한 반영), 작업 시작이 빠른 순. */
+export async function listActiveWorkNotices(projectId: string, userId: string): Promise<ActiveWorkNotice[]> {
+  const role = await getMemberRole(projectId, userId);
+  const now = new Date();
+  const rows = await getPrisma().announcement.findMany({
+    where: { projectId, deletedAt: null, isWorkNotice: true, noticeStartAt: { lte: now }, workEndAt: { gt: now }, ...(isManagerRole(role) ? {} : { audience: "ALL" as const }) },
+    orderBy: { workStartAt: "asc" }, take: 5,
+    select: { id: true, title: true, content: true, noticeStartAt: true, workStartAt: true, workEndAt: true, workImpact: true },
+  });
+  return rows.map((row) => ({ id: row.id, title: row.title, content: row.content.slice(0, 2000), noticeStartAt: row.noticeStartAt!.toISOString(), workStartAt: row.workStartAt!.toISOString(), workEndAt: row.workEndAt!.toISOString(), workImpact: row.workImpact }));
 }

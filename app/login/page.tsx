@@ -1,131 +1,44 @@
-"use client";
+import { getPrisma } from "@/lib/server/db-pg";
+import { LoginClient } from "./LoginClient";
+import { unstable_cache } from "next/cache";
 
-import { FormEvent, Suspense, useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { PublicReadOnlyModal } from "@/components/PublicReadOnlyModal";
-import { WarningDialog } from "@/components/WarningDialog";
-
-const SAVED_USER_ID_KEY = "pmotools:savedUserId";
-const SAVED_PROJECT_CODE_KEY = "pmotools:savedProjectCode";
-
-function LoginForm() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
-  const [idleNotice, setIdleNotice] = useState("");
-  const [userId, setUserId] = useState("");
-  const [projectCode, setProjectCode] = useState("");
-  const [rememberUserId, setRememberUserId] = useState(false);
-  const [projects, setProjects] = useState<{ code: string; name: string }[]>([]);
-
-  useEffect(() => {
+// DB를 찌르는 캐시 함수 (태그: 'login-data')
+const getLoginData = unstable_cache(
+  async () => {
+    const prisma = getPrisma();
+    let projects: { code: string; name: string }[] = [];
+    
+    // 1. 프로젝트 목록 조회 (isPublic 자동 생성 및 정렬 반영)
     try {
-      const saved = localStorage.getItem(SAVED_USER_ID_KEY);
-      if (saved) { setUserId(saved); setRememberUserId(true); }
-    } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
-    if (params.get("reason") === "idle") {
-      setIdleNotice("1시간 동안 활동이 없어 자동으로 로그아웃되었습니다.");
-      // 안내를 한 번 보여준 뒤에는 URL에서 reason을 지워, 이 화면을 새로고침하거나
-      // 다시 방문해도 예전 로그아웃 사유가 계속 뜨지 않도록 한다.
-      router.replace("/login", { scroll: false });
-    }
-    fetch("/api/v1/public/projects")
-      .then((res) => res.json())
-      .then((payload) => {
-        const list: { code: string; name: string }[] = Array.isArray(payload?.data) ? payload.data : [];
-        setProjects(list);
-        try {
-          const savedProject = localStorage.getItem(SAVED_PROJECT_CODE_KEY);
-          if (savedProject && list.some((p) => p.code === savedProject)) setProjectCode(savedProject);
-        } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
-      })
-      .catch(() => setProjects([]));
-  }, []);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setMessage("");
-    const data = new FormData(event.currentTarget);
-    const result = await signIn("credentials", {
-      userId,
-      password: String(data.get("password") ?? ""),
-      projectCode,
-      redirect: false,
-    });
-    setPending(false);
-    if (result?.error) {
-      setMessage("아이디, 비밀번호 또는 선택한 프로젝트가 일치하지 않습니다.");
-      return;
+      await prisma.$executeRawUnsafe(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "isPublic" BOOLEAN NOT NULL DEFAULT true;`);
+    } catch (e) {
+      // ignore
     }
     try {
-      if (rememberUserId) localStorage.setItem(SAVED_USER_ID_KEY, userId);
-      else localStorage.removeItem(SAVED_USER_ID_KEY);
-      localStorage.setItem(SAVED_PROJECT_CODE_KEY, projectCode);
-    } catch { /* private browsing 등에서 storage 접근이 막힐 수 있음 */ }
-    router.push(params.get("callbackUrl") ?? "/portfolio");
-    router.refresh();
-  }
+      projects = await prisma.$queryRaw<{ code: string; name: string }[]>`SELECT code, name FROM projects WHERE "isPublic" = true ORDER BY "sortOrder" ASC, name ASC`;
+    } catch (e) {
+      projects = await prisma.$queryRaw<{ code: string; name: string }[]>`SELECT code, name FROM projects ORDER BY "sortOrder" ASC, name ASC`;
+    }
 
-  return (
-    <form className="auth-form" onSubmit={submit}>
-      {idleNotice && <p className="auth-notice" role="status">{idleNotice}</p>}
-      <label>
-        프로젝트
-        <select name="projectCode" required value={projectCode} onChange={(event) => setProjectCode(event.target.value)}>
-          <option value="" disabled>프로젝트를 선택하세요</option>
-          {projects.map((project) => <option value={project.code} key={project.code}>{project.name}</option>)}
-        </select>
-      </label>
-      <label>아이디<input name="userId" autoComplete="username" placeholder="아이디 입력" required maxLength={50} value={userId} onChange={(event) => setUserId(event.target.value)} /></label>
-      <label>비밀번호<input name="password" type="password" autoComplete="current-password" placeholder="••••••••" required maxLength={100} /></label>
-      <label className="toggle auth-remember"><input type="checkbox" checked={rememberUserId} onChange={(event) => setRememberUserId(event.target.checked)} /> 아이디 저장</label>
-      <WarningDialog message={message} onClose={() => setMessage("")} />
-      <button className="auth-submit" disabled={pending}>{pending ? <span className="loader" role="status" aria-label="로그인 중" /> : "로그인"}</button>
-    </form>
-  );
-}
+    // 2. 로그인 배경 이미지 URL 조회 (최적화)
+    let loginBgUrl = "/login-bg.webp";
+    try {
+      const img = await prisma.loginImage.findUnique({
+        where: { scope: "MAIN" },
+        select: { id: true, updatedAt: true }
+      });
+      if (img) loginBgUrl = `/api/v1/settings/login-image/file?v=${img.updatedAt.getTime()}`;
+    } catch (e) {
+      // ignore
+    }
 
-export default function LoginPage() {
-  const [publicView, setPublicView] = useState<"calendar" | "meetrooms" | null>(null);
-  const [loginBgUrl, setLoginBgUrl] = useState<string | null>(null);
+    return { projects, loginBgUrl };
+  },
+  ["login-data-key"], // cache key
+  { tags: ["login-data"] } // webhook 갱신용 tag
+);
 
-  useEffect(() => {
-    fetch("/api/v1/settings/login-image")
-      .then((res) => res.json())
-      .then((data) => { setLoginBgUrl(data.url ?? "/login-bg.png"); })
-      .catch(() => { setLoginBgUrl("/login-bg.png"); });
-  }, []);
-  return (
-    <div className="auth-split-layout">
-      {/* 왼쪽: 이미지 패널 (70%) */}
-      <div className="auth-image-panel" aria-hidden="true">
-        {loginBgUrl && <img src={loginBgUrl} alt="" className="auth-image-panel__img" />}
-      </div>
-      {/* 오른쪽: 로그인 패널 (30%) */}
-      <div className="auth-login-panel">
-        <div className="auth-card">
-          <div className="auth-brand">
-            <img src="/pmotools-logo-login.png" alt="PMOTOOLS" />
-          </div>
-          <div className="auth-divider" />
-          <Suspense fallback={null}>
-            <LoginForm />
-          </Suspense>
-          <div className="auth-footer-links">
-            <Link href="/signup">회원가입</Link>
-            <Link href="/reset-password">비밀번호 초기화</Link>
-          </div>
-          <div className="public-view-links" aria-label="로그인 없이 조회">
-            <button type="button" onClick={() => setPublicView("calendar")}>캘린더 조회</button>
-            <button type="button" onClick={() => setPublicView("meetrooms")}>회의실 예약현황 조회</button>
-          </div>
-        </div>
-      </div>
-      {publicView ? <PublicReadOnlyModal view={publicView} onClose={() => setPublicView(null)} /> : null}
-    </div>
-  );
+export default async function LoginPage() {
+  const { projects, loginBgUrl } = await getLoginData();
+  return <LoginClient projects={projects} loginBgUrl={loginBgUrl} />;
 }

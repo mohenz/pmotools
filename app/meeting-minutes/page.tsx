@@ -9,7 +9,9 @@ const dateParam = (value: string | string[] | undefined) => (typeof value === "s
 export default async function MeetingMinutesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { projectId } = await getLocalContext();
   const params = await searchParams;
-  const filters = { q: typeof params.q === "string" ? params.q : "", dateFrom: dateParam(params.dateFrom), dateTo: dateParam(params.dateTo) };
-  const result = await listMeetingMinutes(projectId, { ...filters, page: typeof params.page === "string" ? Number(params.page) || 1 : 1 });
+  const pageSize: number | "all" = params.pageSize === "all" ? "all" : typeof params.pageSize === "string" && [20, 40, 60, 80, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20;
+  const page = typeof params.page === "string" ? Number(params.page) || 1 : 1;
+  const filters = { q: typeof params.q === "string" ? params.q : "", dateFrom: dateParam(params.dateFrom), dateTo: dateParam(params.dateTo), page, pageSize };
+  const result = await listMeetingMinutes(projectId, filters);
   return <MeetingMinuteListScreen result={result} filters={filters} />;
 }

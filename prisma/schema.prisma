@@ -99,6 +99,7 @@ model User {
   meetingMinuteActionItems      MeetingMinuteActionItem[]     @relation("MeetingActionItemAssignee")
   meetingActionItemChanges      MeetingMinuteActionItem[]     @relation("MeetingActionItemStatusChanger")
   meetingActionItemLogs         MeetingMinuteActionItemLog[]  @relation("MeetingActionItemLogActor")
+  importBatches                 ImportBatch[]                 @relation("ImportBatchUploader")
 
   @@map("users")
 }
@@ -176,6 +177,8 @@ model Project {
   projectGrade      ProjectGrade @default(B)
   timezone          String       @default("Asia/Seoul")
   staleBusinessDays Int          @default(3)
+  sortOrder         Int          @default(0) // 노출 우선순위 — 작을수록 위. 같으면 이름순(프로젝트 관리 목록·프로젝트 전환·WBS2 대상 프로젝트 선택)
+  numberingBase     Int?         @unique // 번호 시작점(10만 단위) — 전역 유일 표시 ID 7종의 프로젝트별 순번 구간. 생성 시 자동 발번, 화면 수정 불가(2026-09-30)
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
@@ -216,6 +219,7 @@ model Project {
   meetingMinuteSequence     MeetingMinuteSequence?
 
   @@index([parentId])
+  importBatches ImportBatch[]
   @@map("projects")
 }
 
@@ -1174,6 +1178,13 @@ enum AnnouncementAudience {
   MANAGERS
 }
 
+// 작업 알림(배포·점검) 영향 — 2026-10-01
+enum WorkNoticeImpact {
+  OUTAGE // 접속 중단
+  PARTIAL // 일부 기능 제한
+  NONE // 영향 없음
+}
+
 model Announcement {
   id                 String               @id @default(uuid())
   projectId          String
@@ -1185,6 +1196,12 @@ model Announcement {
   dashboardVisibleTo DateTime?            @db.Date
   publishedAt        DateTime             @default(now())
   expiresAt          DateTime?            @db.Date
+  // 작업 알림(2026-10-01) — 로그인 후 팝업, 안내 시작~작업 종료 동안 "오늘 하루 보지 않기"로 표시
+  isWorkNotice       Boolean              @default(false)
+  noticeStartAt      DateTime?
+  workStartAt        DateTime?
+  workEndAt          DateTime?
+  workImpact         WorkNoticeImpact?
   viewCount          Int                  @default(0)
   authorId           String
   updatedById        String
@@ -1198,6 +1215,7 @@ model Announcement {
 
   @@index([projectId, deletedAt, isImportant, publishedAt])
   @@index([projectId, showOnDashboard, dashboardVisibleTo])
+  @@index([projectId, isWorkNotice, workEndAt])
   @@map("announcements")
 }
 
@@ -1591,7 +1609,7 @@ model MeetingMinuteSequence {
 
 model MeetingMinute {
   id          String    @id @default(uuid())
-  displayId   String    @unique // MM-0001
+  displayId   String // MM-0001 — 프로젝트 안에서만 유일 (프로젝트마다 순번이 1부터라 전역 유일이면 두 번째 프로젝트에서 충돌)
   seq         Int
   projectId   String
   category    String // 회의 분류(예: DES) — 우선 수기 입력, 이후 공통코드로 전환 예정
@@ -1613,6 +1631,7 @@ model MeetingMinute {
   entries     MeetingMinuteEntry[]
   actionItems MeetingMinuteActionItem[]
 
+  @@unique([projectId, displayId])
   @@index([projectId, archivedAt, meetingDate])
   @@map("meeting_minutes")
 }
@@ -1693,4 +1712,72 @@ model MeetingMinuteActionItemLog {
 
   @@index([actionItemId, createdAt])
   @@map("meeting_minute_action_item_logs")
+}
+
+// ---------------------------------------------------------------------------
+// 엑셀 업로드 임시 저장(스테이징) — WBS2 · 요구사항관리2 (2026-09-30)
+// 업로드한 엑셀을 반영 전에 담아 두고 행별 정상/오류를 보여 준다. 오류 행은 화면에서 고쳐 재검증하고, 반영하면 배치를 지운다.
+// (프로젝트, 종류, 올린 사람)당 배치 1개 — 재업로드하면 교체. 올린 사람만 보고 수정·반영한다.
+// ---------------------------------------------------------------------------
+
+enum ImportBatchKind {
+  WBS
+  REQUIREMENT
+}
+
+enum ImportRowStatus {
+  OK
+  ERROR
+}
+
+model ImportBatch {
+  id         String          @id @default(uuid())
+  projectId  String
+  kind       ImportBatchKind
+  fileName   String
+  headers    Json // 1행 헤더(열 순서대로 문자열 배열)
+  summary    Json // 마지막 검증 요약 { total, ok, error, actionCounts?, willDeleteCount? , fileErrors[] }
+  uploadedBy String
+  version    Int             @default(1)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader User             @relation("ImportBatchUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
+  rows     ImportBatchRow[]
+
+  @@unique([projectId, kind, uploadedBy])
+  @@map("import_batches")
+}
+
+model ImportBatchRow {
+  id       String          @id @default(uuid())
+  batchId  String
+  rowNo    Int // 엑셀 행 번호(2부터) — 검증 메시지·화면 표시에 그대로 쓴다
+  cells    Json // 열 순서대로 값 배열(날짜는 YYYY-MM-DD, 리치텍스트·수식은 표시값)
+  status   ImportRowStatus @default(OK)
+  errors   Json            @default("[]")
+  warnings Json            @default("[]")
+  edited   Boolean         @default(false)
+  editedAt DateTime?
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, rowNo])
+  @@map("import_batch_rows")
+}
+
+// ---------------------------------------------------------------------------
+// 배치 작업 이력 (DB 자동 백업 등)
+// ---------------------------------------------------------------------------
+model BatchJobLog {
+  id         String   @id @default(uuid())
+  jobName    String
+  status     String
+  output     String?
+  durationMs Int?
+  executedAt DateTime @default(now())
+
+  @@index([jobName, executedAt])
+  @@map("batch_job_logs")
 }

@@ -67,8 +67,8 @@ npx prisma studio
 ## 🚀 배포 및 서버 인프라 원칙
 
 1. **사내 중앙 통합 서버 (기본 인프라)**:
-   - URL: `http://10.147.147.145:3020` (개발/검증 환경)
-   - 사내 Gitea 원격 저장소(`http://10.147.147.145:3000/PMO/pmotools.git`)의 `develop` 브랜치에 푸시하여 배포.
+   - URL: `http://10.147.148.101:3020` (개발/검증 환경)
+   - 사내 Gitea 원격 저장소(`http://10.147.148.101:3000/PMO/pmotools.git`)의 `develop` 브랜치에 푸시하여 배포.
 2. **Vercel 프로덕션 (클라우드)**:
    - 대상 프로젝트: `mohenzs-projects/pmotools` (URL: `https://pmotools.vercel.app`)
    - **주의**: 사용자의 명시적 요청 시에만 수행하며, 레거시 프로젝트(`mohenzs-projects/projectmgmt`)는 절대 배포 대상이 아님.

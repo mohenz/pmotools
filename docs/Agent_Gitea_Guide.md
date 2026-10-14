@@ -26,7 +26,7 @@
   sudo yum install -y git
   ```
 ### Gitea 서버 접속 정보
-- **저장소 URL**: `http://10.147.147.145:3000/PMO/pmotools.git`
+- **저장소 URL**: `http://10.147.148.101:3000/PMO/pmotools.git`
   - *(참고: IP 주소는 인트라넷 IP를 사용하거나, 사내 DNS가 할당된 도메인을 사용하십시오.)*
 - **접속 계정 (Agent 전용)**: `pmoadmin` / `adminadmin`
   - *(보안 상 Agent 전용 계정 발급이 필요할 경우, Gitea 관리자 페이지에서 신규 계정을 생성 후 사용)*
@@ -40,7 +40,7 @@
 
 ### Step 1. 저장소 클론 (Clone)
 ```bash
-git clone http://pmoadmin:adminadmin@10.147.147.145:3000/PMO/pmotools.git
+git clone http://pmoadmin:adminadmin@10.147.148.101:3000/PMO/pmotools.git
 cd pmotools
 ```
 

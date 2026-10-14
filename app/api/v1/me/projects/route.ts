@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-import { getPrisma } from "@/lib/server/db-pg";
 import { getLocalContext } from "@/lib/server/context";
+import { listAccessibleProjects } from "@/lib/server/project-access";
 
+// 프로젝트 전환 목록 — 슈퍼관리자·관리자는 전체 프로젝트, 운영자·사용자는 배정된 프로젝트(노출 우선순위 → 이름순)
 export async function GET() {
   const { userId } = await getLocalContext();
-  const memberships = await getPrisma().projectMember.findMany({
-    where: { userId, isActive: true },
-    select: { role: true, project: { select: { id: true, code: true, name: true } } },
-    orderBy: { project: { name: "asc" } },
-  });
-  return NextResponse.json({
-    data: memberships.map((m) => ({ projectId: m.project.id, code: m.project.code, name: m.project.name, role: m.role })),
-  });
+  return NextResponse.json({ data: await listAccessibleProjects(userId) });
 }

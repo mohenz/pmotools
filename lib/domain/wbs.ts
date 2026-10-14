@@ -129,6 +129,8 @@ export function wbsDelayCompletion(dueDate: Date, actualDueDate: Date, holidays:
 export type WbsDelayCheckInput = { plannedStart: string | null; actualStart: string | null; plannedDue: string | null; actualDue: string | null };
 
 export function isWbsItemDelayed(today: string, item: WbsDelayCheckInput): boolean {
+  if (item.actualDue !== null) return false;
+
   const startDelayed = item.plannedStart !== null && item.plannedStart < today && item.actualStart === null;
   const dueDelayed = item.plannedDue !== null && item.plannedDue < today && item.actualDue === null;
   const notYetDue = item.plannedDue !== null && item.plannedDue >= today && item.actualStart === null && item.actualDue === null;

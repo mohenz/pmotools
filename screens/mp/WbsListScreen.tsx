@@ -1,0 +1,120 @@
+// [WBS2 복사본] 원본: screens/WbsListScreen.tsx — 2026-09-29 복사. 원본과 독립 운영(D-1). 원본 수정이 자동 반영되지 않으므로 docs/다중프로젝트_작업절차서.md 7-4 대응표 참고.
+import React from "react";
+import Link from "next/link";
+import { ClickableTableRow } from "@/components/ClickableTableRow";
+import { WbsExcludeCompletedToggle } from "@/features/mp/wbs/WbsExcludeCompletedToggle";
+import { CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, WBS_ITEM_STATUSES } from "@/lib/domain/wbs";
+import { WBS_EXCEL_HEADERS as HEADERS, WBS_EXCEL_ROLE_NAMES } from "@/lib/server/mp/wbs";
+import type { WbsExcelListResult } from "@/lib/server/mp/wbs";
+
+// 목록 화면에서는 숨기되(엑셀 다운로드/업로드용 HEADERS 원본은 그대로 유지) — 입력 불필요 항목·역할별 권한/진도율 매트릭스는
+// 목록을 지나치게 넓게 만들어 화면에서 뺀다(2026-09-04 사용자 요청). Confing Status·TRACK·sort도 동일한 이유로 추가 제외(2026-09-05 사용자 요청).
+const HIDDEN_HEADERS = new Set<string>([
+  "sort", "Confing Status", "TRACK",
+  "사용자ID", "StartDate", "DueDate", "Deliverables(이슈 및 사유)",
+  "공식여부(입력불필요)", "파일위치(입력불필요)", "트랜젝션코드(정렬SEQ)",
+  "산출물템플릿(입력불필요)", "검수자(입력불필요)", "검수실행일(입력불필요)",
+  "계산 가중치(입력불필요)", "가중치(입력불필요)", "Sort(Working Day)",
+  ...WBS_EXCEL_ROLE_NAMES.map((role) => `${role}(진척등록권한)`),
+  ...WBS_EXCEL_ROLE_NAMES.map((role) => `${role}(진도율)`),
+]);
+
+type Filters = {
+  page: number; pageSize: number | "all"; q: string; assignee: string;
+  startDateFrom: string; startDateTo: string; dueDateFrom: string; dueDateTo: string;
+  actualStartDateFrom: string; actualStartDateTo: string; actualDueDateFrom: string; actualDueDateTo: string;
+  delayed: "" | "y" | "n";
+  stage: string; status: "" | "not_started" | "in_progress" | "completed" | "on_hold";
+  excludeCompleted: boolean;
+  cp?: boolean; cpMinWorkingDays?: number;
+  projectCode?: string;
+};
+// 최상위 프로젝트 통합 조회일 때만 전달 — 프로젝트 선택 필터와 안내 문구를 보여준다.
+type TopLevel = { projects: { code: string; name: string }[] };
+function queryString(filters: Filters, overrides: Record<string, string | number | boolean | undefined> = {}) {
+  const p = new URLSearchParams();
+  Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => {
+    if (value != null && value !== "" && !(key === "page" && value === 1) && !(key === "pageSize" && value === 50)) {
+      if (key === "excludeCompleted") {
+        p.set(key, value ? "y" : "n");
+      } else if (key === "cp") {
+        if (value) p.set(key, "y");
+      } else if (key === "cpMinWorkingDays") {
+        // 서버가 공통코드에서 매번 다시 읽는 값이라 URL에 싣지 않는다.
+      } else {
+        p.set(key, String(value));
+      }
+    }
+  });
+  return p.toString();
+}
+
+const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "");
+const pct = (value: number | null) => (value === null ? "" : `${Math.round(value * 100)}%`);
+// 엑셀 원본 헤더 텍스트는 그대로 유지하되(다운로드/업로드 호환), 화면 표시용으로만 "(입력불필요)" 안내문구를 뺀다.
+const displayHeader = (header: string) => header.replace("(입력불필요)", "").replace("(진도관리대상-4레벨)", "");
+
+export function WbsListScreen({ result, filters, topLevel }: { result: WbsExcelListResult; filters: Filters; topLevel?: TopLevel }) {
+  const cpMinWorkingDays = filters.cpMinWorkingDays ?? CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS;
+  const pageLinkCount = Math.min(10, result.totalPages);
+  const firstPage = Math.max(1, Math.min(result.page - 4, result.totalPages - pageLinkCount + 1));
+  const pageNumbers = Array.from({ length: pageLinkCount }, (_, index) => firstPage + index);
+  return <>
+    <header className="topbar"><div><h1>WBS</h1><p>총 {result.total}건 · 엑셀 원본 47개 컬럼{topLevel && ` · 최상위 통합 조회(${topLevel.projects.length}개 프로젝트)`}</p></div></header>
+    <div className="content">
+      <section className="panel compact">
+        <details className="wbs-filter-panel" open>
+          <summary>검색조건</summary>
+          <form className="filters inline-filter" method="get">
+            {filters.pageSize !== 50 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
+            <div className="filter-row">
+              {topLevel && <select name="projectCode" defaultValue={filters.projectCode ?? ""} aria-label="프로젝트"><option value="">전체 프로젝트</option>{topLevel.projects.map((project) => <option value={project.code} key={project.code}>{project.name} ({project.code})</option>)}</select>}
+              <input name="q" defaultValue={filters.q} placeholder="Task 코드·이름 검색" aria-label="Task 검색" />
+              <input name="assignee" defaultValue={filters.assignee} placeholder="담당자 검색" aria-label="담당자 검색" />
+              <select name="delayed" defaultValue={filters.delayed} aria-label="지연여부"><option value="">전체 지연여부</option><option value="y">지연</option><option value="n">정상</option></select>
+              <select name="stage" defaultValue={filters.stage} aria-label="Stage 검색"><option value="">전체 Stage</option>{result.stages?.map((stage) => <option value={stage} key={stage}>{stage}</option>)}</select>
+              <select name="status" defaultValue={filters.status} aria-label="상태"><option value="">전체 상태</option>{WBS_ITEM_STATUSES.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}</select>
+              <WbsExcludeCompletedToggle defaultChecked={filters.excludeCompleted} key={String(filters.excludeCompleted)} />
+              <label className="wbs-exclude-completed-toggle" title={`계획소요일(영업일)이 ${cpMinWorkingDays}일 이상인 Task만 작업기간이 긴 순으로 조회`}><input type="checkbox" name="cp" value="y" defaultChecked={filters.cp} aria-label="CP 대상만 조회" /><span>CP 대상({cpMinWorkingDays}일 이상)</span></label>
+            </div>
+            <div className="filter-row filter-row-dates">
+              <fieldset className="wbs-date-range"><legend>계획시작일</legend><input type="date" name="startDateFrom" defaultValue={filters.startDateFrom} aria-label="계획시작일 시작일" /><span>~</span><input type="date" name="startDateTo" defaultValue={filters.startDateTo} aria-label="계획시작일 종료일" /></fieldset>
+              <fieldset className="wbs-date-range"><legend>계획종료일</legend><input type="date" name="dueDateFrom" defaultValue={filters.dueDateFrom} aria-label="계획종료일 시작일" /><span>~</span><input type="date" name="dueDateTo" defaultValue={filters.dueDateTo} aria-label="계획종료일 종료일" /></fieldset>
+              <fieldset className="wbs-date-range"><legend>실적시작일</legend><input type="date" name="actualStartDateFrom" defaultValue={filters.actualStartDateFrom} aria-label="실적시작일 시작일" /><span>~</span><input type="date" name="actualStartDateTo" defaultValue={filters.actualStartDateTo} aria-label="실적시작일 종료일" /></fieldset>
+              <fieldset className="wbs-date-range"><legend>실적종료일</legend><input type="date" name="actualDueDateFrom" defaultValue={filters.actualDueDateFrom} aria-label="실적종료일 시작일" /><span>~</span><input type="date" name="actualDueDateTo" defaultValue={filters.actualDueDateTo} aria-label="실적종료일 종료일" /></fieldset>
+              <button className="button secondary" type="submit">조회</button>
+              <Link className="button ghost" href="/mp-wbs">초기화</Link>
+            </div>
+          </form>
+        </details>
+      </section>
+      <section className="panel compact">
+        {result.rows.length ? <div className="table-wrap wbs-table-wrap"><table><thead><tr>{HEADERS.filter((h) => !HIDDEN_HEADERS.has(h)).map((h) => <th key={h}>{displayHeader(h)}</th>)}<th>계획시작일</th><th>계획종료일</th><th>계획소요일</th><th>실적시작일</th><th>실적종료일</th><th>실적소요일</th><th>지연율</th><th>지연일자</th><th>지연여부</th></tr></thead>
+          <tbody>{result.rows.map((item) => <ClickableTableRow href={`/mp-wbs/${item.id}`} ariaLabel={`${item.name} WBS 상세보기`} className={item.isDelayed ? "high-risk-row" : undefined} key={item.id}>
+            <td>{item.level}</td>
+            <td>{item.projectCode}</td>
+            <td>{item.stage ?? ""}</td>
+            <td className="mono">{item.code}</td>
+            <td className="title-cell"><Link className="table-link" href={`/mp-wbs/${item.id}`}>{item.name}</Link></td>
+            <td>{item.isLeaf ? 1 : ""}</td>
+            <td>{item.ownerUserId && item.ownerLoginId ? <Link className="table-link" href={`/mp-wbs/by-owner/${item.ownerLoginId}`}>{item.ownerName}</Link> : (item.ownerName ?? "")}</td>
+            <td>{item.groupLabel ?? ""}</td>
+            <td>{Math.round(item.actualProgress * 100)}</td>
+            <td>{pct(item.plannedProgress)}</td>
+            <td>{pct(item.actualProgress)}</td>
+            <td>{pct(item.progressIndex)}</td>
+            <td>{dot(item.startDate)}</td>
+            <td>{dot(item.dueDate)}</td>
+            <td data-numeric>{item.workingDays ?? "-"}</td>
+            <td>{dot(item.actualStartDate)}</td>
+            <td>{dot(item.actualDueDate)}</td>
+            <td data-numeric>{item.actualWorkingDays ?? "-"}</td>
+            <td data-numeric>{item.delayRate === null ? "-" : `${item.delayRate}%`}</td>
+            <td data-numeric>{item.delayDays === null ? "-" : `${item.delayDays}일`}</td>
+            <td>{item.isDelayed ? <span className="badge band-red">지연</span> : ""}</td>
+          </ClickableTableRow>)}</tbody></table></div> : <div className="empty">등록된 WBS 항목이 없습니다.</div>}
+      </section>
+      {result.total > 0 && <nav className="pagination requirement-pagination" aria-label="페이지 이동"><form className="page-size-form" method="get">{filters.q && <input type="hidden" name="q" value={filters.q} />}{filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}{filters.startDateFrom && <input type="hidden" name="startDateFrom" value={filters.startDateFrom} />}{filters.startDateTo && <input type="hidden" name="startDateTo" value={filters.startDateTo} />}{filters.dueDateFrom && <input type="hidden" name="dueDateFrom" value={filters.dueDateFrom} />}{filters.dueDateTo && <input type="hidden" name="dueDateTo" value={filters.dueDateTo} />}{filters.actualStartDateFrom && <input type="hidden" name="actualStartDateFrom" value={filters.actualStartDateFrom} />}{filters.actualStartDateTo && <input type="hidden" name="actualStartDateTo" value={filters.actualStartDateTo} />}{filters.actualDueDateFrom && <input type="hidden" name="actualDueDateFrom" value={filters.actualDueDateFrom} />}{filters.actualDueDateTo && <input type="hidden" name="actualDueDateTo" value={filters.actualDueDateTo} />}{filters.delayed && <input type="hidden" name="delayed" value={filters.delayed} />}{filters.stage && <input type="hidden" name="stage" value={filters.stage} />}{filters.status && <input type="hidden" name="status" value={filters.status} />}<input type="hidden" name="excludeCompleted" value={filters.excludeCompleted ? "y" : "n"} />{filters.cp && <input type="hidden" name="cp" value="y" />}{filters.projectCode && <input type="hidden" name="projectCode" value={filters.projectCode} />}<label>표시 개수<select name="pageSize" defaultValue={String(filters.pageSize)}><option value="50">50개</option><option value="100">100개</option><option value="200">200개</option></select></label><button className="button secondary" type="submit">적용</button></form><div className="page-links">{result.page > 1 && <Link href={`/mp-wbs?${queryString(filters, { page: result.page - 1 })}`} aria-label="이전 페이지">이전</Link>}{pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={`/mp-wbs?${queryString(filters, { page })}`} key={page}>{page}</Link>)}{result.page < result.totalPages && <Link href={`/mp-wbs?${queryString(filters, { page: result.page + 1 })}`} aria-label="다음 페이지">다음</Link>}</div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}
+    </div>
+  </>;
+}

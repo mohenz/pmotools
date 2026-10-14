@@ -4,9 +4,11 @@ import { DEFAULT_PROJECT_ID } from "@/lib/domain/constants";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
     const prisma = getPrisma();
+    
     const project = await prisma.project.findUnique({ where: { id: DEFAULT_PROJECT_ID } });
     if (!project) throw new Error("Default project is unavailable.");
 

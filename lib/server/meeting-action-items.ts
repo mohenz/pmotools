@@ -18,7 +18,7 @@ export type MeetingActionItemFilters = {
   dateFrom?: string;
   dateTo?: string;
   page?: number;
-  pageSize?: number;
+  pageSize?: number | "all";
 };
 
 export type MeetingActionItemListRow = {
@@ -67,13 +67,16 @@ export async function listMeetingActionItems(projectId: string, userId: string, 
   const summary: MeetingActionSummary = { total: 0, overdue, WAITING: 0, IN_PROGRESS: 0, ON_HOLD: 0, DONE: 0 };
   for (const group of grouped) { summary[group.status] = group._count._all; summary.total += group._count._all; }
 
-  const pageSize = Math.min(200, Math.max(10, filters.pageSize ?? 50));
+  const isAll = filters.pageSize === "all";
+  const pageSize = isAll ? Math.max(1, total) : Math.min(100, Math.max(10, typeof filters.pageSize === "number" ? filters.pageSize : 20));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
-  // 급한 것부터: 완료예정일 빠른 순(없으면 뒤), 같은 날이면 최근 회의 먼저
   const rows = await prisma.meetingMinuteActionItem.findMany({
-    where, skip: (page - 1) * pageSize, take: pageSize,
-    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { minute: { meetingDate: "desc" } }, { sortOrder: "asc" }],
+    where,
+    skip: isAll ? 0 : (page - 1) * pageSize,
+    take: isAll ? undefined : pageSize,
+    // 최신 등록 순: 소속 회의록 등록일시 내림차순(Action Item 자체 등록일 컬럼 없음), 같은 회의록 안에서는 작성 순서
+    orderBy: [{ minute: { createdAt: "desc" } }, { minute: { seq: "desc" } }, { sortOrder: "asc" }],
     include: { minute: { select: { id: true, displayId: true, title: true, meetingDate: true } }, statusChanger: { select: { name: true } } },
   });
   return {
@@ -86,7 +89,7 @@ export async function listMeetingActionItems(projectId: string, userId: string, 
         statusChangedAt: row.statusChangedAt?.toISOString() ?? null, statusChangerName: row.statusChanger?.name ?? null,
       };
     }),
-    summary, total, page, pageSize, totalPages,
+    summary, total, page, pageSize: isAll ? ("all" as const) : pageSize, totalPages,
   };
 }
 export type MeetingActionItemListResult = Awaited<ReturnType<typeof listMeetingActionItems>>;

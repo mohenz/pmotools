@@ -79,7 +79,7 @@ function minuteColumns(data: MinuteInput) {
   return { category: data.category, title: data.title, meetingDate: dateValue(data.meetingDate), sessions: data.sessions, location: data.location, authorName: data.authorName };
 }
 
-export type MeetingMinuteListFilters = { q?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number };
+export type MeetingMinuteListFilters = { q?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number | "all" };
 
 export async function listMeetingMinutes(projectId: string, filters: MeetingMinuteListFilters = {}) {
   const q = filters.q?.trim();
@@ -90,16 +90,17 @@ export async function listMeetingMinutes(projectId: string, filters: MeetingMinu
   };
   const prisma = getPrisma();
   const total = await prisma.meetingMinute.count({ where });
-  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 20));
+  const isAll = filters.pageSize === "all";
+  const pageSize = isAll ? Math.max(1, total) : Math.min(100, Math.max(10, typeof filters.pageSize === "number" ? filters.pageSize : 20));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
   const rows = await prisma.meetingMinute.findMany({
-    where, orderBy: [{ meetingDate: "desc" }, { seq: "desc" }], skip: (page - 1) * pageSize, take: pageSize,
+    where, orderBy: [{ meetingDate: "desc" }, { seq: "desc" }], skip: isAll ? 0 : (page - 1) * pageSize, take: isAll ? undefined : pageSize,
     select: { id: true, displayId: true, category: true, title: true, meetingDate: true, sessions: true, location: true, authorName: true, updatedAt: true, _count: { select: { actionItems: true } } },
   });
   return {
     rows: rows.map((row) => ({ id: row.id, displayId: row.displayId, category: row.category, title: row.title, meetingDate: isoDate(row.meetingDate), sessions: row.sessions as MeetingSession[], location: row.location, authorName: row.authorName, actionItemCount: row._count.actionItems, updatedAt: row.updatedAt.toISOString() })),
-    total, page, pageSize, totalPages,
+    total, page, pageSize: isAll ? ("all" as const) : pageSize, totalPages,
   };
 }
 export type MeetingMinuteListResult = Awaited<ReturnType<typeof listMeetingMinutes>>;

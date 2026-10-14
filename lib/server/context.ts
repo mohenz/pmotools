@@ -7,6 +7,8 @@ import { hasPmPmoAccess } from "@/lib/domain/job-access";
 export async function getLocalContext() {
   const session = await auth();
   if (!session?.user) throw new Error("인증되지 않은 요청입니다.");
+  // 배정이 모두 해제됐거나 계정이 잠긴 경우 — 세션 쿠키는 남아 있어도 어떤 프로젝트에도 접근할 수 없다.
+  if (session.user.projectAccess === false) redirect("/login?reason=no-project");
   return { userId: session.user.id, loginId: session.user.loginId, projectId: session.user.projectId, role: session.user.role, globalRole: session.user.globalRole, jobTitle: session.user.jobTitle };
 }
 

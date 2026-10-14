@@ -14,5 +14,5 @@ export default async function PortfolioPage() {
     listPortfolioPanelPreferences(projectId),
     listReceivedInvitations(userId),
   ]);
-  return <PortfolioScreen wbsStats={wbsStats} myWbsStatus={myWbsStatus} panelPrefs={panelPrefs} invitations={invitations} role={role} />;
+  return <PortfolioScreen wbsStats={wbsStats} myWbsStatus={myWbsStatus} panelPrefs={panelPrefs} invitations={invitations.rows} role={role} />;
 }

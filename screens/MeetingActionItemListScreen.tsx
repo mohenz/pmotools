@@ -3,18 +3,29 @@ import { MeetingActionStatusControl } from "@/features/meeting-minutes/MeetingAc
 import { MEETING_ACTION_STATUSES } from "@/lib/domain/meeting-action-items";
 import type { MeetingActionItemListResult } from "@/lib/server/meeting-action-items";
 
-export type MeetingActionItemScreenFilters = { status: string; overdue: boolean; mine: boolean; assignee: string; q: string; dateFrom: string; dateTo: string };
+export type MeetingActionItemScreenFilters = {
+  status: string;
+  overdue: boolean;
+  mine: boolean;
+  assignee: string;
+  q: string;
+  dateFrom: string;
+  dateTo: string;
+  page: number;
+  pageSize: number | "all";
+};
 
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "-");
 const dateTime = (value: string) => new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value));
 
-function href(filters: MeetingActionItemScreenFilters, patch: Partial<MeetingActionItemScreenFilters> & { page?: number } = {}) {
+function href(filters: MeetingActionItemScreenFilters, patch: Partial<MeetingActionItemScreenFilters> & { page?: number; pageSize?: number | "all" } = {}) {
   const merged = { ...filters, ...patch };
   const params = new URLSearchParams();
   for (const key of ["status", "assignee", "q", "dateFrom", "dateTo"] as const) if (merged[key]) params.set(key, merged[key]);
   if (merged.overdue) params.set("overdue", "y");
   if (merged.mine) params.set("mine", "y");
-  if (patch.page && patch.page > 1) params.set("page", String(patch.page));
+  if (merged.pageSize && merged.pageSize !== 20) params.set("pageSize", String(merged.pageSize));
+  if (merged.page && merged.page > 1) params.set("page", String(merged.page));
   const query = params.toString();
   return query ? `/meeting-minutes/action-items?${query}` : "/meeting-minutes/action-items";
 }
@@ -26,9 +37,9 @@ export function MeetingActionItemListScreen({ result, filters, today }: { result
   const pageNumbers = Array.from({ length: pageLinkCount }, (_, index) => firstPage + index);
   const filtered = Boolean(filters.status || filters.overdue || filters.mine || filters.assignee || filters.q || filters.dateFrom || filters.dateTo);
   const kpis = [
-    { key: "all", label: "전체", value: summary.total, to: href(filters, { status: "", overdue: false }), active: !filters.status && !filters.overdue },
-    ...MEETING_ACTION_STATUSES.map((status) => ({ key: status.value, label: status.label, value: summary[status.value], to: href(filters, { status: status.value, overdue: false }), active: filters.status === status.value && !filters.overdue })),
-    { key: "overdue", label: "기한 경과", value: summary.overdue, to: href(filters, { status: "", overdue: true }), active: filters.overdue && !filters.status, critical: summary.overdue > 0 },
+    { key: "all", label: "전체", value: summary.total, to: href(filters, { status: "", overdue: false, page: 1 }), active: !filters.status && !filters.overdue },
+    ...MEETING_ACTION_STATUSES.map((status) => ({ key: status.value, label: status.label, value: summary[status.value], to: href(filters, { status: status.value, overdue: false, page: 1 }), active: filters.status === status.value && !filters.overdue })),
+    { key: "overdue", label: "기한 경과", value: summary.overdue, to: href(filters, { status: "", overdue: true, page: 1 }), active: filters.overdue && !filters.status, critical: summary.overdue > 0 },
   ];
   return <>
     <header className="topbar"><div><h1>회의록 Action Item</h1><p>{today} 기준 · 회의록에서 등록한 Action Item 모아보기 · 조건 결과 {result.total}건</p></div></header>
@@ -38,6 +49,7 @@ export function MeetingActionItemListScreen({ result, filters, today }: { result
       </Link>)}</div>
 
       <form className="filters inline-filter pmo-list-filters" method="get">
+        {filters.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(filters.pageSize)} />}
         <label>상태<select name="status" defaultValue={filters.status}>
           <option value="">전체</option><option value="open">미완료(완료 제외)</option>
           {MEETING_ACTION_STATUSES.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}
@@ -65,11 +77,57 @@ export function MeetingActionItemListScreen({ result, filters, today }: { result
             <td className="action-changed">{row.statusChangedAt ? <>{dateTime(row.statusChangedAt)}<br />{row.statusChangerName ?? "-"}</> : "-"}</td>
           </tr>)}</tbody></table></div> : <div className="empty">조건에 맞는 Action Item이 없습니다.</div>}
       </section>
-      {result.totalPages > 1 && <nav className="pagination" aria-label="페이지 이동"><div className="page-links">
-        {result.page > 1 && <Link href={href(filters, { page: result.page - 1 })} aria-label="이전 페이지">이전</Link>}
-        {pageNumbers.map((page) => page === result.page ? <strong className="current" aria-current="page" key={page}>{page}</strong> : <Link href={href(filters, { page })} key={page}>{page}</Link>)}
-        {result.page < result.totalPages && <Link href={href(filters, { page: result.page + 1 })} aria-label="다음 페이지">다음</Link>}
-      </div><span className="page-summary">총 {result.total}건 · {result.page} / {result.totalPages} 페이지</span></nav>}
+      {result.total > 0 && (
+        <nav className="pagination requirement-pagination" aria-label="페이지 이동">
+          <form className="page-size-form" method="get">
+            {filters.status && <input type="hidden" name="status" value={filters.status} />}
+            {filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}
+            {filters.dateFrom && <input type="hidden" name="dateFrom" value={filters.dateFrom} />}
+            {filters.dateTo && <input type="hidden" name="dateTo" value={filters.dateTo} />}
+            {filters.q && <input type="hidden" name="q" value={filters.q} />}
+            {filters.mine && <input type="hidden" name="mine" value="y" />}
+            {filters.overdue && <input type="hidden" name="overdue" value="y" />}
+            <label>
+              표시 개수
+              <select name="pageSize" defaultValue={String(filters.pageSize)}>
+                <option value="20">20개</option>
+                <option value="40">40개</option>
+                <option value="60">60개</option>
+                <option value="80">80개</option>
+                <option value="100">100개</option>
+                <option value="all">전체</option>
+              </select>
+            </label>
+            <button className="button secondary" type="submit">적용</button>
+          </form>
+          <div className="page-links">
+            {result.page > 1 && (
+              <Link href={href(filters, { page: result.page - 1 })} aria-label="이전 페이지">
+                이전
+              </Link>
+            )}
+            {pageNumbers.map((page) =>
+              page === result.page ? (
+                <strong className="current" aria-current="page" key={page}>
+                  {page}
+                </strong>
+              ) : (
+                <Link href={href(filters, { page })} key={page}>
+                  {page}
+                </Link>
+              )
+            )}
+            {result.page < result.totalPages && (
+              <Link href={href(filters, { page: result.page + 1 })} aria-label="다음 페이지">
+                다음
+              </Link>
+            )}
+          </div>
+          <span className="page-summary">
+            총 {result.total}건 · {result.page} / {result.totalPages} 페이지
+          </span>
+        </nav>
+      )}
     </div>
   </>;
 }

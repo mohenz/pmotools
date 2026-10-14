@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { THEME_CHANGE_EVENT } from "@/components/ThemeToggleButton";
 
 type ThemePreference = "light" | "dark" | "system";
 
@@ -34,11 +35,19 @@ function readPreference(): ThemePreference {
 }
 
 export function ThemeSelector() {
-  // head의 차단 스크립트가 마운트 전에 이미 올바른 테마를 적용해 두므로, 여기서도 첫 렌더부터 저장된
-  // 값을 읽어야 한다. 이전엔 항상 기본값(화이트)으로 먼저 그렸다가 useEffect에서야 실제 값으로 고쳐써서,
-  // 새로고침할 때마다 라디오 선택과 "현재 모드" 표시가 화이트로 한 프레임 반짝인 뒤 바뀌는 것처럼 보였다.
-  const [preference, setPreference] = useState<ThemePreference>(readPreference);
-  const [resolved, setResolved] = useState<"light" | "dark">(() => (typeof window === "undefined" ? "light" : resolveTheme(readPreference())));
+  // 첫 렌더는 서버와 같은 기본값으로 그리고, 마운트 직후 저장값으로 맞춘다(2026-10-02).
+  // 이전에는 첫 렌더부터 localStorage를 읽었는데, 저장값이 다크면 서버가 그린 "현재 화이트 모드" 글자와 달라
+  // 화면 불일치(hydration) 오류가 나고 React가 <html>까지 다시 그리면서 head 스크립트가 넣은 data-theme가 지워졌다
+  // (헤더 원클릭 전환으로 다크를 켠 뒤 설정 화면에 오면 화이트로 풀려 보임). 이 패널의 선택 표시만 한 번 바뀐다.
+  const [preference, setPreference] = useState<ThemePreference>(DEFAULT_THEME);
+  const [resolved, setResolved] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const sync = () => { const saved = readPreference(); setPreference(saved); setResolved(resolveTheme(saved)); };
+    sync();
+    window.addEventListener(THEME_CHANGE_EVENT, sync); // 상단 헤더 원클릭 전환과 맞춘다
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");

@@ -39,7 +39,7 @@ describe("회의록 양식 렌더링", () => {
   it("renders the list with sessions and the create action", () => {
     const html = renderToStaticMarkup(React.createElement(MeetingMinuteListScreen, {
       result: { rows: [{ id: "m1", displayId: "MM-0001", category: "DES", title: "상품전시 내부리뷰", meetingDate: "2026-09-28", sessions: minute.sessions, location: "대회의실", authorName: "이승연", actionItemCount: 1, updatedAt: "" }], total: 1, page: 1, pageSize: 20, totalPages: 1 },
-      filters: { q: "", dateFrom: "", dateTo: "" },
+      filters: { q: "", dateFrom: "", dateTo: "", page: 1, pageSize: 20 },
     }));
     expect(html).toContain("09:30~12:00, 13:30~15:00");
     expect(html).toContain("+ 회의록 작성");

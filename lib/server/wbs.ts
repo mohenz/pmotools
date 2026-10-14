@@ -345,8 +345,11 @@ export type WbsStats = { overall: ReturnType<typeof rollupProgress>; itemCount: 
 // 지연업무 기준(isWbsItemDelayed) 건수 집계 — 통계 화면들(전체/Stage/업무그룹)과 지연 Task 조회가 공유한다.
 // tracked(판정 대상)는 계획시작일·계획종료일 중 하나라도 있어 기준을 적용할 수 있는 항목이다.
 function delayStatsOf(rows: WbsItemRow[]) {
-  const tracked = rows.filter((item) => item.startDate !== null || item.dueDate !== null);
-  const delayedCount = tracked.filter((item) => item.isDelayed).length;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // 지연(Delayed)의 정의가 "계획종료일 도과 후 미완료"이므로,
+  // 통계의 모수(분모) 역시 "계획종료일이 오늘 이전인 테스크"로 정확히 일치시킨다.
+  const tracked = rows.filter((item) => item.dueDate !== null && item.dueDate < todayStr);
+  const delayedCount = rows.filter((item) => item.isDelayed).length;
   return { delayedCount, delayTrackedCount: tracked.length, delayRate: tracked.length === 0 ? 0 : delayedCount / tracked.length };
 }
 
@@ -389,7 +392,7 @@ async function loadWbsStats(projectId: string): Promise<WbsStats> {
 
 // 변동 빈도가 낮은 통계 화면이라 포트폴리오 KPI와 동일하게 30초 캐시하고, WBS 변경(mutation) 시 wbsTag로 무효화한다.
 export function getWbsStats(projectId: string) {
-  return unstable_cache(loadWbsStats, ["wbs-stats"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
+  return unstable_cache(loadWbsStats, ["wbs-stats-v2"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
 }
 
 // 사용자관리(설정 → 사용자)에서 사용자별로 지정한 업무그룹(Groups/WORK_MODULE)을 WBS 담당자(ownerUserId)를

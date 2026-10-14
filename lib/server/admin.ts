@@ -6,32 +6,54 @@ import { assertAdmin } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
 import type { GroupType, UserRole, UserStatus } from "@/lib/generated/prisma/client";
 
-export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; jobTitle: string | null; role: UserRole; status: UserStatus; createdAt: string; workGroups: { id: string; label: string }[] };
+// role = 계정 역할(User.role, 2026-09-29 계정 역할 통일). legacyProjectRole = 로그인 프로젝트에서의 이전 프로젝트별 역할(참고용, 권한 판단에 안 씀)
+export type AdminUserRow = { id: string; userId: string; name: string; email: string | null; department: string | null; jobTitle: string | null; role: UserRole; legacyProjectRole: UserRole | null; assignedHere: boolean; assignedProjects: { id: string; code: string; name: string }[]; status: UserStatus; createdAt: string; workGroups: { id: string; label: string }[] };
 export type AdminUserListResult = { users: AdminUserRow[]; total: number; page: number; pageSize: number; totalPages: number };
-export type AdminUserFilters = { q?: string; page?: number; pageSize?: number | "all" };
+export type AdminUserFilters = { q?: string; page?: number; pageSize?: number | "all"; scope?: "all" | "project" };
 export type GroupRow = { id: string; groupType: GroupType; code: string; label: string; color: string | null; sortOrder: number; isActive: boolean; leader: { id: string; userId: string; name: string } | null };
 
 export async function listUsers(projectId: string, adminUserId: string, q?: string): Promise<AdminUserRow[]> {
   return (await listUsersPage(projectId, adminUserId, { q, pageSize: "all" })).users;
 }
 
+// 사용자 관리 목록 — 계정 역할 통일 이후 사용자는 프로젝트가 아니라 플랫폼 단위로 관리한다.
+// scope "all"(기본): 전체 사용자 / "project": 로그인 프로젝트에 배정된 사용자만.
 export async function listUsersPage(projectId: string, adminUserId: string, filters: AdminUserFilters = {}): Promise<AdminUserListResult> {
   await assertAdmin(projectId, adminUserId);
   const query = filters.q?.trim();
-  const where = { projectId, isActive: true, user: { deletedAt: null, ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" as const } }, { name: { contains: query, mode: "insensitive" as const } }, { jobTitle: { contains: query, mode: "insensitive" as const } }] } : {}) } };
+  const where = {
+    deletedAt: null,
+    ...(filters.scope === "project" ? { memberships: { some: { projectId, isActive: true } } } : {}),
+    ...(query ? { OR: [{ userId: { contains: query, mode: "insensitive" as const } }, { name: { contains: query, mode: "insensitive" as const } }, { jobTitle: { contains: query, mode: "insensitive" as const } }] } : {}),
+  };
   const prisma = getPrisma();
-  const total = await prisma.projectMember.count({ where });
+  const total = await prisma.user.count({ where });
   const pageSize = filters.pageSize === "all" ? Math.max(1, total) : Math.min(100, Math.max(10, filters.pageSize ?? 20));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
-  const members = await prisma.projectMember.findMany({
+  const users = await prisma.user.findMany({
     where,
-    include: { user: { include: { groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE", isActive: true } }, include: { group: true } } } } },
-    orderBy: { user: { userId: "asc" } },
+    include: {
+      groupMemberships: { where: { group: { projectId, groupType: "WORK_MODULE", isActive: true } }, include: { group: true } },
+      memberships: { include: { project: { select: { id: true, code: true, name: true, sortOrder: true } } } },
+    },
+    orderBy: { userId: "asc" },
     skip: (page - 1) * pageSize,
     take: pageSize,
   });
-  return { users: members.map((member) => ({ id: member.user.id, userId: member.user.userId, name: member.user.name, email: member.user.email, department: member.user.department, jobTitle: member.user.jobTitle, role: member.role, status: member.user.status, createdAt: member.user.createdAt.toISOString(), workGroups: member.user.groupMemberships.map(({ group }) => ({ id: group.id, label: group.label })).sort((a, b) => a.label.localeCompare(b.label, "ko")) })), total, page, pageSize, totalPages };
+  return {
+    users: users.map((user) => {
+      const here = user.memberships.find((m) => m.projectId === projectId);
+      const assigned = user.memberships.filter((m) => m.isActive).map((m) => m.project).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko"));
+      return {
+        id: user.id, userId: user.userId, name: user.name, email: user.email, department: user.department, jobTitle: user.jobTitle,
+        role: user.role, legacyProjectRole: here?.role ?? null, assignedHere: Boolean(here?.isActive),
+        assignedProjects: assigned.map(({ id, code, name }) => ({ id, code, name })),
+        status: user.status, createdAt: user.createdAt.toISOString(), workGroups: user.groupMemberships.map(({ group }) => ({ id: group.id, label: group.label })),
+      };
+    }),
+    total, page, pageSize, totalPages,
+  };
 }
 
 const workGroupsSchema = z.object({ groupId: z.string().uuid().nullable() });
@@ -54,21 +76,51 @@ export async function updateUserWorkGroups(projectId: string, adminUserId: strin
   return { id: targetUserId, workGroups: groups.sort((a, b) => a.label.localeCompare(b.label, "ko")) };
 }
 
-const ADMIN_TIER_ROLES = ["ADMIN", "SUPER_ADMIN"] as const;
 const roleSchema = z.object({ role: z.enum(["SUPER_ADMIN", "ADMIN", "OPERATOR", "MEMBER"]) });
+
+async function assertPlatformSuperAdmin(actorId: string, message: string) {
+  const actor = await getPrisma().user.findUnique({ where: { id: actorId }, select: { role: true } });
+  if (actor?.role !== "SUPER_ADMIN") throw new DomainError("FORBIDDEN", message);
+}
+
+// 계정 역할 변경 — 슈퍼관리자만(R-5). 역할은 모든 프로젝트에 공통으로 적용된다(R-1).
+// 플랫폼에는 슈퍼관리자가 최소 한 명 남아야 한다. 이전 프로젝트별 역할(ProjectMember.role)도 새 역할로 맞춰 둔다.
 export async function updateUserRole(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
-  await assertAdmin(projectId, adminUserId);
+  await assertPlatformSuperAdmin(adminUserId, "계정 역할은 슈퍼관리자만 변경할 수 있습니다.");
   const data = roleSchema.parse(input);
   const prisma = getPrisma();
-  const member = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: targetUserId } } });
-  if (!member) throw new DomainError("NOT_FOUND", "해당 프로젝트의 사용자를 찾을 수 없습니다.");
-  if ((ADMIN_TIER_ROLES as readonly string[]).includes(member.role) && !(ADMIN_TIER_ROLES as readonly string[]).includes(data.role)) {
-    const adminCount = await prisma.projectMember.count({ where: { projectId, role: { in: [...ADMIN_TIER_ROLES] } } });
-    if (adminCount <= 1) throw new DomainError("LAST_ACTIVE_CODE", "프로젝트에는 최소 한 명의 관리자가 필요합니다.");
+  const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!user || user.deletedAt) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+  if (user.role === "SUPER_ADMIN" && data.role !== "SUPER_ADMIN") {
+    const superAdmins = await prisma.user.count({ where: { role: "SUPER_ADMIN", deletedAt: null, status: "ACTIVE" } });
+    if (superAdmins <= 1) throw new DomainError("LAST_ACTIVE_CODE", "플랫폼에는 최소 한 명의 슈퍼관리자가 필요합니다.");
   }
-  const updated = await prisma.projectMember.update({ where: { id: member.id }, data: { role: data.role } });
-  await writeAuditLog(projectId, adminUserId, "USER_ROLE_UPDATE", "project_members", member.id, member, updated);
-  return { id: targetUserId, role: updated.role };
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: targetUserId }, data: { role: data.role } }),
+    prisma.projectMember.updateMany({ where: { userId: targetUserId }, data: { role: data.role } }),
+  ]);
+  await writeAuditLog(projectId, adminUserId, "USER_ACCOUNT_ROLE_UPDATE", "users", targetUserId, { role: user.role }, { role: data.role });
+  return { id: targetUserId, role: data.role };
+}
+
+// 프로젝트 배정 — 관리자 이상. 선택한 프로젝트는 배정(소속 활성화), 선택하지 않은 프로젝트는 배정 해제(소속 비활성, 이력 보존).
+// 관리자 이상은 배정 없이도 모든 프로젝트에 접근하지만, 담당자·참석자 목록에 나오려면 배정이 필요하다.
+const projectsSchema = z.object({ projectIds: z.array(z.string().uuid()).max(500) });
+export async function updateUserProjects(projectId: string, adminUserId: string, targetUserId: string, input: unknown) {
+  await assertAdmin(projectId, adminUserId);
+  const data = projectsSchema.parse(input);
+  const prisma = getPrisma();
+  const user = await prisma.user.findUnique({ where: { id: targetUserId }, include: { memberships: true } });
+  if (!user || user.deletedAt) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+  const wanted = [...new Set(data.projectIds)];
+  if (wanted.length && (await prisma.project.count({ where: { id: { in: wanted } } })) !== wanted.length) throw new DomainError("NOT_FOUND", "존재하지 않는 프로젝트가 포함되어 있습니다.");
+  const before = user.memberships.filter((m) => m.isActive).map((m) => m.projectId).sort();
+  await prisma.$transaction([
+    ...wanted.map((id) => prisma.projectMember.upsert({ where: { projectId_userId: { projectId: id, userId: targetUserId } }, create: { projectId: id, userId: targetUserId, role: user.role }, update: { isActive: true, role: user.role } })),
+    prisma.projectMember.updateMany({ where: { userId: targetUserId, projectId: { notIn: wanted }, isActive: true }, data: { isActive: false } }),
+  ]);
+  await writeAuditLog(projectId, adminUserId, "USER_PROJECTS_UPDATE", "project_members", targetUserId, { projectIds: before }, { projectIds: [...wanted].sort() });
+  return { id: targetUserId, projectIds: wanted };
 }
 
 const statusSchema = z.object({ status: z.enum(["ACTIVE", "LOCKED"]) });
@@ -111,6 +163,8 @@ const createUserSchema = z.object({
 export async function createUser(projectId: string, adminUserId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
   const data = createUserSchema.parse(input);
+  // 관리자 이상(모든 프로젝트 접근) 계정은 슈퍼관리자만 만들 수 있다(R-5). 새 사용자는 로그인 프로젝트에 배정된다.
+  if (data.role === "SUPER_ADMIN" || data.role === "ADMIN") await assertPlatformSuperAdmin(adminUserId, "관리자 이상 계정은 슈퍼관리자만 만들 수 있습니다.");
   const prisma = getPrisma();
   const existing = await prisma.user.findUnique({ where: { userId: data.userId } });
   if (existing) throw new DomainError("DUPLICATE_CODE", "이미 사용 중인 아이디입니다.");
@@ -147,27 +201,23 @@ export async function updateUserProfile(projectId: string, adminUserId: string, 
   return { id: targetUserId, userId: updated.userId, name: updated.name, email: updated.email, department: updated.department, jobTitle: updated.jobTitle };
 }
 
+// 사용자 삭제 — 계정을 잠그고 모든 프로젝트 배정을 해제한다(이력 보존). 관리자 이상은 슈퍼관리자만, 마지막 슈퍼관리자는 삭제 불가.
 export async function deleteUser(projectId: string, adminUserId: string, targetUserId: string) {
   await assertAdmin(projectId, adminUserId);
   if (targetUserId === adminUserId) throw new DomainError("FORBIDDEN", "본인 계정은 삭제할 수 없습니다.");
   const prisma = getPrisma();
-  const member = await prisma.projectMember.findUnique({
-    where: { projectId_userId: { projectId, userId: targetUserId } },
-    include: { user: true },
-  });
-  if (!member || !member.isActive || member.user.deletedAt) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
-  if ((ADMIN_TIER_ROLES as readonly string[]).includes(member.role)) {
-    const adminCount = await prisma.projectMember.count({
-      where: { projectId, role: { in: [...ADMIN_TIER_ROLES] }, isActive: true, user: { deletedAt: null } },
-    });
-    if (adminCount <= 1) throw new DomainError("LAST_ACTIVE_CODE", "프로젝트에는 최소 한 명의 관리자가 필요합니다.");
+  const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!user || user.deletedAt) throw new DomainError("NOT_FOUND", "사용자를 찾을 수 없습니다.");
+  if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") await assertPlatformSuperAdmin(adminUserId, "관리자 이상 계정은 슈퍼관리자만 삭제할 수 있습니다.");
+  if (user.role === "SUPER_ADMIN" && (await prisma.user.count({ where: { role: "SUPER_ADMIN", deletedAt: null, status: "ACTIVE" } })) <= 1) {
+    throw new DomainError("LAST_ACTIVE_CODE", "플랫폼에는 최소 한 명의 슈퍼관리자가 필요합니다.");
   }
   const deletedAt = new Date();
   await prisma.$transaction([
-    prisma.projectMember.update({ where: { id: member.id }, data: { isActive: false } }),
+    prisma.projectMember.updateMany({ where: { userId: targetUserId }, data: { isActive: false } }),
     prisma.user.update({ where: { id: targetUserId }, data: { status: "LOCKED", deletedAt } }),
   ]);
-  await writeAuditLog(projectId, adminUserId, "USER_DELETE", "users", targetUserId, { userId: member.user.userId, role: member.role }, { deletedAt: deletedAt.toISOString() });
+  await writeAuditLog(projectId, adminUserId, "USER_DELETE", "users", targetUserId, { userId: user.userId, role: user.role }, { deletedAt: deletedAt.toISOString() });
   return { id: targetUserId };
 }
 

@@ -1,20 +1,14 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db-pg";
+import { resolveProjectRole } from "@/lib/server/project-access";
 import type { UserRole } from "@/lib/generated/prisma/client";
 import { DomainError } from "@/lib/server/errors";
 
+// 이 프로젝트에서 사용자가 동작하는 역할 — 계정 역할 하나로 판단한다(2026-09-29, R-1).
+// 슈퍼관리자·관리자는 모든 프로젝트에서 계정 역할, 운영자·사용자는 배정된 프로젝트에서만 계정 역할, 그 외 null.
+// 프로젝트별 역할(ProjectMember.role)은 더 이상 쓰지 않는다. 모든 기능의 권한 검사(assertManager 등)가 이 함수를 거친다.
 export async function getMemberRole(projectId: string, userId: string): Promise<UserRole | null> {
-  const prisma = getPrisma();
-  const [member, user] = await Promise.all([
-    prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-  ]);
-  // 플랫폼 전역 SUPER_ADMIN(User.role)은 실제 프로젝트 소속 역할과 무관하게 모든 프로젝트를
-  // 관리할 수 있어야 한다 — 그렇지 않으면 백오피스에서 SUPER_ADMIN으로 로그인해도
-  // 소속이 없거나 낮은 프로젝트의 설정 화면(사용자 관리 등)에서 차단당한다.
-  if (user?.role === "SUPER_ADMIN") return "SUPER_ADMIN";
-  return member?.role ?? null;
+  return resolveProjectRole(userId, projectId);
 }
 
 export function isManagerRole(role: UserRole | null) {

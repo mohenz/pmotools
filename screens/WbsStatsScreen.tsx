@@ -1,7 +1,7 @@
 import { WbsStageChart } from "@/components/WbsStageChart";
 import type { WbsStats } from "@/lib/server/wbs";
 
-const pct = (value: number) => Math.round(value * 100);
+const pct = (value: number) => { const p = value * 100; return p > 0 && p < 1 ? p.toFixed(1) : String(Math.round(p)); };
 const fmt = (value: number) => value.toLocaleString("ko-KR");
 
 export function WbsStatsScreen({ stats }: { stats: WbsStats }) {

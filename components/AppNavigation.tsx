@@ -8,18 +8,18 @@ import { CalendarIcon, DashboardIcon, DocumentIcon, FileIcon, GanttIcon, IssueAl
 import { isMenuVisibleForRole, type MenuPreferenceRow } from "@/lib/domain/menu-preferences";
 import { hasPmPmoAccess } from "@/lib/domain/job-access";
 
-const TOOL_ICONS: Record<string, ElementType> = { portfolio: DashboardIcon, "management-tasks": PerformanceIcon, wbs: GanttIcon, "pmo-daily": TaskIcon, "work-logs": DocumentIcon, calendar: CalendarIcon, meetrooms: MeetingRoomIcon, "meeting-minutes": DocumentIcon, issues: IssueAlertIcon, requirements: RequestIcon, announcements: NotificationIcon, "weekly-reports": ReportIcon, "weekly-progress": ProgressIcon, "staff-changes": TeamIcon, messages: MessageIcon, manuals: FileIcon };
-const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks", wbs: "/wbs", "pmo-daily": "/pmo-daily", "work-logs": "/work-logs", calendar: "/calendar", meetrooms: "/meetrooms", "meeting-minutes": "/meeting-minutes", issues: "/issues", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
+const TOOL_ICONS: Record<string, ElementType> = { portfolio: DashboardIcon, "management-tasks": PerformanceIcon, wbs: GanttIcon, "pmo-daily": TaskIcon, "work-logs": DocumentIcon, calendar: CalendarIcon, meetrooms: MeetingRoomIcon, "meeting-minutes": DocumentIcon, wbs2: GanttIcon, "work-logs2": DocumentIcon, requirements2: RequestIcon, issues: IssueAlertIcon, requirements: RequestIcon, announcements: NotificationIcon, "weekly-reports": ReportIcon, "weekly-progress": ProgressIcon, "staff-changes": TeamIcon, messages: MessageIcon, manuals: FileIcon };
+const TOOL_HREF: Record<string, string> = { portfolio: "/portfolio", "management-tasks": "/management-tasks", wbs: "/wbs", "pmo-daily": "/pmo-daily", "work-logs": "/work-logs", calendar: "/calendar", meetrooms: "/meetrooms", "meeting-minutes": "/meeting-minutes", wbs2: "/mp-wbs", "work-logs2": "/mp-work-logs", requirements2: "/mp-requirements", issues: "/issues", requirements: "/requirements", announcements: "/announcements", "weekly-reports": "/weekly-reports", "weekly-progress": "/weekly-progress", "staff-changes": "/staff-changes", messages: "/messages", manuals: "/manuals" };
 // 메뉴를 눌렀을 때 처음 여는 화면(기본은 TOOL_HREF). TOOL_HREF는 현재 메뉴 판단·하위 탭 기준이라 그대로 두고 진입 화면만 바꾼다.
 const TOOL_ENTRY: Record<string, string> = { "pmo-daily": "/pmo-daily/dashboard" };
-const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", wbs: "WBS", "pmo-daily": "PMO Daily", "work-logs": "WBS상세내용", calendar: "캘린더", meetrooms: "회의실", "meeting-minutes": "회의록", issues: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "메뉴얼" };
+const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "management-tasks": "관리업무", wbs: "WBS", "pmo-daily": "PMO Daily", "work-logs": "WBS상세내용", calendar: "캘린더", meetrooms: "회의실", "meeting-minutes": "회의록", wbs2: "WBS2", "work-logs2": "WBS상세내용2", requirements2: "요구사항관리2", issues: "이슈 관리", requirements: "요구사항관리", announcements: "공지사항", "weekly-reports": "위클리리포트", "weekly-progress": "주간실적", "staff-changes": "인력변동", messages: "초청", manuals: "메뉴얼" };
 
 export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[]; canManageWorkLogs?: boolean }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = session?.user?.role ?? "MEMBER";
   const hasRestrictedToolAccess = hasPmPmoAccess(session?.user?.jobTitle, role);
-  const isSuperAdmin = role === "SUPER_ADMIN";
+  const isSuperAdmin = role === "SUPER_ADMIN" || (session?.user as { globalRole?: string })?.globalRole === "SUPER_ADMIN";
   const isAdmin = isSuperAdmin || role === "ADMIN";
   const isManager = isAdmin || role === "OPERATOR";
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
@@ -63,6 +63,10 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
         { href: "/settings/groups", label: "그룹 관리", active: pathname.startsWith("/settings/groups") },
         { href: "/activity-logs", label: "활동 내역", active: pathname.startsWith("/activity-logs") },
       ] : []),
+      ...(isSuperAdmin ? [
+        { href: "/settings/projects", label: "프로젝트 관리", active: pathname.startsWith("/settings/projects") },
+        { href: "/settings/global-common-codes", label: "전역 공통코드", active: pathname.startsWith("/settings/global-common-codes") },
+      ] : []),
       { href: "/settings/system", label: "시스템 설정", active: pathname.startsWith("/settings/system") },
     ];
     return <div className="workspace-nav settings-workspace-nav"><strong className="workspace-tool-name">설정</strong><nav className="tool-tabs" aria-label="설정 기능">{settingsTabs.map((tab)=><Link className={tab.active?"active":""} aria-current={tab.active?"page":undefined} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav></div>;
@@ -74,6 +78,10 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks": [...(hasRestrictedToolAccess?[{href:"/management-tasks/dashboard",label:"대시보드"}]:[]),{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"},...(hasRestrictedToolAccess?[{href:"/action-items",label:"액션아이템목록조회"}]:[])],
       "/wbs": [{href:"/wbs",label:"전체 목록"},...(isManager?[{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"},{href:"/wbs/group-stats",label:"업무그룹별 통계"},{href:"/wbs/weekly-stats",label:"주간 통계"},{href:"/wbs/delay-history",label:"지연 이력"},{href:"/wbs/manage",label:"데이터 관리"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      // 다중 프로젝트 메뉴(WBS2 계열) — 원본 탭과 같은 구성, 경로만 분리. 권한 탭 노출은 화면 표시용이며 실제 권한은 각 화면이 선택 프로젝트 역할로 다시 검사한다.
+      "/mp-wbs": [{href:"/mp-wbs",label:"전체 목록"},{href:"/mp-wbs/gantt",label:"간트 차트"},...(isManager?[{href:"/mp-wbs/new",label:"WBS 항목 등록"},{href:"/mp-wbs/stats",label:"통계"},{href:"/mp-wbs/group-stats",label:"업무그룹별 통계"},{href:"/mp-wbs/weekly-stats",label:"주간 통계"},{href:"/mp-wbs/delay-history",label:"지연 이력"},{href:"/mp-wbs/manage",label:"데이터 관리"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      "/mp-work-logs": [{href:"/mp-work-logs",label:"WBS상세내용 목록"},{href:"/mp-work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/mp-work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
+      "/mp-requirements": [{href:"/mp-requirements",label:"요구사항정의서"},{href:"/mp-requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/mp-requirements/changes",label:"요구사항변경관리"},{href:"/mp-requirements/excel",label:"엑셀 관리"},{href:"/manuals/requirements-excel",label:"사용 메뉴얼"}]:[])],
       "/meeting-minutes": [{href:"/meeting-minutes",label:"전체 목록"},{href:"/meeting-minutes/new",label:"회의록 작성"},{href:"/meeting-minutes/action-items",label:"Action Item"}],
       "/pmo-daily": [{href:"/pmo-daily/dashboard",label:"대시보드"},{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/calendar",label:"일정관리"}],
       "/work-logs": [{href:"/work-logs",label:"WBS상세내용 목록"},{href:"/work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
