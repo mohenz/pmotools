@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+import { actorNameOf, getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { allocateNumberingBase, isNumberingBaseConflict, presetNumberingSequences } from "@/lib/server/numbering";
 import { updateProjectInformation } from "@/lib/server/project-information";
@@ -113,8 +113,12 @@ export async function reorderProjects(actorId: string, orderedIds: unknown) {
   if (new Set(ids).size !== ids.length || ids.length !== all.length || !all.every((p) => ids.includes(p.id))) {
     throw new DomainError("INVALID_CODE", "프로젝트 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요.");
   }
-  await prisma.$transaction(ids.map((id, index) => prisma.project.update({ where: { id }, data: { sortOrder: index } })));
-  await writeAuditLog(null, actorId, "PROJECT_REORDER", "projects", null, null, { orderedIds: ids });
+  // 순서 저장과 감사로그를 한 트랜잭션으로 — 감사로그가 실패하면 순서도 되돌려 "오류인데 반영됨" 상태를 막는다.
+  const actorName = await actorNameOf(actorId);
+  await prisma.$transaction([
+    ...ids.map((id, index) => prisma.project.update({ where: { id }, data: { sortOrder: index } })),
+    prisma.auditLog.create({ data: { projectId: null, actorId, actorName, action: "PROJECT_REORDER", targetTable: "projects", targetId: null, afterData: { orderedIds: ids } } }),
+  ]);
 }
 
 export type ProjectMemberAdminRow = { userId: string; loginId: string; name: string; jobTitle: string | null; role: string; status: string };
