@@ -2,6 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
+import { WbsDelayedToggle } from "@/features/mp/wbs/WbsDelayedToggle";
 import { WbsExcludeCompletedToggle } from "@/features/mp/wbs/WbsExcludeCompletedToggle";
 import { CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, WBS_ITEM_STATUSES } from "@/lib/domain/wbs";
 import { WBS_EXCEL_HEADERS as HEADERS, WBS_EXCEL_ROLE_NAMES } from "@/lib/server/mp/wbs";
@@ -71,9 +72,9 @@ export function WbsListScreen({ result, filters, topLevel }: { result: WbsExcelL
               {topLevel && <select name="projectCode" defaultValue={filters.projectCode ?? ""} aria-label="프로젝트"><option value="">전체 프로젝트</option>{topLevel.projects.map((project) => <option value={project.code} key={project.code}>{project.name} ({project.code})</option>)}</select>}
               <input name="q" defaultValue={filters.q} placeholder="Task 코드·이름 검색" aria-label="Task 검색" />
               <input name="assignee" defaultValue={filters.assignee} placeholder="담당자 검색" aria-label="담당자 검색" />
-              <select name="delayed" defaultValue={filters.delayed} aria-label="지연여부"><option value="">전체 지연여부</option><option value="y">지연</option><option value="n">정상</option></select>
               <select name="stage" defaultValue={filters.stage} aria-label="Stage 검색"><option value="">전체 Stage</option>{result.stages?.map((stage) => <option value={stage} key={stage}>{stage}</option>)}</select>
               <select name="status" defaultValue={filters.status} aria-label="상태"><option value="">전체 상태</option>{WBS_ITEM_STATUSES.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}</select>
+              <WbsDelayedToggle defaultChecked={filters.delayed === "y"} key={filters.delayed} />
               <WbsExcludeCompletedToggle defaultChecked={filters.excludeCompleted} key={String(filters.excludeCompleted)} />
               <label className="wbs-exclude-completed-toggle" title={`계획소요일(영업일)이 ${cpMinWorkingDays}일 이상인 Task만 작업기간이 긴 순으로 조회`}><input type="checkbox" name="cp" value="y" defaultChecked={filters.cp} aria-label="CP 대상만 조회" /><span>CP 대상({cpMinWorkingDays}일 이상)</span></label>
             </div>

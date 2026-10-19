@@ -136,4 +136,31 @@ describe("WbsListScreen Pagination UI", () => {
     expect(newPageSource).toContain("requireManagerContext");
     expect(newPageSource).not.toContain("getLocalContext");
   });
+
+  it("renders delayed toggle between status select and excludeCompleted toggle without select[name='delayed']", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(WbsListScreen, {
+        result: mockResult,
+        filters: defaultFilters,
+      })
+    );
+
+    // 기존 select[name="delayed"]가 제거되었는지 확인
+    expect(html).not.toContain('<select name="delayed"');
+
+    // WbsDelayedToggle 토글 컨트롤(hidden input 및 checkbox) 존재 확인
+    expect(html).toContain('<input type="hidden" name="delayed" value=""/>');
+    expect(html).toContain('aria-label="지연여부"');
+    expect(html).toContain('<span>지연</span>');
+
+    // DOM 배치 순서 검증: select[name="status"] -> delayed toggle -> excludeCompleted toggle
+    const statusIndex = html.indexOf('name="status"');
+    const delayedIndex = html.indexOf('aria-label="지연여부"');
+    const excludeIndex = html.indexOf('aria-label="완료제외"');
+
+    expect(statusIndex).toBeGreaterThan(-1);
+    expect(delayedIndex).toBeGreaterThan(statusIndex);
+    expect(excludeIndex).toBeGreaterThan(delayedIndex);
+  });
 });
+
