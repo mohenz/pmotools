@@ -900,6 +900,9 @@ a.history-item:hover { background: var(--accent); }
 .code-value { padding-left: 4px; color: var(--muted-foreground); }
 .toggle { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 12px; font-weight: 600; }
 .toggle input { width: 16px; min-height: 16px; }
+/* 폼 패널의 label 그리드(.form-panel label) 안에서도 토글은 체크박스+문구 한 줄로(2026-10-21) */
+.form-panel label.toggle { display: flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
+.form-panel label.toggle input { flex: none; width: 16px; height: 16px; min-height: 16px; margin: 0; }
 .code-create { margin-top: 8px; padding: 9px; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: var(--muted); }
 
 .inline-create { display: grid; grid-template-columns: 120px 170px 140px 140px auto; align-items: end; gap: 7px; }
