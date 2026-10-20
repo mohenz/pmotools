@@ -1753,8 +1753,6 @@ a.history-item:hover { background: var(--accent); }
 .ut-tree-head { display: flex; align-items: center; justify-content: space-between; }
 .ut-tree-all { padding: 2px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); cursor: pointer; font-size: 12px; }
 .ut-tree-all.active { border-color: var(--primary); color: var(--primary); }
-.ut-tree-only { display: inline-flex; flex-direction: row; align-items: center; gap: 5px; width: auto; font-size: 12px; line-height: 1; color: var(--muted-foreground); white-space: nowrap; cursor: pointer; }
-.ut-tree-only input[type="checkbox"] { flex: none; width: 13px; min-width: 0; height: 13px; min-height: 0; margin: 0; padding: 0; }
 .ut-tree-list, .ut-tree-list ul { margin: 0; padding: 0; list-style: none; }
 .ut-tree-list { overflow: auto; }
 .ut-tree-row { display: flex; align-items: center; gap: 2px; border-radius: var(--radius-sm); }

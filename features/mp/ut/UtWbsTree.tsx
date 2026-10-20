@@ -4,14 +4,13 @@ import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { UtTreeNode } from "@/lib/server/mp/ut/grid";
 
-// 설계서 8장 — 모든 목록 화면 좌측에 고정하는 WBS 트리. 노드를 고르면 ?wbs={id}로 해당 WBS 하위만 조회한다.
+// 설계서 8장 — 목록 좌측 WBS 트리. WBS 단위테스트 대상 Task와 그 상위를 모두 보여 주며(2026-10-21), 노드를 고르면 ?wbs={id}로 해당 WBS 하위만 조회한다.
 export function UtWbsTree({ nodes }: { nodes: UtTreeNode[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
   const selected = search.get("wbs") ?? "";
   const [q, setQ] = useState("");
-  const [onlyWithScenario, setOnlyWithScenario] = useState(false);
   const childrenOf = useMemo(() => {
     const map = new Map<string | null, UtTreeNode[]>();
     for (const n of nodes) map.set(n.parentId, [...(map.get(n.parentId) ?? []), n]);
@@ -36,7 +35,6 @@ export function UtWbsTree({ nodes }: { nodes: UtTreeNode[] }) {
   }
 
   const render = (parentId: string | null, depth: number): React.ReactNode => (childrenOf.get(parentId) ?? [])
-    .filter((n) => !onlyWithScenario || n.scenarioCount > 0)
     .map((n) => {
       const kids = childrenOf.get(n.id) ?? [];
       const expanded = keyword ? true : open.has(n.id) || ancestorsOfSelected.has(n.id);
@@ -58,7 +56,6 @@ export function UtWbsTree({ nodes }: { nodes: UtTreeNode[] }) {
       <button type="button" className={`ut-tree-all${selected ? "" : " active"}`} onClick={() => go("")}>전체</button>
     </div>
     <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="WBS 코드·명 검색" aria-label="WBS 검색" />
-    <label className="ut-tree-only"><input type="checkbox" checked={onlyWithScenario} onChange={(e) => setOnlyWithScenario(e.target.checked)} />시나리오 있는 WBS만</label>
     <ul className="ut-tree-list">{render(null, 0)}</ul>
   </aside>;
 }
