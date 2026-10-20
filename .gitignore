@@ -35,3 +35,7 @@ sonar-project.properties
 scripts/create-token.ps1
 scripts/fetch-metrics.ps1
 scripts/test-remote-db.ts
+
+# 단위테스트 증적 로컬 저장소(개발용, 운영은 UT_EVIDENCE_ROOT)
+.ut-evidence/
+.ut-evidence-tmp/
