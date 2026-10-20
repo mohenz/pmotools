@@ -158,7 +158,7 @@ export function ProjectPortfolioScreen({ data }: { data: ProjectPortfolio }) {
           </table>
           {!visibleRows.length && <p className="empty">조건에 맞는 프로젝트가 없습니다.</p>}
         </div>
-        <p className="portfolio-note">대표·상위 프로젝트 행은 하위 프로젝트를 합산한 값입니다. Leaf WBS 건수 기준 — 공정율 = 완료 ÷ 전체, 예상공정율 = 계획종료일이 오늘 이하인 Task ÷ 전체, 지연율 = 지연 Task ÷ 계획종료일이 오늘 이전인 Task. 공정율은 WBS 통계의 실적 공정율(작업기간 가중)과 다를 수 있습니다. 상태: 예정 &lt; 1%, 진행 ≥ 1%, 완료 = 전 Task 완료.</p>
+        <p className="portfolio-note">대표·상위 프로젝트 행은 하위 프로젝트를 합산한 값입니다. Leaf WBS 건수 기준 — 공정율 = 완료 ÷ 전체, 예상공정율 = 계획종료일이 오늘 이하인 Task ÷ 전체, 지연율 = 지연 Task ÷ 계획종료일이 오늘 이전인 Task. 상태: 예정 &lt; 1%, 진행 ≥ 1%, 완료 = 전 Task 완료.</p>
       </section>
     </div>
   </>;

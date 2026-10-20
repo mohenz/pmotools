@@ -1,6 +1,6 @@
 // WBS2 간트 차트(조회 전용, 2026-09-30) — 표시할 행 추리기, 상위 단계 요약, 상태 판정, 기간 계산.
 // 화면(클라이언트)과 서버가 함께 쓰므로 순수 함수로만 둔다.
-import { rollupProgress } from "@/lib/domain/wbs";
+import { rollupProgressByCount } from "@/lib/domain/wbs";
 
 export type GanttState = "completed" | "delayedCompletion" | "delayed" | "inProgress" | "notStarted";
 
@@ -47,7 +47,7 @@ const maxDate = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b
 /**
  * WBS 트리 순서(path 순) 행에서 간트 행을 만든다.
  * - 최하위 Task만 필터를 적용하고, 조건에 맞는 Task의 상위 단계는 함께 남긴다(요약 막대).
- * - 상위 단계 기간 = 자기 일정과 남은 하위 Task 일정의 합집합, 진척 = WBS 통계와 같은 가중 평균(가중치 → 영업일수).
+ * - 상위 단계 기간 = 자기 일정과 남은 하위 Task 일정의 합집합, 진척 = WBS 통계와 같은 건수 기준(완료 ÷ 전체, 2026-10-20).
  */
 export function buildGanttRows(items: GanttSource[], filters: GanttFilters = {}): GanttRow[] {
   const byId = new Map(items.map((item) => [item.id, item]));
@@ -87,7 +87,7 @@ export function buildGanttRows(items: GanttSource[], filters: GanttFilters = {})
     }
     const start = leaves.reduce<string | null>((acc, leaf) => minDate(acc, leaf.startDate), item.startDate);
     const due = leaves.reduce<string | null>((acc, leaf) => maxDate(acc, leaf.dueDate), item.dueDate);
-    const rollup = rollupProgress(leaves.map((leaf) => ({ weight: leaf.weight || leaf.workingDays || 0, planned: leaf.plannedProgress ?? 0, actual: leaf.actualProgress })));
+    const rollup = rollupProgressByCount(leaves);
     const states = leaves.map(leafState);
     const state: GanttState = !leaves.length ? "notStarted"
       : states.includes("delayed") ? "delayed"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actualProgress, childPath, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, sortKeyFromCode, wbsDelayCompletion, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
+import { actualProgress, childPath, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, pathFromCode, plannedProgress, progressIndex, rebasePath, rollupProgress, rollupProgressByCount, sortKeyFromCode, wbsDelayCompletion, wbsDelayDays, wbsDelayRate, workingDays } from "./wbs";
 
 describe("nextSegment", () => {
   it("starts a fresh sibling group at 0001", () => {
@@ -194,6 +194,28 @@ describe("rollupProgress", () => {
     const result = rollupProgress([{ weight: 0, planned: 1, actual: 1 }, { weight: 2, planned: 0.4, actual: 0.2 }]);
     expect(result.planned).toBeCloseTo(0.4);
     expect(result.actual).toBeCloseTo(0.2);
+  });
+});
+
+describe("rollupProgressByCount (건수 기준)", () => {
+  const T = "2026-10-20";
+  it("대상이 없으면 0", () => {
+    expect(rollupProgressByCount([], T)).toEqual({ planned: 0, actual: 0, progressIndex: 0 });
+  });
+  it("계획 = 계획종료일 ≤ 오늘 ÷ 전체, 실적 = 완료 ÷ 전체, 진척율 = 실적 ÷ 계획", () => {
+    const result = rollupProgressByCount([
+      { dueDate: "2026-10-01", actualProgress: 1 },
+      { dueDate: T, actualProgress: 0.5 },
+      { dueDate: "2026-10-21", actualProgress: 1 },
+      { dueDate: null, actualProgress: 0 },
+    ], T);
+    expect(result.planned).toBeCloseTo(0.5);
+    expect(result.actual).toBeCloseTo(0.5);
+    expect(result.progressIndex).toBeCloseTo(1);
+  });
+  it("사용자 예시: 1656건 중 907건 완료면 55%", () => {
+    const items = Array.from({ length: 1656 }, (_, i) => ({ dueDate: null, actualProgress: i < 907 ? 1 : 0 }));
+    expect(Math.round(rollupProgressByCount(items, T).actual * 100)).toBe(55);
   });
 });
 

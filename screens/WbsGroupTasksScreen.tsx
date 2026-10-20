@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
 import { WbsStageChart } from "@/components/WbsStageChart";
-import { rollupProgress } from "@/lib/domain/wbs";
+import { rollupProgressByCount } from "@/lib/domain/wbs";
 import type { WbsGroupTasks } from "@/lib/server/wbs";
 
 const pct = (value: number | null) => (value === null ? "-" : `${Math.round(value * 100)}%`);
@@ -24,7 +24,7 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
   }
   const owners = [...itemsByOwner.entries()]
     .map(([owner, rows]) => {
-      const rollup = rollupProgress(rows.map((row) => ({ weight: row.weight || row.workingDays || 0, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
+      const rollup = rollupProgressByCount(rows);
       const completedCount = rows.filter((row) => row.actualProgress >= 1).length;
       const ownerLoginId = rows.find((row) => row.ownerLoginId)?.ownerLoginId ?? null;
       return { owner, ownerLoginId, itemCount: rows.length, completedCount, planned: rollup.planned, actual: rollup.actual, delayed: rows.some((row) => row.isDelayed) };

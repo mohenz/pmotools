@@ -153,6 +153,20 @@ export function rollupProgress(inputs: WbsRollupInput[]): WbsRollup {
   return { planned, actual, progressIndex: progressIndex(actual, planned) };
 }
 
+export type WbsCountRollupInput = { dueDate: string | null; actualProgress: number };
+
+/**
+ * 건수 기준 공정율 롤업(2026-10-20 사용자 확정 — 2026-09-10 가중평균 결정을 대체, 통계·포트폴리오 전 화면 공통).
+ * 계획(목표) = 계획종료일이 오늘 이하인 Task ÷ 전체, 실적 = 완료(실적 100%) Task ÷ 전체, 진척율 = 실적 ÷ 계획.
+ * today 기본값은 지연율 모수(delayStatsOf)와 같은 서버 UTC 날짜다. 대상이 없으면 전부 0.
+ */
+export function rollupProgressByCount(items: WbsCountRollupInput[], today: string = new Date().toISOString().slice(0, 10)): WbsRollup {
+  if (items.length === 0) return { planned: 0, actual: 0, progressIndex: 0 };
+  const planned = items.filter((item) => item.dueDate !== null && item.dueDate <= today).length / items.length;
+  const actual = items.filter((item) => item.actualProgress >= 1).length / items.length;
+  return { planned, actual, progressIndex: progressIndex(actual, planned) };
+}
+
 // ---------------------------------------------------------------------------
 // CP(Critical Path) 대상 조회 — 선후행 관계 없이 계획 작업기간(영업일)이 기준일수 이상인 leaf Task를 CP 대상으로 본다.
 // 기준일수는 공통코드(CRITICAL_PATH / MIN_WORKING_DAYS)의 명칭 값이며, 없거나 양의 정수가 아니면 기본 5일이다.

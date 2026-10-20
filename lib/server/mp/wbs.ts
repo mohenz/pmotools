@@ -4,7 +4,7 @@ import "server-only";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
-import { actualProgress, childPath, CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
+import { actualProgress, childPath, CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, rollupProgressByCount, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { scheduleProgress } from "@/lib/domain/pmo-daily";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
@@ -368,7 +368,7 @@ export async function getWbsOwnerStatus(projectId: string, loginId: string) {
   // 담당 작업 중 leaf 항목이 있으면 우선 집계하되, PM/PL처럼 상위 요약·마일스톤 Task만 할당받은 경우에도
   // 담당 작업이 그래프와 통계에 정상 반영되도록 fallback(전체 담당 Task) 처리한다.
   const targetItems = leaves.length > 0 ? leaves : items;
-  const overall = rollupProgress(targetItems.map((row) => ({ weight: row.weight || row.workingDays || 1, planned: row.plannedProgress ?? 0, actual: row.actualProgress })));
+  const overall = rollupProgressByCount(targetItems);
   // 진척율(실적÷목표)은 오늘 기준 선형보간 목표 대비 페이스 지표라, 마감 전인데 입력된 진도율이
   // 아직 낮은 항목이 있으면 실제 지연(계획종료일 경과 미완료, 또는 지연완료)이 하나도 없어도 100% 밑으로 나올 수 있다.
   // "critical" 강조는 진척율 수치가 아니라 실제 지연 항목 존재 여부로 판단한다(2026-09-10 사용자 요청).
@@ -406,9 +406,9 @@ function delayStatsOf(rows: WbsItemRow[]) {
 // 계획건수/실적건수 — Stage 개요 화면 전용 누적 기준(2026-09-10 확정, PMO Daily "1. 공정현황"과는 계획건수
 // 필터가 다르다: PMO Daily는 계획종료일이 "정확히 기준일"인 건만 세는 하루 단위 스냅샷이고, 여기는 "기준일까지 누적"이라
 // 프로젝트가 진행될수록 단조 증가한다 — Stage 전체 진행 상황을 보여주는 화면 성격상 의도적으로 다르게 설계했다.
-// 계획건수 = 계획종료일이 오늘 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목. 참고용 건수일 뿐,
-// 공정율 계산에는 쓰지 않는다 — 같은 행의 계획(%)/실적(%)(leaf 전체 가중평균)과 모집단이 달라 공정율을 건수비로 구하면
-// "계획건수=실적건수인데 계획%≠실적%"처럼 서로 안 맞는 숫자가 나온다(2026-09-10 사용자 지적으로 수정).
+// 계획건수 = 계획종료일이 오늘 이전(포함)인 leaf 항목, 실적건수 = 그중 실적(진척율)이 100%인 항목.
+// 2026-10-20 공정율이 건수 기준(rollupProgressByCount)으로 바뀌어 계획(%) = 계획건수 ÷ 전체가 된다. 실적(%)은 완료 전체
+// (계획종료일 전 조기 완료 포함) ÷ 전체라, 실적건수(계획분 중 완료)와는 조기 완료 건만큼 다를 수 있다.
 function countStatsOf(rows: WbsItemRow[], todayStr: string) {
   const plannedRows = rows.filter((item) => item.dueDate !== null && item.dueDate <= todayStr);
   const plannedCount = plannedRows.length;
@@ -416,13 +416,12 @@ function countStatsOf(rows: WbsItemRow[], todayStr: string) {
   return { plannedCount, actualCount };
 }
 
-// 통계 화면 — leaf 항목(다른 항목의 상위로 참조되지 않는 행 = 엑셀 "상세진도(진도관리대상)")만 가중치(weight ?? workingDays) 기준으로 롤업한다.
+// 통계 화면 — leaf 항목(다른 항목의 상위로 참조되지 않는 행 = 엑셀 "상세진도(진도관리대상)")만 건수 기준으로 롤업한다(2026-10-20, 이전: 가중치 가중평균).
 async function loadWbsStats(projectId: string | string[]): Promise<WbsStats> {
   const items = await listWbsItems(projectId);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
-  const overall = rollupProgress(toRollupInputs(leaves));
+  const overall = rollupProgressByCount(leaves);
   const overallDelay = delayStatsOf(leaves);
   const todayStr = new Date().toISOString().slice(0, 10);
   const overallCounts = countStatsOf(leaves, todayStr);
@@ -441,7 +440,7 @@ async function loadWbsStats(projectId: string | string[]): Promise<WbsStats> {
   }
   const stages = stageDefs.map(({ projectCode, stage, label }) => {
     const rows = (leaves as any[]).filter((item) => item.projectCode === projectCode && item.stage === stage);
-    const rollup = rollupProgress(toRollupInputs(rows));
+    const rollup = rollupProgressByCount(rows);
     const stageDelay = delayStatsOf(rows);
     const stageCounts = countStatsOf(rows, todayStr);
     return { stage: label, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: stageDelay.delayedCount > 0, ...stageCounts, scheduleProgress: scheduleProgress(rollup.planned, rollup.actual), delayedCount: stageDelay.delayedCount, delayTrackedCount: stageDelay.delayTrackedCount, delayRate: stageDelay.delayRate };
@@ -489,8 +488,7 @@ async function loadWbsWorkGroupStats(projectId: string | string[]): Promise<WbsW
   const [items, { groupLabelByOwner, groupSortKeyByLabel }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  const toRollupInputs = (rows: typeof leaves) => rows.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress }));
-  const overall = rollupProgress(toRollupInputs(leaves));
+  const overall = rollupProgressByCount(leaves);
   const overallDelay = delayStatsOf(leaves);
 
   const leavesByGroup = new Map<string, typeof leaves>();
@@ -507,7 +505,7 @@ async function loadWbsWorkGroupStats(projectId: string | string[]): Promise<WbsW
   }
   const groups = [...leavesByGroup.entries()]
     .map(([groupLabel, rows]) => {
-      const rollup = rollupProgress(toRollupInputs(rows));
+      const rollup = rollupProgressByCount(rows);
       const memberCount = new Set(rows.map((row) => row.ownerUserId).filter((id): id is string => !!id)).size;
       const groupDelay = delayStatsOf(rows);
       return { groupLabel, memberCount, itemCount: rows.length, planned: rollup.planned, actual: rollup.actual, delayed: groupDelay.delayedCount > 0, ...groupDelay };
@@ -657,7 +655,7 @@ export async function getWbsGroupTasks(projectId: string, group: string, delayed
       (item.dueDate !== null && item.dueDate >= startDate && item.dueDate <= endDate) ||
       (item.dueDate !== null && item.dueDate < startDate && item.actualProgress < 1));
   }
-  const overall = rollupProgress(leaves.map((item) => ({ weight: item.weight || item.workingDays || 0, planned: item.plannedProgress ?? 0, actual: item.actualProgress })));
+  const overall = rollupProgressByCount(leaves);
   return { group, delayedOnly, weekRange: weekRange ?? null, overall, items: leaves };
 }
 export type WbsGroupTasks = Awaited<ReturnType<typeof getWbsGroupTasks>>;

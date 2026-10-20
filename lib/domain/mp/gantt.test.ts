@@ -31,7 +31,7 @@ describe("WBS2 간트", () => {
     expect(rows.map((r) => `${r.id}:${r.depth}`)).toEqual(["1:0", "1.1:1", "1.1.1:2", "1.1.2:2", "2:0", "2.1:1"]);
     const stage = rows.find((r) => r.id === "1")!;
     expect([stage.start, stage.due, stage.state, stage.hasChildren]).toEqual(["2026-09-01", "2026-09-20", "delayed", true]);
-    expect(stage.actual).toBeCloseTo(5 / 6); // 가중치 = 영업일수 5·1, 실적 1·0
+    expect(stage.actual).toBeCloseTo(1 / 2); // 건수 기준(2026-10-20): 하위 Task 2건 중 1건 완료
     expect(rows.find((r) => r.id === "1.1.2")!.milestone).toBe(true);
   });
 
