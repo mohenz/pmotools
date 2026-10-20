@@ -100,6 +100,28 @@ model User {
   meetingActionItemChanges      MeetingMinuteActionItem[]     @relation("MeetingActionItemStatusChanger")
   meetingActionItemLogs         MeetingMinuteActionItemLog[]  @relation("MeetingActionItemLogActor")
   importBatches                 ImportBatch[]                 @relation("ImportBatchUploader")
+  utLockedProjects              UtProjectSetting[]            @relation("UtProjectLocker")
+  utCreatedPrograms             UtProgram[]                   @relation("UtProgramCreator")
+  utWrittenScenarios            UtScenario[]                  @relation("UtScenarioWriter")
+  utPlScenarios                 UtScenario[]                  @relation("UtScenarioPl")
+  utApprovedScenarios           UtScenario[]                  @relation("UtScenarioApprover")
+  utCreatedScenarios            UtScenario[]                  @relation("UtScenarioCreator")
+  utExecutorCases               UtCase[]                      @relation("UtCaseExecutor")
+  utQcCases                     UtCase[]                      @relation("UtCaseQc")
+  utCreatedCases                UtCase[]                      @relation("UtCaseCreator")
+  utExecutions                  UtExecution[]                 @relation("UtExecutionExecutor")
+  utApprovals                   UtApproval[]                  @relation("UtApprovalApprover")
+  utUploadedEvidences           UtEvidence[]                  @relation("UtEvidenceUploader")
+  utEvidenceViews               UtEvidenceView[]              @relation("UtEvidenceViewer")
+  utAssignedDefects             UtDefect[]                    @relation("UtDefectAssignee")
+  utFixedDefects                UtDefect[]                    @relation("UtDefectFixer")
+  utVerifiedDefects             UtDefect[]                    @relation("UtDefectVerifier")
+  utCreatedDefects              UtDefect[]                    @relation("UtDefectCreator")
+  utDefectActions               UtDefectAction[]              @relation("UtDefectActionActor")
+  utDeclaredMilestones          UtWbsMilestone[]              @relation("UtMilestoneDeclarer")
+  utConfirmedMilestones         UtWbsMilestone[]              @relation("UtMilestoneConfirmer")
+  utRecordedMilestones          UtWbsMilestone[]              @relation("UtMilestoneRecorder")
+  utWbsMigrations               UtWbsMigration[]              @relation("UtMigrationMigrator")
 
   @@map("users")
 }
@@ -217,6 +239,9 @@ model Project {
   holidays                  Holiday[]
   meetingMinutes            MeetingMinute[]
   meetingMinuteSequence     MeetingMinuteSequence?
+  utSetting                 UtProjectSetting?
+  utPrograms                UtProgram[]
+  utScenarios               UtScenario[]
 
   @@index([parentId])
   importBatches ImportBatch[]
@@ -283,6 +308,10 @@ model Groups {
   pmoDelayedTasks PmoDelayedTask[]
   workLogs        WorkLog[]
   actionItems     ActionItem[]
+  utPrograms       UtProgram[]  @relation("UtProgramGroup")
+  utScenarios      UtScenario[] @relation("UtScenarioGroup")
+  utCauseDefects   UtDefect[]   @relation("UtDefectCauseGroup")
+  utVendorDefects  UtDefect[]   @relation("UtDefectVendorGroup")
 
   @@unique([projectId, groupType, code])
   @@index([leaderId])
@@ -397,6 +426,9 @@ model CommonCode {
   wbsAssignments            WbsAssignment[]
   actionItemsByCategory     ActionItem[]              @relation("ActionItemCategory")
   workLogsByDeliverableExtension WorkLog[]            @relation("WorkLogDeliverableExtension")
+  utExecutionEnvs        UtExecution[] @relation("UtExecutionEnv")
+  utApprovalRejectReasons UtApproval[] @relation("UtApprovalRejectReason")
+  utDefectTypes          UtDefect[]    @relation("UtDefectType")
 
   @@unique([groupId, code])
   @@map("common_codes")
@@ -591,6 +623,7 @@ model Requirement {
   category CommonCode?         @relation("RequirementCategory", fields: [categoryCodeId], references: [id])
   events   RequirementEvent[]
   changes  RequirementChange[]
+  utScenarios UtScenario[]
 
   @@unique([projectId, requirementId])
   @@index([projectId, archivedAt])
@@ -1454,6 +1487,11 @@ model WbsItem {
   deliverable  WbsDeliverable?
   delayedTasks WbsDelayedTask[]
   actionItems  ActionItem[]
+  utProgramMaps  UtWbsProgramMap[]
+  utScenarios    UtScenario[]
+  utMilestone    UtWbsMilestone?
+  utMigrationsFrom UtWbsMigration[] @relation("UtMigrationFrom")
+  utMigrationsTo   UtWbsMigration[] @relation("UtMigrationTo")
 
   @@index([projectId, archivedAt])
   @@index([projectId, path])
@@ -1723,6 +1761,7 @@ model MeetingMinuteActionItemLog {
 enum ImportBatchKind {
   WBS
   REQUIREMENT
+  UT_CASE
 }
 
 enum ImportRowStatus {
@@ -1780,4 +1819,435 @@ model BatchJobLog {
 
   @@index([jobName, executedAt])
   @@map("batch_job_logs")
+}
+
+// ---------------------------------------------------------------------------
+// 단위테스트 수행관리 (설계: docs/단위테스트 수행관리 프로그램 설계서.md 4장, 2026-10-20 Phase 1)
+// 1단계 수기 관리 — UT 데이터는 기존 WBS 진척(실적일·역할 트랙)을 변경하지 않는다.
+// 하위 행의 projectId·wbsItemId는 상위 행 값을 저장 시 복사한 비정규화 컬럼(FK 없음, 인덱스만) — 4.3 규칙 1·3.
+// 수행 결과·승인·증적·결함 조치 이력은 INSERT 전용(수기 마이그레이션의 트리거로 강제) — 4.3 규칙 6.
+// ---------------------------------------------------------------------------
+
+enum UtPriority {
+  H
+  M
+  L
+}
+
+enum UtCaseType {
+  NORMAL    // 정상
+  EXCEPTION // 예외
+  BOUNDARY  // 경계
+}
+
+enum UtScenarioStatus {
+  DRAFT            // 작성중
+  REVIEW_REQUESTED // 검토요청
+  APPROVED         // 승인
+  REJECTED         // 반려
+}
+
+enum UtCaseStatus {
+  DRAFT            // 작성중
+  REVIEW_REQUESTED // 검토요청
+  APPROVED         // 승인
+  IN_EXECUTION     // 수행중(최초 수행 등록 또는 Fail·반려 후 재수행 대기)
+  QC_PENDING       // Pass(QC대기)
+  PL_PENDING       // QC확인(PL대기)
+  PL_CONFIRMED     // PL확인완료
+}
+
+enum UtVerdict {
+  PASS
+  FAIL
+  BLOCKED
+  NA
+}
+
+enum UtApprovalStatus {
+  QC_PENDING
+  PL_PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UtApprovalStep {
+  QC
+  PL
+}
+
+enum UtDecision {
+  APPROVED
+  REJECTED
+}
+
+enum UtProgramType {
+  SCREEN
+  API
+  BATCH
+  REPORT
+}
+
+enum UtDefectSeverity {
+  CRITICAL
+  MAJOR
+  MINOR
+  TRIVIAL
+}
+
+enum UtDefectStatus {
+  REGISTERED // 등록
+  FIXED      // 조치완료
+  VERIFIED   // 검증완료
+  REFIX      // 재조치(검증 부적합)
+}
+
+enum UtVerificationResult {
+  PASS // 적합
+  FAIL // 부적합
+}
+
+enum UtDefectActionType {
+  FIX
+  VERIFY
+}
+
+enum UtWbsChangeType {
+  SPLIT
+  MERGE
+  ARCHIVE
+  LEAF_LOST
+}
+
+model UtProjectSetting {
+  projectId    String    @id
+  utStartDate  DateTime? @db.Date
+  utEndDate    DateTime? @db.Date
+  samplingRate Int       @default(10) // PMO 샘플링 비율(%)
+  lockedAt     DateTime? // 마감 잠금 — 기록되면 UT 데이터 쓰기 차단(4.3 규칙 8)
+  lockedBy     String?
+  lockReason   String    @default("")
+  updatedBy    String?
+  version      Int       @default(1)
+  updatedAt    DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  locker  User?   @relation("UtProjectLocker", fields: [lockedBy], references: [id])
+
+  @@map("ut_project_settings")
+}
+
+model UtProgram {
+  id          String        @id @default(uuid())
+  projectId   String
+  programCode String
+  name        String
+  programType UtProgramType @default(SCREEN)
+  screenId    String        @default("")
+  groupId     String? // Groups(WORK_MODULE)
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  archivedAt  DateTime?
+
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group     Groups?           @relation("UtProgramGroup", fields: [groupId], references: [id], onDelete: SetNull)
+  creator   User              @relation("UtProgramCreator", fields: [createdBy], references: [id])
+  wbsMaps   UtWbsProgramMap[]
+  scenarios UtScenario[]
+
+  @@unique([projectId, programCode])
+  @@map("ut_programs")
+}
+
+model UtWbsProgramMap {
+  wbsItemId String
+  programId String
+  createdAt DateTime @default(now())
+
+  wbsItem WbsItem   @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  program UtProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@id([wbsItemId, programId])
+  @@map("ut_wbs_program_maps")
+}
+
+model UtScenario {
+  id                String           @id @default(uuid())
+  projectId         String
+  wbsItemId         String
+  displayId         String // UTS-{WBS displayId에서 "WBS-" 제외}-{순번 2자리}
+  seq               Int
+  groupId           String // 업무단위 = Groups(WORK_MODULE), 수기 선택(4.4)
+  programId         String?
+  requirementId     String?
+  name              String
+  priority          UtPriority       @default(M)
+  writerId          String
+  plUserId          String? // PL 수기 지정(4.4)
+  status            UtScenarioStatus @default(DRAFT)
+  reviewRequestedAt DateTime?
+  approvedAt        DateTime?
+  approvedBy        String?
+  rejectReason      String           @default("")
+  createdBy         String
+  updatedBy         String?
+  version           Int              @default(1)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  archivedAt        DateTime?
+
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsItem     WbsItem         @relation(fields: [wbsItemId], references: [id], onDelete: Restrict)
+  group       Groups          @relation("UtScenarioGroup", fields: [groupId], references: [id], onDelete: Restrict)
+  program     UtProgram?      @relation(fields: [programId], references: [id], onDelete: SetNull)
+  requirement Requirement?    @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  writer      User            @relation("UtScenarioWriter", fields: [writerId], references: [id])
+  pl          User?           @relation("UtScenarioPl", fields: [plUserId], references: [id])
+  approver    User?           @relation("UtScenarioApprover", fields: [approvedBy], references: [id])
+  creator     User            @relation("UtScenarioCreator", fields: [createdBy], references: [id])
+  cases       UtCase[]
+  migrations  UtWbsMigration[]
+
+  @@unique([projectId, displayId])
+  @@index([projectId, archivedAt, status])
+  @@index([wbsItemId])
+  @@index([plUserId, status])
+  @@map("ut_scenarios")
+}
+
+model UtCase {
+  id             String       @id @default(uuid())
+  projectId      String // 시나리오 값 복사
+  scenarioId     String
+  wbsItemId      String // 시나리오 값 복사(이관 처리에서만 변경)
+  displayId      String // {시나리오 ID}-{순번 3자리}
+  seq            Int
+  caseType       UtCaseType
+  name           String // 테스트 대상(검증 규칙 1개)
+  precondition   String       @default("")
+  steps          String       @default("") // 테스트스텝
+  inputData      String       @default("")
+  expectedResult String       @default("")
+  priority       UtPriority   @default(M)
+  executorId     String?
+  plannedDate    DateTime?    @db.Date
+  qcUserId       String?
+  status         UtCaseStatus @default(DRAFT)
+  isActive       Boolean      @default(true)
+  createdBy      String
+  updatedBy      String?
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  scenario   UtScenario    @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  executor   User?         @relation("UtCaseExecutor", fields: [executorId], references: [id])
+  qc         User?         @relation("UtCaseQc", fields: [qcUserId], references: [id])
+  creator    User          @relation("UtCaseCreator", fields: [createdBy], references: [id])
+  executions UtExecution[]
+  defects    UtDefect[]
+
+  @@unique([projectId, displayId])
+  @@index([scenarioId])
+  @@index([wbsItemId])
+  @@index([executorId, status])
+  @@index([qcUserId, status])
+  @@map("ut_cases")
+}
+
+model UtExecution {
+  id                String            @id @default(uuid())
+  projectId         String
+  caseId            String
+  wbsItemId         String
+  roundNo           Int
+  envCodeId         String? // CommonCode(ut_env)
+  executorId        String
+  executedOn        DateTime          @db.Date // 테스트수행일
+  actualResult      String            @default("")
+  verdict           UtVerdict
+  naReason          String            @default("")
+  approvalStatus    UtApprovalStatus? // PASS → QC_PENDING, NA → PL_PENDING, FAIL·BLOCKED → null
+  approvalUpdatedAt DateTime? // approvalStatus 갱신만 허용(트리거)
+  createdAt         DateTime          @default(now())
+
+  case          UtCase       @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  env           CommonCode?  @relation("UtExecutionEnv", fields: [envCodeId], references: [id], onDelete: SetNull)
+  executor      User         @relation("UtExecutionExecutor", fields: [executorId], references: [id])
+  approvals     UtApproval[]
+  evidences     UtEvidence[]
+  defects       UtDefect[]   @relation("UtDefectFoundIn")
+  retestDefects UtDefect[]   @relation("UtDefectRetest")
+
+  @@unique([caseId, roundNo])
+  @@index([projectId, approvalStatus])
+  @@index([wbsItemId])
+  @@map("ut_executions")
+}
+
+model UtApproval {
+  id                 String         @id @default(uuid())
+  projectId          String
+  executionId        String
+  wbsItemId          String
+  step               UtApprovalStep
+  approverId         String
+  decision           UtDecision
+  rejectReasonCodeId String? // CommonCode(ut_reject_reason)
+  comment            String         @default("")
+  actedAt            DateTime       @default(now())
+
+  execution    UtExecution @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  approver     User        @relation("UtApprovalApprover", fields: [approverId], references: [id])
+  rejectReason CommonCode? @relation("UtApprovalRejectReason", fields: [rejectReasonCodeId], references: [id], onDelete: SetNull)
+
+  @@unique([executionId, step])
+  @@index([projectId, step])
+  @@map("ut_approvals")
+}
+
+model UtEvidence {
+  id          String   @id @default(uuid())
+  projectId   String
+  executionId String
+  fileName    String // 원본 파일명
+  storageKey  String   @unique // 저장소 상대경로 {프로젝트코드}/{yyyy}/{MM}/{id}.{확장자}
+  sizeBytes   Int
+  mimeType    String
+  sha256      String
+  uploadedBy  String
+  uploadedAt  DateTime @default(now())
+
+  execution UtExecution      @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  uploader  User             @relation("UtEvidenceUploader", fields: [uploadedBy], references: [id])
+  views     UtEvidenceView[]
+
+  @@index([executionId])
+  @@map("ut_evidences")
+}
+
+model UtEvidenceView {
+  id         String   @id @default(uuid())
+  evidenceId String
+  viewerId   String
+  viewedAt   DateTime @default(now())
+
+  evidence UtEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict)
+  viewer   User       @relation("UtEvidenceViewer", fields: [viewerId], references: [id])
+
+  @@index([evidenceId, viewerId])
+  @@map("ut_evidence_views")
+}
+
+model UtDefect {
+  id                 String                @id @default(uuid())
+  projectId          String
+  displayId          String // DF-{yyMMdd}-{순번 4자리}
+  executionId        String
+  caseId             String
+  wbsItemId          String
+  description        String // 결함내용(C9)
+  severity           UtDefectSeverity      @default(MAJOR)
+  defectTypeCodeId   String? // CommonCode(ut_defect_type)
+  causeGroupId       String? // Groups(WORK_MODULE)
+  vendorGroupId      String? // Groups(COMPANY) — 프로젝트에 협력사 그룹이 있으면 입력 필수(서버 검증)
+  assigneeId         String? // 조치 담당 지정
+  status             UtDefectStatus        @default(REGISTERED)
+  foundAt            DateTime              @db.Date
+  fixedAt            DateTime?             @db.Date // 조치일
+  fixedBy            String? // 조치자
+  verificationResult UtVerificationResult? // 검증결과(적합/부적합)
+  verifiedAt         DateTime?             @db.Date // 검증일자
+  verifiedBy         String? // 검증자 — 조치자와 달라야 함(4.3 규칙 5)
+  retestExecutionId  String?
+  createdBy          String
+  updatedBy          String?
+  version            Int                   @default(1)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  execution   UtExecution       @relation("UtDefectFoundIn", fields: [executionId], references: [id], onDelete: Restrict)
+  retest      UtExecution?      @relation("UtDefectRetest", fields: [retestExecutionId], references: [id], onDelete: SetNull)
+  case        UtCase            @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  defectType  CommonCode?       @relation("UtDefectType", fields: [defectTypeCodeId], references: [id], onDelete: SetNull)
+  causeGroup  Groups?           @relation("UtDefectCauseGroup", fields: [causeGroupId], references: [id], onDelete: SetNull)
+  vendorGroup Groups?           @relation("UtDefectVendorGroup", fields: [vendorGroupId], references: [id], onDelete: SetNull)
+  assignee    User?             @relation("UtDefectAssignee", fields: [assigneeId], references: [id])
+  fixer       User?             @relation("UtDefectFixer", fields: [fixedBy], references: [id])
+  verifier    User?             @relation("UtDefectVerifier", fields: [verifiedBy], references: [id])
+  creator     User              @relation("UtDefectCreator", fields: [createdBy], references: [id])
+  actions     UtDefectAction[]
+
+  @@unique([projectId, displayId])
+  @@index([projectId, status])
+  @@index([caseId])
+  @@index([assigneeId, status])
+  @@map("ut_defects")
+}
+
+model UtDefectAction {
+  id                 String                @id @default(uuid())
+  defectId           String
+  actionType         UtDefectActionType
+  actedBy            String
+  actedOn            DateTime              @db.Date
+  verificationResult UtVerificationResult?
+  note               String                @default("")
+  createdAt          DateTime              @default(now())
+
+  defect UtDefect @relation(fields: [defectId], references: [id], onDelete: Restrict)
+  actor  User     @relation("UtDefectActionActor", fields: [actedBy], references: [id])
+
+  @@index([defectId])
+  @@map("ut_defect_actions")
+}
+
+model UtWbsMilestone {
+  wbsItemId      String    @id
+  projectId      String
+  devCompletedOn DateTime? @db.Date // 개발완료일(개발자 입력)
+  devDeclaredBy  String?
+  devConfirmedBy String? // PL 확인
+  devConfirmedAt DateTime?
+  utCompletedOn  DateTime? @db.Date // UT완료일(PL 기록)
+  utRecordedBy   String?
+  utRecordedAt   DateTime?
+  note           String    @default("")
+  version        Int       @default(1)
+  updatedAt      DateTime  @updatedAt
+
+  wbsItem   WbsItem @relation(fields: [wbsItemId], references: [id], onDelete: Restrict)
+  declarer  User?   @relation("UtMilestoneDeclarer", fields: [devDeclaredBy], references: [id])
+  confirmer User?   @relation("UtMilestoneConfirmer", fields: [devConfirmedBy], references: [id])
+  recorder  User?   @relation("UtMilestoneRecorder", fields: [utRecordedBy], references: [id])
+
+  @@index([projectId])
+  @@map("ut_wbs_milestones")
+}
+
+model UtWbsMigration {
+  id            String          @id @default(uuid())
+  projectId     String
+  scenarioId    String
+  fromWbsItemId String
+  toWbsItemId   String
+  changeType    UtWbsChangeType
+  migratedBy    String
+  migratedAt    DateTime        @default(now())
+
+  scenario UtScenario @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+  fromWbs  WbsItem    @relation("UtMigrationFrom", fields: [fromWbsItemId], references: [id], onDelete: Restrict)
+  toWbs    WbsItem    @relation("UtMigrationTo", fields: [toWbsItemId], references: [id], onDelete: Restrict)
+  migrator User       @relation("UtMigrationMigrator", fields: [migratedBy], references: [id])
+
+  @@index([projectId])
+  @@map("ut_wbs_migrations")
+}
+
+model UtSequence {
+  scope String @id // scenario:{wbsItemId} · case:{scenarioId} · defect:{projectId}:{yyMMdd}
+  value Int    @default(0)
+
+  @@map("ut_sequences")
 }
