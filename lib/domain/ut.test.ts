@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase, caseDisplayId,
-  defectDisplayId, isUtTargetStage, missingCaseFields, nextRoundNo, nextScenarioStatus, reviewChecklist, scenarioDisplayId, utCompletionConditions, validateExecution,
+  defectDisplayId, isUtTargetStage, isUtTargetTask, missingCaseFields, nextRoundNo, nextScenarioStatus, reviewChecklist, scenarioDisplayId, utCompletionConditions, validateExecution,
   type UtCaseDraft,
 } from "@/lib/domain/ut";
 
@@ -143,5 +143,14 @@ describe("단위테스트 대상 Stage", () => {
     expect(isUtTargetStage(" 개발 ")).toBe(true);
     expect(isUtTargetStage("설계")).toBe(false);
     expect(isUtTargetStage(null)).toBe(false);
+  });
+});
+
+describe("단위테스트 대상 Task", () => {
+  it("개발 단계 Leaf + 대상 체크만 대상", () => {
+    expect(isUtTargetTask({ stage: "개발", isUnitTestTarget: true, isLeaf: true })).toBe(true);
+    expect(isUtTargetTask({ stage: "개발", isUnitTestTarget: false, isLeaf: true })).toBe(false);
+    expect(isUtTargetTask({ stage: "설계", isUnitTestTarget: true, isLeaf: true })).toBe(false);
+    expect(isUtTargetTask({ stage: "개발", isUnitTestTarget: true, isLeaf: false })).toBe(false);
   });
 });

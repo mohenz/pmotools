@@ -1470,6 +1470,7 @@ model WbsItem {
   status                WbsItemStatus @default(not_started)
   configStatus          String        @default("") // 엑셀 D열(Confing Status) — 원본에도 용도가 불명확한 자유 텍스트 상태값
   weight                Decimal?      @db.Decimal(6, 2) // 엑셀 V열(가중치) 수동 입력값. null이면 상위 롤업 시 영업일수(U열 취지)로 대체한다.
+  isUnitTestTarget      Boolean       @default(false) // 단위테스트 대상 — 개발 단계 Leaf 중 체크된 Task만 단위테스트 관리 대상(2026-10-21).
   createdBy             String
   version               Int           @default(1)
   createdAt             DateTime      @default(now())

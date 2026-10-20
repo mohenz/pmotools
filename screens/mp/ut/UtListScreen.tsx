@@ -14,7 +14,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
   const exportQuery = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
   return <>
     <header className="topbar">
-      <div><h1>단위테스트 목록</h1><p>개발 단계 WBS 기준 테스트 케이스 · 총 {paging.total}건</p></div>
+      <div><h1>단위테스트 목록</h1><p>WBS 단위테스트 대상(개발 단계) 기준 테스트 케이스 · 총 {paging.total}건</p></div>
       <div className="topbar-actions"><a className="button secondary" href={`/api/v1/mp/ut/sheet?${exportQuery}${exportQuery ? "&" : ""}format=xlsx`}>엑셀 출력</a></div>
     </header>
     <div className="content ut-split">

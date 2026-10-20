@@ -4,7 +4,7 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { listWbsItems } from "@/lib/server/mp/wbs";
 import { listProjectMembers } from "@/lib/server/users";
-import { assertSeparation, caseDisplayId, isUtTargetStage, missingCaseFields, nextScenarioStatus, reviewChecklist, scenarioDisplayId, utCompletionConditions, type UtCaseStatus } from "@/lib/domain/ut";
+import { assertSeparation, caseDisplayId, isUtTargetTask, missingCaseFields, nextScenarioStatus, reviewChecklist, scenarioDisplayId, utCompletionConditions, type UtCaseStatus } from "@/lib/domain/ut";
 import { assertActiveMember, assertNotLocked, dateOnly, isUtManager, listUtCodes, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
@@ -46,11 +46,11 @@ const EDITABLE: ("DRAFT" | "REJECTED")[] = ["DRAFT", "REJECTED"];
 // 조회
 // ---------------------------------------------------------------------------
 
-/** 시나리오를 걸 수 있는 Leaf WBS — 보관 제외, 개발 단계(UT_TARGET_STAGE)만(2026-10-20 사용자 확정). */
+/** 시나리오를 걸 수 있는 WBS Task — WBS 기준으로 읽는다: 보관 제외, 개발 단계 Leaf 중 "단위테스트 대상" 체크(2026-10-21 사용자 확정). */
 export async function listUtWbsLeaves(projectId: string) {
   const items = await listWbsItems(projectId);
   const parentIds = new Set(items.filter((i) => i.parentId).map((i) => i.parentId!));
-  return items.filter((i) => !parentIds.has(i.id) && isUtTargetStage(i.stage)).map((i) => ({ id: i.id, displayId: i.displayId, code: i.code, name: i.name, stage: i.stage, ownerUserId: i.ownerUserId, ownerName: i.ownerName, dueDate: i.dueDate }));
+  return items.filter((i) => isUtTargetTask({ ...i, isLeaf: !parentIds.has(i.id) })).map((i) => ({ id: i.id, displayId: i.displayId, code: i.code, name: i.name, stage: i.stage, ownerUserId: i.ownerUserId, ownerName: i.ownerName, dueDate: i.dueDate }));
 }
 
 /** 등록·수정 화면 선택지 — 업무단위(업무그룹), 구성원, 프로그램, 요구사항, 공통코드. */
@@ -181,7 +181,7 @@ export async function createUtScenario(actor: UtActor, input: unknown) {
   await assertNotLocked(actor.projectId);
   const leaves = await listUtWbsLeaves(actor.projectId);
   const wbs = leaves.find((w) => w.id === data.wbsItemId);
-  if (!wbs) throw new DomainError("INVALID_CODE", "같은 프로젝트의 개발 단계 최하위(Leaf) WBS만 선택할 수 있습니다.");
+  if (!wbs) throw new DomainError("INVALID_CODE", "WBS에서 단위테스트 대상으로 체크된 개발 단계 최하위(Leaf) Task만 선택할 수 있습니다.");
   await assertScenarioRefs(actor.projectId, data);
   if (data.plUserId === actor.userId) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
   const created = await getPrisma().$transaction(async (tx) => {

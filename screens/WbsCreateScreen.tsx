@@ -29,6 +29,7 @@ export function WbsCreateScreen({ items, groups, members }: { items: WbsItemRow[
         startDate: form.get("startDate") || null, dueDate: form.get("dueDate") || null,
         actualStartDate: form.get("actualStartDate") || null, actualDueDate: form.get("actualDueDate") || null, status: form.get("status"),
         configStatus: form.get("configStatus"), weight: form.get("weight") ? Number(form.get("weight")) : null,
+        isUnitTestTarget: form.get("isUnitTestTarget") === "on",
       }),
     });
     const payload = await response.json().catch(() => null);
@@ -80,6 +81,7 @@ export function WbsCreateScreen({ items, groups, members }: { items: WbsItemRow[
           <label>설정상태<input name="configStatus" maxLength={200} placeholder="형상관리 상태 등 자유 입력" /></label>
           <label>가중치<input type="number" name="weight" min={0} max={999999.99} step="0.01" placeholder="비워두면 영업일수로 자동 산정" /></label>
           <label>항목명<input name="name" required maxLength={200} placeholder="예: 계정신청 정보확인" /></label>
+          <label className="toggle" title="개발 단계 최하위 Task 중 체크된 항목만 단위테스트 관리 대상이 됩니다."><input type="checkbox" name="isUnitTestTarget" /> 단위테스트 대상</label>
         </div>
         <label>내용<textarea name="description" rows={3} maxLength={10000} /></label>
       </section>

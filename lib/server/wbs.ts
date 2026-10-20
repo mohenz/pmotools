@@ -28,6 +28,8 @@ const baseWbsItemSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed", "on_hold"]).default("not_started"),
   configStatus: z.string().trim().max(200).default(""),
   weight: z.number().min(0).max(999_999.99).nullable().optional(),
+  // 단위테스트 대상 — 개발 단계 Leaf 중 이 값이 체크된 Task만 단위테스트 관리에서 읽어 쓴다(2026-10-21). 생략하면 기존 값 유지.
+  isUnitTestTarget: z.boolean().optional(),
 });
 export const createWbsItemSchema = baseWbsItemSchema;
 export const updateWbsItemSchema = baseWbsItemSchema.extend({ version: z.number().int().positive() });
@@ -55,6 +57,7 @@ export type WbsItemRow = {
   actualStartDate: string | null; actualDueDate: string | null;
   status: "not_started" | "in_progress" | "completed" | "on_hold";
   weight: number | null;
+  isUnitTestTarget: boolean;
   workingDays: number | null; actualWorkingDays: number | null; plannedProgress: number | null; actualProgress: number; progressIndex: number | null;
   delayDays: number | null; delayRate: number | null; isDelayed: boolean;
   isDelayedCompletion: boolean; delayedCompletionDate: string | null;
@@ -154,7 +157,7 @@ function toRow(row: WbsItemWithRelations, holidays: Set<string>, today: Date, st
     groupId: row.groupId, groupLabel: row.group?.label ?? null, groupCode: row.group?.code ?? null,
     startDate: startStr, dueDate: dueStr,
     actualStartDate: actualStartStr, actualDueDate: actualDueStr,
-    status: row.status, weight: row.weight ? Number(row.weight) : null,
+    status: row.status, weight: row.weight ? Number(row.weight) : null, isUnitTestTarget: row.isUnitTestTarget,
     workingDays: plannedWorkingDays, actualWorkingDays: actualStart && actualDue ? workingDays(actualStart, actualDue, holidays) : null,
     plannedProgress: planned, actualProgress: actual, progressIndex: actualDue ? 1 : (planned !== null ? progressIndex(actual, planned) : null),
     delayDays: delayDaysValue, delayRate: delayDaysValue !== null && plannedWorkingDays !== null ? wbsDelayRate(delayDaysValue, plannedWorkingDays) : null, isDelayed,
@@ -181,12 +184,17 @@ type WbsTreeCacheEntry = {
 const wbsTreeCache = new Map<string, WbsTreeCacheEntry>();
 const WBS_CACHE_TTL_MS = 60_000;
 
+// 같은 wbs_items를 따로 캐시하는 모듈(WBS2 등)이 등록해 두면, 원본 WBS에서 데이터가 바뀔 때 함께 비운다(2026-10-21 — 단위테스트 대상 체크 즉시 반영).
+const linkedCacheInvalidators = new Set<(projectId?: string) => void>();
+export function onWbsTreeCacheInvalidate(clear: (projectId?: string) => void) { linkedCacheInvalidators.add(clear); }
+
 export function invalidateWbsTreeCache(projectId?: string) {
   if (projectId) {
     wbsTreeCache.delete(projectId);
   } else {
     wbsTreeCache.clear();
   }
+  linkedCacheInvalidators.forEach((clear) => clear(projectId));
 }
 
 function revalidateWbs(projectId: string) {
@@ -745,7 +753,7 @@ export async function createWbsItem(projectId: string, userId: string, input: un
         startDate: data.startDate ? new Date(data.startDate) : null, dueDate: data.dueDate ? new Date(data.dueDate) : null,
         actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null, actualDueDate: data.actualDueDate ? new Date(data.actualDueDate) : null,
         isDelayedCompletion, delayedCompletionDate, delayDays,
-        status: data.actualDueDate ? "completed" : data.status, configStatus: data.configStatus, weight: data.weight ?? null, createdBy: userId,
+        status: data.actualDueDate ? "completed" : data.status, configStatus: data.configStatus, weight: data.weight ?? null, isUnitTestTarget: data.isUnitTestTarget ?? false, createdBy: userId,
       },
     });
     if (isDelayedCompletion && (delayDays ?? 0) >= 1) {
@@ -816,6 +824,7 @@ export async function updateWbsItem(projectId: string, userId: string, id: strin
         actualStartDate: data.actualStartDate ? new Date(data.actualStartDate) : null, actualDueDate: data.actualDueDate ? new Date(data.actualDueDate) : null,
         isDelayedCompletion, delayedCompletionDate, delayDays,
         status: data.actualDueDate ? "completed" : data.status, configStatus: data.configStatus, weight: data.weight ?? null, version,
+        ...(data.isUnitTestTarget !== undefined ? { isUnitTestTarget: data.isUnitTestTarget } : {}),
       },
     });
     // 실적종료일이 있으면 진척등록권한이 있는(=WbsAssignment 행이 존재하는) Track은 모두 완료로 간주해 진도율을 100%로 맞춘다.

@@ -5,6 +5,9 @@
 
 BEGIN;
 
+-- 20261021090000_wbs_unit_test_target 원복(WBS 단위테스트 대상 체크 값)
+ALTER TABLE "wbs_items" DROP COLUMN IF EXISTS "isUnitTestTarget";
+
 DROP TRIGGER IF EXISTS "ut_executions_guard" ON "ut_executions";
 DROP TRIGGER IF EXISTS "ut_evidences_insert_only" ON "ut_evidences";
 DROP TRIGGER IF EXISTS "ut_defect_actions_insert_only" ON "ut_defect_actions";

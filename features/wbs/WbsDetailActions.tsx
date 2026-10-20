@@ -47,6 +47,7 @@ export function WbsDetailActions({ item, items, groups, members, assignments, de
       startDate: form.get("startDate") || null, dueDate: form.get("dueDate") || null,
       actualStartDate: form.get("actualStartDate") || null, actualDueDate: actualDueDate || null, status: form.get("status"),
       configStatus: form.get("configStatus"), weight: form.get("weight") ? Number(form.get("weight")) : null,
+      isUnitTestTarget: form.get("isUnitTestTarget") === "on",
     }, "details");
     if (!saved) return;
     // 실적종료일이 새로 입력/변경됐으면 이동 전에 잠깐 party-popper 효과를 보여준다(2026-09-06 사용자 요청).
@@ -120,6 +121,7 @@ export function WbsDetailActions({ item, items, groups, members, assignments, de
         {/* 화면에서는 감추되(2026-09-06 사용자 요청) 저장 시 기존 값을 그대로 유지하기 위해 hidden으로 계속 전송한다. */}
         <input type="hidden" name="configStatus" defaultValue={item.configStatus} />
         <input type="hidden" name="weight" defaultValue={item.weight ?? ""} />
+        <label className="toggle" title="개발 단계 최하위 Task 중 체크된 항목만 단위테스트 관리 대상이 됩니다."><input type="checkbox" name="isUnitTestTarget" defaultChecked={item.isUnitTestTarget} /> 단위테스트 대상</label>
         <button className="button primary" type="submit" disabled={!!pending}>{pending === "details" ? "저장 중…" : "수정 저장"}</button>
         {partyTrigger > 0 && <PartyPopperIcon trigger={partyTrigger} className="party-popper-effect" aria-hidden />}
       </div>

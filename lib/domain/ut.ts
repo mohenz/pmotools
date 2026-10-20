@@ -27,6 +27,12 @@ export function isUtTargetStage(stage: string | null | undefined) {
   return (stage ?? "").trim() === UT_TARGET_STAGE;
 }
 
+/** 단위테스트 대상 Task(2026-10-21 사용자 확정) — WBS 기준: 개발 단계 Leaf이면서 WBS에서 "단위테스트 대상"이 체크된 Task.
+ *  대상 여부는 WBS 항목에만 저장하고, 단위테스트 관리는 이를 읽기만 한다(별도 대상 테이블 없음). */
+export function isUtTargetTask(item: { stage: string | null | undefined; isUnitTestTarget: boolean; isLeaf: boolean }) {
+  return item.isLeaf && item.isUnitTestTarget && isUtTargetStage(item.stage);
+}
+
 export class UtRuleError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
