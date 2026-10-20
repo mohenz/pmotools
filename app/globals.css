@@ -1696,3 +1696,40 @@ a.history-item:hover { background: var(--accent); }
   .portfolio-table th:nth-child(7), .portfolio-table td:nth-child(7),
   .portfolio-table th:nth-child(8), .portfolio-table td:nth-child(8) { display: none; }
 }
+
+/* 단위테스트 수행관리 (/mp-ut) */
+.ut-filters { flex-direction: row; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+.ut-check { flex-direction: row; align-items: center; gap: 6px; }
+.ut-table th { white-space: nowrap; }
+.ut-table td.critical { color: var(--destructive); font-weight: 700; }
+.ut-actions { display: flex; flex-wrap: wrap; gap: 6px; white-space: nowrap; }
+.ut-actions .button { padding: 4px 10px; font-size: 12px; }
+.ut-inactive td { opacity: .55; }
+.ut-rejected td { background: var(--destructive-bg); }
+.ut-missing { display: block; color: var(--destructive); font-size: 11px; }
+.ut-hint { display: block; color: var(--muted-foreground); font-size: 12px; }
+.ut-ok { border-color: color-mix(in oklch, var(--success), transparent 60%); background: var(--success-bg); }
+.ut-detail .ut-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ut-checklist { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+.ut-checklist .ok { color: var(--success); }
+.ut-checklist .ng { color: var(--destructive); }
+.ut-case-form, .ut-exec-form { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }
+.ut-expand td { background: var(--secondary); }
+.ut-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0 0 10px; }
+.ut-dl dt { color: var(--muted-foreground); font-size: 12px; }
+.ut-dl dd { margin: 0; }
+.ut-pre { white-space: pre-wrap; }
+.ut-runs .ut-steps { max-width: 280px; }
+.ut-subtable { width: 100%; font-size: 12px; }
+.ut-file { display: inline-block; margin-right: 8px; }
+.ut-file.viewed { color: var(--success); }
+.ut-approval { display: block; }
+.ut-wbs-select { width: 100%; }
+.ut-reference p { margin: 2px 0; font-size: 13px; }
+.ut-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.ut-tabs button { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); cursor: pointer; }
+.ut-tabs button.active { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.ut-approval-card { margin-bottom: 12px; }
+.ut-decide { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.ut-history { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+@media (max-width: 860px) { .ut-detail .ut-side, .ut-dl { grid-template-columns: 1fr; } }

@@ -67,7 +67,7 @@ const AMBIGUOUS_WORDS = ["정상 처리", "정상처리", "정상적으로", "�
 /** 검토요청 전 필수 필드 누락 — 비어 있으면 검토요청 불가(5장 필수 12개 중 케이스 단위 항목). */
 export function missingCaseFields(c: UtCaseDraft): string[] {
   const missing: string[] = [];
-  if (!c.name.trim()) missing.push("테스트 대상");
+  if (!c.name.trim()) missing.push("케이스명");
   if (!c.precondition.trim()) missing.push("사전조건");
   if (!c.steps.trim()) missing.push("테스트스텝");
   if (!c.inputData.trim()) missing.push("입력데이터");

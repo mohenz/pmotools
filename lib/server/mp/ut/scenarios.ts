@@ -56,14 +56,15 @@ export async function listUtWbsLeaves(projectId: string) {
 /** 등록·수정 화면 선택지 — 업무단위(업무그룹), 구성원, 프로그램, 요구사항, 공통코드. */
 export async function getUtFormOptions(projectId: string) {
   const prisma = getPrisma();
-  const [groups, members, programs, requirements, codes] = await Promise.all([
+  const [groups, companies, members, programs, requirements, codes] = await Promise.all([
     prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", isActive: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { id: true, code: true, label: true, leaderId: true } }),
+    prisma.groups.findMany({ where: { projectId, groupType: "COMPANY", isActive: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { id: true, code: true, label: true } }),
     listProjectMembers(projectId),
     prisma.utProgram.findMany({ where: { projectId, archivedAt: null }, orderBy: { programCode: "asc" }, select: { id: true, programCode: true, name: true, screenId: true } }),
     prisma.requirement.findMany({ where: { projectId, archivedAt: null }, orderBy: { displayId: "asc" }, select: { id: true, displayId: true, title: true } }),
     listUtCodes(projectId),
   ]);
-  return { groups, members, programs, requirements, codes };
+  return { groups, companies, members, programs, requirements, codes };
 }
 
 /** PL 지정 참고(4.4) — 작성자 소속 업무그룹과 리더. 선택은 사람이 한다. */
