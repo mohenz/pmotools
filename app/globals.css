@@ -1769,7 +1769,7 @@ a.history-item:hover { background: var(--accent); }
 .ut-sheet .ut-pre { max-width: 240px; font-size: 12px; }
 .ut-todo { display: block; color: var(--primary); font-size: 11px; font-weight: 700; }
 /* 테스트 케이스 정보 모달 */
-.ut-case-backdrop { align-items: start; overflow-y: auto; }
-.ut-case-modal { width: min(1200px, 100%); max-height: none; margin: 20px auto; padding: 0; gap: 0; }
-.ut-case-modal .topbar { position: sticky; top: 0; z-index: 3; border-radius: var(--radius) var(--radius) 0 0; }
-.ut-case-modal .content { padding: 14px 18px 20px; }
+.ut-case-backdrop { overflow: hidden; }
+.ut-case-modal { display: flex; flex-direction: column; width: min(1200px, 100%); height: calc(100vh - 40px); max-height: calc(100vh - 40px); padding: 0; gap: 0; overflow: hidden; }
+.ut-case-modal .topbar { flex: none; border-radius: var(--radius) var(--radius) 0 0; }
+.ut-case-modal .content { flex: 1 1 auto; min-height: 0; padding: 14px 18px 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
