@@ -4,11 +4,13 @@ import type { UtSheetRow, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import { STATUS_BAND, dot } from "@/features/mp/ut/format";
 import { UtPagination, type UtPageSize } from "@/features/mp/ut/UtPagination";
 import { UtWbsTree } from "@/features/mp/ut/UtWbsTree";
+import { UtCaseModal } from "@/features/mp/ut/UtCaseModal";
 
 export const UT_TODO_LABEL: Record<string, string> = { review: "검토 대기", execute: "수행 대상", qc: "QC 확인 대기", pl: "PL 확인 대기", defect: "결함 조치·검증 대기", draft: "작성중" };
 
 // 단위테스트 목록 — 사용자 양식 24개 열(2026-10-20). 케이스를 누르면 정보확인/처리 화면.
 export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree: UtTreeNode[]; rows: UtSheetRow[]; filters: Record<string, string>; paging: { pageSize: UtPageSize; page: number; total: number; totalPages: number }; canCreate: boolean }) {
+  const keep = (extra: Record<string, string>) => `/mp-ut?${new URLSearchParams({ ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), ...(paging.page > 1 ? { page: String(paging.page) } : {}), ...(paging.pageSize !== 20 ? { pageSize: String(paging.pageSize) } : {}), ...extra })}`;
   const exportQuery = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
   return <>
     <header className="topbar">
@@ -25,7 +27,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
           <select name="verdict" defaultValue={filters.verdict ?? ""} aria-label="테스트 결과"><option value="">전체 결과</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BLOCKED">BLOCKED</option><option value="NA">N/A</option><option value="NONE">미수행</option></select>
           <select name="todo" defaultValue={filters.todo ?? ""} aria-label="처리 대기"><option value="">전체 케이스</option><option value="any">내 처리 대기 전체</option>{Object.entries(UT_TODO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <button className="button secondary" type="submit">조회</button>
-          {canCreate && <Link className="button primary filter-primary-action" href={`/mp-ut/cases/new${filters.wbs ? `?wbs=${filters.wbs}` : ""}`}>+ 신규 등록</Link>}
+          {canCreate && <Link className="button primary filter-primary-action" href={keep({ new: "1" })} scroll={false}>+ 신규 등록</Link>}
         </form>
         <section className="panel compact">
           {rows.length ? <div className="table-wrap wbs-table-wrap"><table className="ut-table ut-sheet">
@@ -36,8 +38,8 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
             <tbody>{rows.map((r) => <tr key={r.caseId}>
               <td>{r.unit}</td>
               <td className="mono">{r.wbsDisplayId}</td>
-              <td className="mono"><Link className="table-link" href={`/mp-ut/cases/${r.caseId}`}>{r.caseDisplayId}</Link>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
-              <td className="title-cell"><Link className="table-link" href={`/mp-ut/cases/${r.caseId}`}>{r.caseName}</Link></td>
+              <td className="mono"><Link className="table-link" href={keep({ case: r.caseId })} scroll={false}>{r.caseDisplayId}</Link>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
+              <td className="title-cell"><Link className="table-link" href={keep({ case: r.caseId })} scroll={false}>{r.caseName}</Link></td>
               <td className="ut-pre">{r.precondition}</td>
               <td className="ut-pre">{r.inputData}</td>
               <td className="ut-pre ut-steps">{r.steps}</td>
@@ -64,5 +66,6 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
         <UtPagination basePath="/mp-ut" filters={filters} {...paging} />
       </div>
     </div>
+    <UtCaseModal />
   </>;
 }

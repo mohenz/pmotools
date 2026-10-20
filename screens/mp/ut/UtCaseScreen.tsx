@@ -13,10 +13,21 @@ type Editor = Awaited<ReturnType<typeof getUtCaseEditor>>;
 type Options = Awaited<ReturnType<typeof getUtFormOptions>>;
 
 // 단위테스트 정보확인/처리 — 케이스 정보 입력·수정, 검토요청·PL 승인, 판정·증적 등록, QC·PL 확인, 결함 등록·조치·검증, 이력(2026-10-20 화면 2개 체계).
-export function UtCaseScreen({ editor, options, leaves, projectCode, userId }: { editor: Editor; options: Options; leaves: UtTreeNode[]; projectCode: string; userId: string }) {
+export type UtCaseNavParams = { caseId?: string; scenario?: string; wbs?: string };
+export type UtCaseModalControl = { close: () => void; reload: () => void; open: (params: UtCaseNavParams) => void };
+
+export function UtCaseScreen({ editor, options, leaves, projectCode, userId, modal }: { editor: Editor; options: Options; leaves: UtTreeNode[]; projectCode: string; userId: string; modal?: UtCaseModalControl }) {
   const router = useRouter();
+  // 모달로 열렸으면 목록을 떠나지 않고 모달 안에서 이동·갱신한다(2026-10-20 사용자 요청).
+  const refresh = () => { modal?.reload(); router.refresh(); };
+  const goTo = (params: UtCaseNavParams) => {
+    if (modal) return modal.open(params);
+    if (params.caseId) return router.push(`/mp-ut/cases/${params.caseId}`);
+    router.replace(params.scenario ? `/mp-ut/cases/new?scenario=${params.scenario}` : `/mp-ut/cases/new?wbs=${params.wbs ?? ""}`);
+  };
   const { scenario, case: c } = editor;
-  const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId ?? "");
+  // 신규 등록에서는 Leaf WBS만 미리 채운다(트리에서 상위 WBS를 고른 상태로 열 수 있음).
+  const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (editor.scenario || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
   const [scenarioId, setScenarioId] = useState(scenario?.id ?? "new");
   const [wbsQuery, setWbsQuery] = useState("");
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -27,7 +38,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId }: {
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setPending(true); setMessage(null);
-    try { await fn(); setMessage({ tone: "ok", text: done }); setOpenDefect(null); router.refresh(); }
+    try { await fn(); setMessage({ tone: "ok", text: done }); setOpenDefect(null); refresh(); }
     catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
     finally { setPending(false); }
   }
@@ -47,8 +58,8 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId }: {
       let sid = scenarioId;
       if (isNewScenario) sid = (await utApi<{ id: string }>("scenarios", json("POST", { wbsItemId, ...scenarioData }))).id;
       else if (scenario && sid === scenario.id) await utApi(`scenarios/${sid}`, json("PATCH", { ...scenarioData, version: scenario.version }));
-      if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...caseData, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); router.refresh(); }
-      else { const created = await utApi<{ id: string }>(`scenarios/${sid}/cases`, json("POST", caseData)); router.push(`/mp-ut/cases/${created.id}`); }
+      if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...caseData, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); refresh(); }
+      else { const created = await utApi<{ id: string }>(`scenarios/${sid}/cases`, json("POST", caseData)); router.refresh(); goTo({ caseId: created.id }); }
     } catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
     finally { setPending(false); }
   }
@@ -56,7 +67,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId }: {
   async function requestReview() {
     if (!scenario) return;
     setPending(true); setMessage(null);
-    try { await utApi(`scenarios/${scenario.id}/review`, json("POST")); setMessage({ tone: "ok", text: "검토를 요청했습니다." }); router.refresh(); }
+    try { await utApi(`scenarios/${scenario.id}/review`, json("POST")); setMessage({ tone: "ok", text: "검토를 요청했습니다." }); refresh(); }
     catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
     finally { setPending(false); }
   }
@@ -66,8 +77,8 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId }: {
     <header className="topbar">
       <div><h1>테스트 케이스 정보</h1><p>{c ? <><span className="mono">{c.displayId}</span> <span className={`badge ${STATUS_BAND[c.status]}`}>{UT_CASE_STATUS_LABEL[c.status]}</span></> : "신규 케이스"}{scenario && <> · 시나리오 <span className="mono">{scenario.displayId}</span> <span className={`badge ${STATUS_BAND[scenario.status]}`}>{UT_SCENARIO_STATUS_LABEL[scenario.status]}</span></>}</p></div>
       <div className="topbar-actions">
-        <Link className="button secondary" href={`/mp-ut${editor.wbsItemId ? `?wbs=${editor.wbsItemId}` : ""}`}>목록</Link>
-        {c && scenario && editor.editable && <Link className="button secondary" href={`/mp-ut/cases/new?scenario=${scenario.id}`}>+ 같은 시나리오에 케이스 추가</Link>}
+        {c && scenario && editor.editable && <button type="button" className="button secondary" onClick={() => goTo({ scenario: scenario.id })}>+ 같은 시나리오에 케이스 추가</button>}
+        {modal ? <button type="button" className="button secondary" onClick={modal.close}>닫기</button> : <Link className="button secondary" href={`/mp-ut${editor.wbsItemId ? `?wbs=${editor.wbsItemId}` : ""}`}>목록</Link>}
       </div>
     </header>
     <div className="content ut-edit">
@@ -84,11 +95,11 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId }: {
           </div>
           {scenario ? <label>WBS ID<input value={`${scenario.wbsDisplayId} ${scenario.wbsName}`} readOnly /></label> : <>
             <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
-            <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); setScenarioId("new"); router.replace(`/mp-ut/cases/new?wbs=${e.target.value}`); }} aria-label="WBS 선택" className="ut-wbs-select">
+            <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); setScenarioId("new"); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
               {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
             </select>
           </>}
-          {!c && wbsItemId && <label>시나리오<select value={scenarioId} onChange={(e) => { const value = e.target.value; setScenarioId(value); router.replace(value === "new" ? `/mp-ut/cases/new?wbs=${wbsItemId}` : `/mp-ut/cases/new?scenario=${value}`); }}>
+          {!c && wbsItemId && <label>시나리오<select value={scenarioId} onChange={(e) => { const value = e.target.value; setScenarioId(value); goTo(value === "new" ? { wbs: wbsItemId } : { scenario: value }); }}>
             {editor.wbsScenarios.filter((s) => s.status === "DRAFT" || s.status === "REJECTED").map((s) => <option key={s.id} value={s.id}>{s.displayId} {s.name}</option>)}
             <option value="new">+ 새 시나리오</option>
           </select></label>}

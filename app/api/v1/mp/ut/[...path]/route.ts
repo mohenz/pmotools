@@ -11,7 +11,8 @@ import { decideUtApproval, listMyUtExecutionTargets, listUtApprovalInbox, openUt
 import { fixUtDefect, listUtDefectActions, listUtRunRows, registerUtDefect, updateUtDefect, verifyUtDefect } from "@/lib/server/mp/ut/defects";
 import { cancelUtMilestone, confirmUtDevComplete, declareUtDevComplete, getUtSettings, listUtMilestones, recordUtComplete, saveUtSettings, setUtLock } from "@/lib/server/mp/ut/milestones";
 import { buildUtRunWorkbook, buildUtSheetWorkbook } from "@/lib/server/mp/ut/export";
-import { listUtCaseSheet } from "@/lib/server/mp/ut/grid";
+import { getUtCaseEditor, getUtWbsTree, listUtCaseSheet } from "@/lib/server/mp/ut/grid";
+import { getPrisma } from "@/lib/server/db-pg";
 
 // ---------------------------------------------------------------------------
 // 단위테스트 API(/api/v1/mp/ut/*) — 다중 프로젝트(MP) 선택 프로젝트 기준. 쓰기는 하위 프로젝트에서만(assertMpWritableProject).
@@ -56,6 +57,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_수행결함관리.xlsx")}` } });
       }
       return ok(rows);
+    }
+    if (a === "editor") {
+      // 정보확인/처리 모달용 — 케이스(caseId) 또는 신규(scenario·wbs) 편집 데이터와 선택지
+      const caseId = sp.get("caseId") || undefined;
+      const [editor, options, tree, project] = await Promise.all([
+        getUtCaseEditor(actor.projectId, actor, { caseId, scenarioId: sp.get("scenario") || undefined, wbs: sp.get("wbs") || undefined }),
+        getUtFormOptions(actor.projectId), caseId ? Promise.resolve([]) : getUtWbsTree(actor.projectId),
+        getPrisma().project.findUnique({ where: { id: actor.projectId }, select: { code: true } }),
+      ]);
+      return ok({ editor, options, leaves: tree.filter((n) => n.isLeaf), projectCode: project?.code ?? "", userId: actor.userId });
     }
     if (a === "sheet") {
       const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
