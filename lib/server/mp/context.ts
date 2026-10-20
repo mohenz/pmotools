@@ -31,7 +31,7 @@ async function sessionUser() {
 }
 
 // 대표(최상위) 프로젝트 — parentId를 끝까지 따라 올라간다. 계층이 꼬여 순환하면 멈춘 지점을 대표로 본다.
-function topAncestorOf(projectId: string, projects: { id: string; parentId: string | null }[]) {
+export function topAncestorOf(projectId: string, projects: { id: string; parentId: string | null }[]) {
   const byId = new Map(projects.map((project) => [project.id, project]));
   let current = byId.get(projectId);
   const seen = new Set<string>();
@@ -40,7 +40,7 @@ function topAncestorOf(projectId: string, projects: { id: string; parentId: stri
 }
 
 // 뿌리 프로젝트부터 하위 계층 전체(자기 자신 포함)를 깊이 우선 순서로 반환한다.
-function descendantsOf(rootId: string, projects: { id: string; code: string; name: string; parentId: string | null; sortOrder: number }[]) {
+export function descendantsOf(rootId: string, projects: { id: string; code: string; name: string; parentId: string | null; sortOrder: number }[]) {
   const children = new Map<string, typeof projects>();
   for (const project of projects) if (project.parentId) children.set(project.parentId, [...(children.get(project.parentId) ?? []), project]);
   const root = projects.find((project) => project.id === rootId);

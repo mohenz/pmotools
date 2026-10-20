@@ -83,7 +83,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/mp-work-logs": [{href:"/mp-work-logs",label:"WBS상세내용 목록"},{href:"/mp-work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/mp-work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/mp-requirements": [{href:"/mp-requirements",label:"요구사항정의서"},{href:"/mp-requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/mp-requirements/changes",label:"요구사항변경관리"},{href:"/mp-requirements/excel",label:"엑셀 관리"},{href:"/manuals/requirements-excel",label:"사용 메뉴얼"}]:[])],
       "/meeting-minutes": [{href:"/meeting-minutes",label:"전체 목록"},{href:"/meeting-minutes/new",label:"회의록 작성"},{href:"/meeting-minutes/action-items",label:"Action Item"}],
-      "/pmo-daily": [{href:"/pmo-daily/dashboard",label:"대시보드"},{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/calendar",label:"일정관리"}],
+      "/pmo-daily": [{href:"/pmo-daily/dashboard",label:"대시보드"},{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/pmo-daily/portfolio",label:"프로젝트 포트폴리오"},{href:"/calendar",label:"일정관리"}],
       "/work-logs": [{href:"/work-logs",label:"WBS상세내용 목록"},{href:"/work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},...(isManager?[{href:"/portfolio",label:"공정률 현황"}]:[]),{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
