@@ -79,7 +79,6 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/management-tasks": [...(hasRestrictedToolAccess?[{href:"/management-tasks/dashboard",label:"대시보드"}]:[]),{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"},...(hasRestrictedToolAccess?[{href:"/action-items",label:"액션아이템목록조회"}]:[])],
       "/wbs": [{href:"/wbs",label:"전체 목록"},...(isManager?[{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"},{href:"/wbs/group-stats",label:"업무그룹별 통계"},{href:"/wbs/weekly-stats",label:"주간 통계"},{href:"/wbs/delay-history",label:"지연 이력"},{href:"/wbs/manage",label:"데이터 관리"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       // 다중 프로젝트 메뉴(WBS2 계열) — 원본 탭과 같은 구성, 경로만 분리. 권한 탭 노출은 화면 표시용이며 실제 권한은 각 화면이 선택 프로젝트 역할로 다시 검사한다.
-      "/mp-ut": [{href:"/mp-ut",label:"단위테스트 시나리오"},{href:"/mp-ut/new",label:"시나리오 등록"},{href:"/mp-ut/inbox",label:"내 업무"},{href:"/mp-ut/runs",label:"수행·결함"},{href:"/mp-ut/milestones",label:"이정표"},{href:"/mp-ut/settings",label:"설정"}],
       "/mp-wbs": [{href:"/mp-wbs",label:"전체 목록"},{href:"/mp-wbs/gantt",label:"간트 차트"},...(isManager?[{href:"/mp-wbs/new",label:"WBS 항목 등록"},{href:"/mp-wbs/stats",label:"통계"},{href:"/mp-wbs/group-stats",label:"업무그룹별 통계"},{href:"/mp-wbs/weekly-stats",label:"주간 통계"},{href:"/mp-wbs/delay-history",label:"지연 이력"},{href:"/mp-wbs/manage",label:"데이터 관리"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       "/mp-work-logs": [{href:"/mp-work-logs",label:"WBS상세내용 목록"},{href:"/mp-work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/mp-work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/mp-requirements": [{href:"/mp-requirements",label:"요구사항정의서"},{href:"/mp-requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/mp-requirements/changes",label:"요구사항변경관리"},{href:"/mp-requirements/excel",label:"엑셀 관리"},{href:"/manuals/requirements-excel",label:"사용 메뉴얼"}]:[])],
@@ -96,6 +95,21 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/announcements": [{href:"/announcements",label:"공지사항 조회"},...(isManager?[{href:"/announcements/new",label:"공지사항 등록"}]:[])],
       "/manuals": [{href:"/manuals",label:"전체 메뉴얼"},{href:"/manuals/pmo-daily",label:"PMO Daily"},{href:"/manuals/work-logs",label:"WBS상세내용"},{href:"/manuals/weekly-report",label:"위클리리포트"},{href:"/manuals/announcements",label:"공지사항"},{href:"/manuals/calendar",label:"캘린더"},{href:"/manuals/meeting-rooms",label:"회의실"},{href:"/manuals/wbs",label:"WBS"},{href:"/manuals/requirements-excel",label:"요구사항관리 엑셀관리"}],
     };
+    // 3단계 메뉴(2026-10-20): 상위 메뉴 → 좌측 패널의 하위 메뉴 묶음(예: 테스트 → 단위테스트) → 기능. 묶음이 없는 메뉴는 기존 탭 그대로.
+    const moduleGroups: Record<string, {label:string;tabs:{href:string;label:string}[]}[]> = {
+      "/mp-ut": [
+        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"시나리오"},{href:"/mp-ut/new",label:"시나리오 등록"},{href:"/mp-ut/inbox",label:"내 업무"},{href:"/mp-ut/runs",label:"수행·결함"},{href:"/mp-ut/milestones",label:"이정표"},{href:"/mp-ut/settings",label:"설정"}] },
+      ],
+    };
+    const groups = moduleGroups[currentTool.href];
+    if (groups) {
+      const activeGroup = groups.find((g) => g.tabs.some((t) => pathname === t.href || pathname.startsWith(`${t.href}/`)));
+      return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}{activeGroup ? <span className="workspace-tool-sub"> › {activeGroup.label}</span> : null}</strong>
+        <nav className="tool-tabs tool-tabs-grouped" aria-label={`${currentTool.label} 기능`}>{groups.map((g) => <div className="tool-tab-group" key={g.label}>
+          <span className="tool-tab-group-label">{g.label}</span>
+          {g.tabs.map((tab)=><Link className={pathname===tab.href?"active":""} aria-current={pathname===tab.href?"page":undefined} href={tab.href} key={tab.href}>{tab.label}</Link>)}
+        </div>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
+    }
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }
 

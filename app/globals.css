@@ -1733,3 +1733,12 @@ a.history-item:hover { background: var(--accent); }
 .ut-decide { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .ut-history { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 @media (max-width: 860px) { .ut-detail .ut-side, .ut-dl { grid-template-columns: 1fr; } }
+
+/* 3단계 메뉴 — 좌측 패널 하위 메뉴 묶음(상위 메뉴 → 묶음 → 기능), 2026-10-20 */
+.workspace-tool-sub { color: var(--muted-foreground); font-weight: 600; }
+.tool-tabs-grouped { gap: 12px; }
+.tool-tab-group { display: flex; align-items: stretch; gap: 4px; }
+.tool-tab-group-label { display: flex; align-items: center; padding: 0 6px; color: var(--muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.module-sidebar .tool-tab-group { flex-direction: column; gap: 2px; }
+.module-sidebar .tool-tab-group-label { padding: 6px 10px 4px; border-bottom: 1px dashed var(--border); }
+.module-sidebar .tool-tab-group a { padding-left: 20px; }
