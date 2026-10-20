@@ -111,7 +111,7 @@ export function ProjectPortfolioScreen({ data }: { data: ProjectPortfolio }) {
       <section className="kpi-grid portfolio-kpis">
         <div className="kpi"><span>프로젝트</span><strong>{fmt(summaryRows.length)}</strong><small>예정 {statusCount("PLANNED")} · 진행 {statusCount("IN_PROGRESS")} · 완료 {statusCount("COMPLETED")}</small></div>
         <div className="kpi"><span>전체 Task</span><strong>{fmt(summary.totalCount)}</strong><small>미완료 {fmt(summary.incompleteCount)}</small></div>
-        <div className="kpi"><span>완료 Task</span><strong>{fmt(summary.completedCount)}</strong><small>실적 100% Leaf</small></div>
+        <div className="kpi"><span>완료 Task</span><strong>{fmt(summary.completedCount)}</strong><small>완료 ÷ 전체 = 공정율</small></div>
         <div className="kpi"><span>지연 Task</span><strong className={summary.delayedCount > 0 ? "critical" : undefined}>{fmt(summary.delayedCount)}</strong><small>계획일 도과 미착수·미완료</small></div>
         <div className="kpi"><span>공정율</span><strong>{pct(summary.progress)}</strong><small>예상공정율 {pct(summary.expectedProgress)}</small></div>
         <div className="kpi"><span>지연율</span><strong className={(summary.delayRate ?? 0) >= DELAY_ALERT ? "critical" : undefined}>{pct(summary.delayRate)}</strong><small>지연 {fmt(summary.delayedCount)} / 도래 {fmt(summary.delayTrackedCount)}</small></div>
@@ -158,7 +158,7 @@ export function ProjectPortfolioScreen({ data }: { data: ProjectPortfolio }) {
           </table>
           {!visibleRows.length && <p className="empty">조건에 맞는 프로젝트가 없습니다.</p>}
         </div>
-        <p className="portfolio-note">대표·상위 프로젝트 행은 하위 프로젝트를 합산한 값입니다. 공정율·예상공정율은 Leaf WBS 가중 평균(WBS 통계와 같은 기준), 상태는 공정율 기준(예정 &lt; 1%, 진행 ≥ 1%, 완료 = 전 Task 완료)입니다.</p>
+        <p className="portfolio-note">대표·상위 프로젝트 행은 하위 프로젝트를 합산한 값입니다. Leaf WBS 건수 기준 — 공정율 = 완료 ÷ 전체, 예상공정율 = 계획종료일이 오늘 이하인 Task ÷ 전체, 지연율 = 지연 Task ÷ 계획종료일이 오늘 이전인 Task. 공정율은 WBS 통계의 실적 공정율(작업기간 가중)과 다를 수 있습니다. 상태: 예정 &lt; 1%, 진행 ≥ 1%, 완료 = 전 Task 완료.</p>
       </section>
     </div>
   </>;
