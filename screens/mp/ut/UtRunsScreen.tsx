@@ -7,9 +7,10 @@ import { UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type U
 import type { UtRunRow } from "@/lib/server/mp/ut/defects";
 import { json, utApi } from "@/features/mp/ut/client";
 import { STATUS_BAND, dot, today } from "@/features/mp/ut/format";
+import { UtPagination, type UtPageSize } from "@/features/mp/ut/UtPagination";
 
 // UT-040 — 설계서 5.1 테스트 수행·결함 관리 양식(13개 열). 조치·검증은 행에서 등록(수기), 이력은 결함 단위로 보존.
-export function UtRunsScreen({ rows, filters }: { rows: UtRunRow[]; filters: Record<string, string> }) {
+export function UtRunsScreen({ rows, filters, paging }: { rows: UtRunRow[]; filters: Record<string, string>; paging: { pageSize: UtPageSize; page: number; total: number; totalPages: number } }) {
   const router = useRouter();
   const [action, setAction] = useState<{ row: UtRunRow; kind: "fix" | "verify" } | null>(null);
   const [history, setHistory] = useState<{ id: string; items: { actionType: string; actorName: string; actedOn: string | null; verificationResult: string | null; note: string }[] } | null>(null);
@@ -36,19 +37,19 @@ export function UtRunsScreen({ rows, filters }: { rows: UtRunRow[]; filters: Rec
 
   return <>
     <header className="topbar">
-      <div><h1>테스트 수행·결함 관리</h1><p>수행 1건 × 결함 n건 · {rows.length}행</p></div>
+      <div><h1>테스트 수행·결함 관리</h1><p>수행 1건 × 결함 n건 · 총 {paging.total}행</p></div>
       <div className="topbar-actions"><a className="button secondary" href={`/api/v1/mp/ut/runs?${query}${query ? "&" : ""}format=xlsx`}>엑셀 출력</a></div>
     </header>
     <div className="content">
-      <section className="panel">
-        <form className="filters inline-filter ut-filters" method="get">
-          {filters.scenarioId && <input type="hidden" name="scenarioId" value={filters.scenarioId} />}
-          <label>검색<input name="q" defaultValue={filters.q ?? ""} placeholder="케이스ID·명·결함내용" /></label>
-          <label className="ut-check"><input type="checkbox" name="defectOnly" value="1" defaultChecked={filters.defectOnly === "1"} />결함 있는 건만</label>
-          <label className="ut-check"><input type="checkbox" name="openOnly" value="1" defaultChecked={filters.openOnly === "1"} />미검증 결함만</label>
-          <button className="button secondary" type="submit">조회</button>
-          {filters.scenarioId && <Link className="button secondary" href="/mp-ut/runs">전체 보기</Link>}
-        </form>
+      <form className="filters requirement-filter-panel" method="get">
+        {filters.scenarioId && <input type="hidden" name="scenarioId" value={filters.scenarioId} />}
+        {paging.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(paging.pageSize)} />}
+        <input name="q" defaultValue={filters.q ?? ""} placeholder="케이스ID·케이스명·결함내용 검색" aria-label="검색어" />
+        <select name="defect" defaultValue={filters.defect ?? ""} aria-label="결함 범위"><option value="">전체 수행</option><option value="any">결함 있는 건</option><option value="open">미검증 결함</option></select>
+        <button className="button secondary" type="submit">조회</button>
+        {filters.scenarioId && <Link className="button secondary" href="/mp-ut/runs">전체 보기</Link>}
+      </form>
+      <section className="panel compact">
         {message && <p className={`action-message ${message.tone === "ok" ? "ut-ok" : ""}`} role="status">{message.text}</p>}
         <div className="table-wrap">
           <table className="ut-table ut-runs">
@@ -79,6 +80,7 @@ export function UtRunsScreen({ rows, filters }: { rows: UtRunRow[]; filters: Rec
           {!rows.length && <p className="empty">수행 기록이 없습니다.</p>}
         </div>
       </section>
+      <UtPagination basePath="/mp-ut/runs" filters={filters} {...paging} />
     </div>
 
     {action && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={action.kind === "fix" ? "조치 등록" : "검증 등록"}>

@@ -1,6 +1,7 @@
 import { getMpScope } from "@/lib/server/mp/context";
 import { getUtFormOptions, listUtScenarios } from "@/lib/server/mp/ut/scenarios";
 import { UtScenarioListScreen } from "@/screens/mp/ut/UtScenarioListScreen";
+import { paginate, parsePaging } from "@/features/mp/ut/UtPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,11 @@ export default async function UtScenarioListPage({ searchParams }: { searchParam
   const pick = (key: string) => (typeof params[key] === "string" ? (params[key] as string) : "");
   const filters = { q: pick("q"), status: pick("status"), groupId: pick("groupId"), mine: pick("mine") };
   const scope = await getMpScope();
-  const [rows, options] = await Promise.all([
+  const { page, pageSize } = parsePaging(params);
+  const [all, options] = await Promise.all([
     listUtScenarios(scope.projectIds, { ...filters, userId: scope.context.userId }),
     getUtFormOptions(scope.context.projectId),
   ]);
-  return <UtScenarioListScreen rows={rows} filters={filters} groups={options.groups} canCreate={!scope.isTopLevel} />;
+  const result = paginate(all, page, pageSize);
+  return <UtScenarioListScreen rows={result.rows} filters={filters} paging={{ pageSize, page: result.page, total: result.total, totalPages: result.totalPages }} groups={options.groups} canCreate={!scope.isTopLevel} />;
 }

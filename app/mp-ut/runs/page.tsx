@@ -1,6 +1,7 @@
 import { getMpScope } from "@/lib/server/mp/context";
 import { listUtRunRows } from "@/lib/server/mp/ut/defects";
 import { UtRunsScreen } from "@/screens/mp/ut/UtRunsScreen";
+import { paginate, parsePaging } from "@/features/mp/ut/UtPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,11 @@ export const dynamic = "force-dynamic";
 export default async function UtRunsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const pick = (key: string) => (typeof params[key] === "string" ? (params[key] as string) : "");
-  const filters = { q: pick("q"), defectOnly: pick("defectOnly"), openOnly: pick("openOnly"), scenarioId: pick("scenarioId") };
+  const filters = { q: pick("q"), defect: pick("defect"), scenarioId: pick("scenarioId") };
+  const { page, pageSize } = parsePaging(params);
   const scope = await getMpScope();
   const c = scope.context;
-  const rows = await listUtRunRows(scope.projectIds, { projectId: c.projectId, userId: c.userId, role: c.role, jobTitle: c.jobTitle }, { q: filters.q || undefined, defectOnly: filters.defectOnly === "1", openOnly: filters.openOnly === "1", scenarioId: filters.scenarioId || undefined });
-  return <UtRunsScreen rows={rows} filters={filters} />;
+  const all = await listUtRunRows(scope.projectIds, { projectId: c.projectId, userId: c.userId, role: c.role, jobTitle: c.jobTitle }, { q: filters.q || undefined, defectOnly: filters.defect === "any", openOnly: filters.defect === "open", scenarioId: filters.scenarioId || undefined });
+  const result = paginate(all, page, pageSize);
+  return <UtRunsScreen rows={result.rows} filters={filters} paging={{ pageSize, page: result.page, total: result.total, totalPages: result.totalPages }} />;
 }

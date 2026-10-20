@@ -93,7 +93,7 @@ export async function listUtScenarios(projectIds: string[], filters: UtScenarioF
       cases: { where: { isActive: true }, select: { status: true, caseType: true } },
     },
     orderBy: [{ wbsItem: { path: "asc" } }, { seq: "asc" }],
-    take: 500,
+    take: 5000, // 화면은 표준 페이징(서버에서 잘라 표시)
   });
   return rows.map((s) => {
     const byStatus = (status: UtCaseStatus) => s.cases.filter((c) => c.status === status).length;

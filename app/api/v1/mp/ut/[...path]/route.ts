@@ -49,7 +49,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       return new NextResponse(new Uint8Array(file.bytes), { headers: { "content-type": file.mimeType, "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "cache-control": "private, no-store" } });
     }
     if (a === "runs" && !id) {
-      const rows = await listUtRunRows(projectIds, actor, { q: sp.get("q") ?? undefined, defectOnly: sp.get("defectOnly") === "1", openOnly: sp.get("openOnly") === "1", scenarioId: sp.get("scenarioId") ?? undefined });
+      const rows = await listUtRunRows(projectIds, actor, { q: sp.get("q") ?? undefined, defectOnly: sp.get("defectOnly") === "1" || sp.get("defect") === "any", openOnly: sp.get("openOnly") === "1" || sp.get("defect") === "open", scenarioId: sp.get("scenarioId") ?? undefined });
       if (sp.get("format") === "xlsx") {
         const buffer = await buildUtRunWorkbook(rows);
         return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_수행결함관리.xlsx")}` } });
