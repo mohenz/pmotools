@@ -13,8 +13,8 @@ export const DEFAULT_MENU_ITEMS = [
   { key: "wbs2", label: "WBS2" },
   { key: "work-logs2", label: "WBS상세내용2" },
   { key: "requirements2", label: "요구사항관리2" },
-  // 단위테스트 수행관리(2026-10-20, 다중 프로젝트 계열)
-  { key: "ut", label: "단위테스트" },
+  // 테스트(2026-10-20) — 상위 메뉴. 하위 메뉴로 단위테스트(다중 프로젝트 계열 /mp-ut)를 두고, 통합테스트 등은 같은 메뉴 아래에 추가한다.
+  { key: "test", label: "테스트" },
   { key: "announcements", label: "공지사항" },
   { key: "weekly-reports", label: "위클리리포트" },
   // 주간실적(weekly-progress)·인력변동(staff-changes)은 사이드바 상위 메뉴에서 제외(2026-09-29 사용자 요청).
