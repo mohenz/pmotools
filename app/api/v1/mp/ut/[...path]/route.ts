@@ -10,7 +10,8 @@ import {
 import { decideUtApproval, listMyUtExecutionTargets, listUtApprovalInbox, openUtEvidence, registerUtExecution } from "@/lib/server/mp/ut/executions";
 import { fixUtDefect, listUtDefectActions, listUtRunRows, registerUtDefect, updateUtDefect, verifyUtDefect } from "@/lib/server/mp/ut/defects";
 import { cancelUtMilestone, confirmUtDevComplete, declareUtDevComplete, getUtSettings, listUtMilestones, recordUtComplete, saveUtSettings, setUtLock } from "@/lib/server/mp/ut/milestones";
-import { buildUtRunWorkbook } from "@/lib/server/mp/ut/export";
+import { buildUtRunWorkbook, buildUtSheetWorkbook } from "@/lib/server/mp/ut/export";
+import { listUtCaseSheet } from "@/lib/server/mp/ut/grid";
 
 // ---------------------------------------------------------------------------
 // 단위테스트 API(/api/v1/mp/ut/*) — 다중 프로젝트(MP) 선택 프로젝트 기준. 쓰기는 하위 프로젝트에서만(assertMpWritableProject).
@@ -55,6 +56,11 @@ export async function GET(request: NextRequest, { params }: Ctx) {
         return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_수행결함관리.xlsx")}` } });
       }
       return ok(rows);
+    }
+    if (a === "sheet") {
+      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
+      const buffer = await buildUtSheetWorkbook(rows);
+      return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_목록.xlsx")}` } });
     }
     if (a === "defects" && id && b === "actions") return ok(await listUtDefectActions(projectIds, id));
     if (a === "milestones") return ok(await listUtMilestones(actor.projectId, actor));

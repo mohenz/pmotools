@@ -2,12 +2,12 @@ import { getMpScope } from "@/lib/server/mp/context";
 import { getPrisma } from "@/lib/server/db-pg";
 import { getUtCaseEditor, getUtWbsTree } from "@/lib/server/mp/ut/grid";
 import { getUtFormOptions } from "@/lib/server/mp/ut/scenarios";
-import { UtCaseEditScreen } from "@/screens/mp/ut/UtCaseEditScreen";
+import { UtCaseScreen } from "@/screens/mp/ut/UtCaseScreen";
 
 export const dynamic = "force-dynamic";
 
 // 단위테스트(설계서 8장 화면 ID 기준) — 다중 프로젝트(MP) 계열, 좌측 WBS 트리 고정.
-// UT-021 케이스 편집(신규)
+// 단위테스트 정보확인/처리(신규 등록)
 export default async function UtCaseNewPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const pick = (key: string) => (typeof params[key] === "string" ? (params[key] as string) : "");
@@ -18,5 +18,5 @@ export default async function UtCaseNewPage({ searchParams }: { searchParams: Pr
     getUtCaseEditor(c.projectId, actor, { scenarioId: pick("scenario") || undefined, wbs: pick("wbs") || undefined }),
     getUtFormOptions(c.projectId), getUtWbsTree(c.projectId), getPrisma().project.findUnique({ where: { id: c.projectId }, select: { code: true } }),
   ]);
-  return <UtCaseEditScreen editor={editor} options={options} leaves={tree.filter((n) => n.isLeaf)} projectCode={project?.code ?? ""} userId={c.userId} />;
+  return <UtCaseScreen editor={editor} options={options} leaves={tree.filter((n) => n.isLeaf)} projectCode={project?.code ?? ""} userId={c.userId} />;
 }

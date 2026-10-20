@@ -1764,3 +1764,6 @@ a.history-item:hover { background: var(--accent); }
 .ut-remaining { display: flex; flex-wrap: wrap; gap: 6px; }
 .ut-modal-wide { width: min(640px, 100%); }
 @media (max-width: 1000px) { .ut-split { grid-template-columns: 1fr; } .ut-tree { position: static; max-height: 320px; } }
+.ut-sheet td { vertical-align: top; }
+.ut-sheet .ut-pre { max-width: 240px; font-size: 12px; }
+.ut-todo { display: block; color: var(--primary); font-size: 11px; font-weight: 700; }
