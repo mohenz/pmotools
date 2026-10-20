@@ -116,7 +116,7 @@ export async function verifyUtDefect(actor: UtActor, defectId: string, input: un
 // ---------------------------------------------------------------------------
 
 export type UtRunRow = {
-  executionId: string; defectId: string | null; defectDisplayId: string | null; defectStatus: string | null; severity: string | null; version: number | null;
+  executionId: string; wbsItemId: string; defectId: string | null; defectDisplayId: string | null; defectStatus: string | null; severity: string | null; version: number | null;
   scenarioId: string; verdict: string; roundNo: number; canFix: boolean; canVerify: boolean;
   /** 13개 열 */ unit: string; caseDisplayId: string; caseName: string; steps: string; description: string; executorName: string; executedOn: string | null; screenId: string;
   fixedAt: string | null; fixerName: string | null; verificationResult: string | null; verifiedAt: string | null; verifierName: string | null;
@@ -143,7 +143,7 @@ export async function listUtRunRows(projectIds: string[], viewer: UtActor, filte
   const rows: UtRunRow[] = [];
   for (const e of executions) {
     const base = {
-      executionId: e.id, scenarioId: e.case.scenario.id, verdict: e.verdict, roundNo: e.roundNo,
+      executionId: e.id, wbsItemId: e.wbsItemId, scenarioId: e.case.scenario.id, verdict: e.verdict, roundNo: e.roundNo,
       unit: e.case.scenario.group.label, caseDisplayId: e.case.displayId, caseName: e.case.name, steps: e.case.steps,
       executorName: e.executor.name, executedOn: dateOnly(e.executedOn), screenId: e.case.scenario.program?.screenId ?? "",
     };

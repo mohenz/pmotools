@@ -324,6 +324,6 @@ export async function decideUtScenarioReview(actor: UtActor, scenarioId: string,
 
 /** 검토함 — 내가 PL이고 검토요청 상태인 시나리오. */
 export async function listUtReviewInbox(projectIds: string[], userId: string) {
-  const rows = await getPrisma().utScenario.findMany({ where: { projectId: { in: projectIds }, archivedAt: null, status: "REVIEW_REQUESTED", plUserId: userId }, include: { wbsItem: { select: { displayId: true, name: true } }, writer: { select: { name: true } }, _count: { select: { cases: { where: { isActive: true } } } } }, orderBy: { reviewRequestedAt: "asc" } });
-  return rows.map((s) => ({ id: s.id, displayId: s.displayId, name: s.name, wbsDisplayId: s.wbsItem.displayId, wbsName: s.wbsItem.name, writerName: s.writer.name, caseCount: s._count.cases, requestedAt: s.reviewRequestedAt?.toISOString() ?? null }));
+  const rows = await getPrisma().utScenario.findMany({ where: { projectId: { in: projectIds }, archivedAt: null, status: "REVIEW_REQUESTED", plUserId: userId }, include: { wbsItem: { select: { id: true, displayId: true, name: true } }, writer: { select: { name: true } }, cases: { where: { isActive: true }, select: { caseType: true } } }, orderBy: { reviewRequestedAt: "asc" } });
+  return rows.map((s) => ({ id: s.id, displayId: s.displayId, name: s.name, priority: s.priority, wbsItemId: s.wbsItem.id, wbsDisplayId: s.wbsItem.displayId, wbsName: s.wbsItem.name, writerName: s.writer.name, caseCount: s.cases.length, normalCount: s.cases.filter((c) => c.caseType === "NORMAL").length, edgeCount: s.cases.filter((c) => c.caseType !== "NORMAL").length, requestedAt: s.reviewRequestedAt?.toISOString() ?? null }));
 }

@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import type { listUtMilestones } from "@/lib/server/mp/ut/milestones";
 import { json, utApi } from "@/features/mp/ut/client";
 import { dot, today } from "@/features/mp/ut/format";
+import { UtWbsTree } from "@/features/mp/ut/UtWbsTree";
+import type { UtTreeNode } from "@/lib/server/mp/ut/grid";
 
 type Row = Awaited<ReturnType<typeof listUtMilestones>>[number];
 
 // UT-013 — WBS 이정표 수기 기록(2.1): 개발완료 선언→PL 확인, UT완료 기록. WBS 진척은 바꾸지 않으며 대조만 보여 준다.
-export function UtMilestonesScreen({ rows }: { rows: Row[] }) {
+export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: Row[] }) {
   const router = useRouter();
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState(false);
@@ -22,8 +24,10 @@ export function UtMilestonesScreen({ rows }: { rows: Row[] }) {
   const ask = (label: string, fallback = "") => window.prompt(label, fallback);
 
   return <>
-    <header className="topbar"><div><h1>WBS 이정표</h1><p>개발완료·UT완료 수기 기록 · 시나리오가 있는 Leaf WBS {rows.length}건{mismatches ? ` · 진척 불일치 ${mismatches}건` : ""}</p></div></header>
-    <div className="content">
+    <header className="topbar"><div><h1>WBS 이정표 기록</h1><p>UT-013 · 개발완료·UT완료 수기 기록 · 시나리오가 있는 Leaf WBS {rows.length}건{mismatches ? ` · 진척 불일치 ${mismatches}건` : ""}</p></div></header>
+    <div className="content ut-split">
+      <UtWbsTree nodes={tree} />
+      <div className="ut-main">
       {message && <p className={`action-message ${message.tone === "ok" ? "ut-ok" : ""}`} role="status">{message.text}</p>}
       <section className="panel">
         <p className="ut-hint">UT완료 조건(①승인 ②수행 ③Pass·Open 결함 0 ④증적·PL확인)은 참고용 현황입니다. PL이 확인해 기록하며, WBS 진척률·실적종료일은 담당자가 WBS 화면에서 직접 입력합니다.</p>
@@ -56,6 +60,7 @@ export function UtMilestonesScreen({ rows }: { rows: Row[] }) {
           {!rows.length && <p className="empty">시나리오가 등록된 WBS가 없습니다.</p>}
         </div>
       </section>
+      </div>
     </div>
   </>;
 }

@@ -98,7 +98,8 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     // 3단계 메뉴(2026-10-20): 상위 메뉴 → 좌측 패널의 하위 메뉴 묶음(예: 테스트 → 단위테스트) → 기능. 묶음이 없는 메뉴는 기존 탭 그대로.
     const moduleGroups: Record<string, {label:string;tabs:{href:string;label:string}[]}[]> = {
       "/mp-ut": [
-        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"시나리오"},{href:"/mp-ut/new",label:"시나리오 등록"},{href:"/mp-ut/inbox",label:"내 업무"},{href:"/mp-ut/runs",label:"수행·결함"},{href:"/mp-ut/milestones",label:"이정표"},{href:"/mp-ut/settings",label:"설정"}] },
+        // 설계서 8장 화면 ID 순서(UT-020·021·023·030·031·032·040·013·010). UT-022 엑셀·UT-011 매핑·UT-012 이관은 구현 후 추가.
+        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"시나리오·케이스 목록"},{href:"/mp-ut/cases/new",label:"케이스 편집"},{href:"/mp-ut/reviews",label:"케이스 검토·승인함"},{href:"/mp-ut/executions",label:"내 수행 목록"},{href:"/mp-ut/qc",label:"QC 확인함"},{href:"/mp-ut/pl",label:"PL 확인함"},{href:"/mp-ut/defects",label:"결함 관리"},{href:"/mp-ut/milestones",label:"WBS 이정표 기록"},{href:"/mp-ut/settings",label:"UT 설정"}] },
       ],
     };
     const groups = moduleGroups[currentTool.href];
