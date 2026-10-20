@@ -28,7 +28,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
           {canCreate && <Link className="button primary filter-primary-action" href={`/mp-ut/cases/new${filters.wbs ? `?wbs=${filters.wbs}` : ""}`}>+ 신규 등록</Link>}
         </form>
         <section className="panel compact">
-          {rows.length ? <div className="table-wrap"><table className="ut-table ut-sheet">
+          {rows.length ? <div className="table-wrap wbs-table-wrap"><table className="ut-table ut-sheet">
             <thead><tr>
               <th>업무명</th><th>WBS ID</th><th>테스트 케이스 ID</th><th>테스트케이스명</th><th>사전조건</th><th>입력 데이터</th><th>테스트 케이스 상세</th><th>예상결과</th><th>실제결과</th><th>테스트 결과</th><th>오류내용</th><th>업무 담당자</th>
               <th>테스트 수행일</th><th>테스트 수행자</th><th>화면 ID</th><th>화면명</th><th>요구사항 ID</th><th>결함 ID</th><th>조치일</th><th>조치자</th><th>검증결과</th><th>검증일자</th><th>검증자</th><th>완료여부</th>
