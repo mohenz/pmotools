@@ -2,7 +2,7 @@ import "server-only";
 import { getPrisma } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { listWbsItems } from "@/lib/server/mp/wbs";
-import { missingCaseFields, reviewChecklist } from "@/lib/domain/ut";
+import { isUtTargetStage, missingCaseFields, reviewChecklist } from "@/lib/domain/ut";
 import { dateOnly, isUtManager, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
@@ -11,13 +11,14 @@ import { dateOnly, isUtManager, type UtActor } from "@/lib/server/mp/ut/common";
 
 export type UtTreeNode = { id: string; parentId: string | null; displayId: string; code: string; name: string; level: number; isLeaf: boolean; scenarioCount: number; caseCount: number };
 
-/** 좌측 WBS 트리 — 보관 제외 전체 WBS(경로 순서) + Leaf별 시나리오·케이스 수(상위는 하위 합). */
+/** 좌측 WBS 트리 — 개발 단계(UT_TARGET_STAGE) 하위만, 보관 제외(경로 순서) + Leaf별 시나리오·케이스 수(상위는 하위 합). */
 export async function getUtWbsTree(projectId: string): Promise<UtTreeNode[]> {
-  const [items, scenarios] = await Promise.all([
+  const [allItems, scenarios] = await Promise.all([
     listWbsItems(projectId),
     getPrisma().utScenario.findMany({ where: { projectId, archivedAt: null }, select: { wbsItemId: true, _count: { select: { cases: { where: { isActive: true } } } } } }),
   ]);
-  const parentIds = new Set(items.filter((i) => i.parentId).map((i) => i.parentId!));
+  const items = allItems.filter((i) => isUtTargetStage(i.stage));
+  const parentIds = new Set(allItems.filter((i) => i.parentId).map((i) => i.parentId!));
   const own = new Map<string, { s: number; c: number }>();
   for (const s of scenarios) { const v = own.get(s.wbsItemId) ?? { s: 0, c: 0 }; v.s += 1; v.c += s._count.cases; own.set(s.wbsItemId, v); }
   const nodes = items.map((i) => ({ id: i.id, parentId: i.parentId, displayId: i.displayId, code: i.code, name: i.name, level: i.level, isLeaf: !parentIds.has(i.id), scenarioCount: own.get(i.id)?.s ?? 0, caseCount: own.get(i.id)?.c ?? 0 }));

@@ -21,6 +21,12 @@ export const UT_VERDICT_LABEL: Record<UtVerdict, string> = { PASS: "Pass", FAIL:
 export const UT_DEFECT_STATUS_LABEL: Record<UtDefectStatus, string> = { REGISTERED: "등록", FIXED: "조치완료", VERIFIED: "검증완료", REFIX: "재조치" };
 export const UT_VERIFICATION_LABEL: Record<UtVerificationResult, string> = { PASS: "적합", FAIL: "부적합" };
 
+/** 단위테스트 대상 Stage(2026-10-20 사용자 확정) — 최상위 WBS 이름이 "개발"인 단계의 Leaf Task만 대상. */
+export const UT_TARGET_STAGE = "개발";
+export function isUtTargetStage(stage: string | null | undefined) {
+  return (stage ?? "").trim() === UT_TARGET_STAGE;
+}
+
 export class UtRuleError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }

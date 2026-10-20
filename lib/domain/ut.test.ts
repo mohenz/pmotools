@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase, caseDisplayId,
-  defectDisplayId, missingCaseFields, nextRoundNo, nextScenarioStatus, reviewChecklist, scenarioDisplayId, utCompletionConditions, validateExecution,
+  defectDisplayId, isUtTargetStage, missingCaseFields, nextRoundNo, nextScenarioStatus, reviewChecklist, scenarioDisplayId, utCompletionConditions, validateExecution,
   type UtCaseDraft,
 } from "@/lib/domain/ut";
 
@@ -134,5 +134,14 @@ describe("이정표", () => {
     expect(() => assertDevConfirm({ declaredBy: null, confirmerId: "pl" })).toThrow();
     expect(() => assertDevConfirm({ declaredBy: "dev", confirmerId: "dev" })).toThrow();
     expect(() => assertDevConfirm({ declaredBy: "dev", confirmerId: "pl" })).not.toThrow();
+  });
+});
+
+describe("단위테스트 대상 Stage", () => {
+  it("개발 단계만 대상", () => {
+    expect(isUtTargetStage("개발")).toBe(true);
+    expect(isUtTargetStage(" 개발 ")).toBe(true);
+    expect(isUtTargetStage("설계")).toBe(false);
+    expect(isUtTargetStage(null)).toBe(false);
   });
 });
