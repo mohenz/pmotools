@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { utApi } from "@/features/mp/ut/client";
 import { UtCaseScreen, type UtCaseNavParams } from "@/screens/mp/ut/UtCaseScreen";
@@ -19,6 +20,8 @@ export function UtCaseModal() {
   const open = Boolean(caseId || isNew);
   const [data, setData] = useState<Omit<Payload, "modal"> | null>(null);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
     if (!open) return;
@@ -47,12 +50,21 @@ export function UtCaseModal() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (!open) return null;
-  return <div className="modal-backdrop ut-case-backdrop" role="dialog" aria-modal="true" aria-label="테스트 케이스 정보" onClick={(e) => { if (e.target === e.currentTarget) replaceParams(null); }}>
+  // 열려 있는 동안 뒤쪽 페이지 스크롤을 막는다.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  if (!open || !mounted) return null;
+  // 본문(main)은 CSS 컨테이너라 fixed 배치의 기준이 되므로, 화면 기준으로 띄우기 위해 body에 포털로 렌더링한다.
+  return createPortal(<div className="modal-backdrop ut-case-backdrop" role="dialog" aria-modal="true" aria-label="테스트 케이스 정보" onClick={(e) => { if (e.target === e.currentTarget) replaceParams(null); }}>
     <div className="modal-card ut-case-modal">
       {error ? <><p className="action-message">{error}</p><div className="modal-actions"><button className="button secondary" onClick={() => replaceParams(null)}>닫기</button></div></>
         : !data ? <p className="ut-hint">불러오는 중…</p>
         : <UtCaseScreen key={`${caseId ?? ""}|${scenario ?? ""}|${wbs ?? ""}`} {...data} modal={{ close: () => replaceParams(null), reload: () => void load(), open: (p) => replaceParams(p) }} />}
     </div>
-  </div>;
+  </div>, document.body);
 }
