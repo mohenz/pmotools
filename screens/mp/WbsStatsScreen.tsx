@@ -9,12 +9,12 @@ export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
   const { overall, itemCount, delayRate, delayedCount, delayTrackedCount, stages } = stats;
   const overallDelayed = delayedCount > 0;
   return <>
-    <header className="topbar"><div><h1>WBS 통계</h1><p>전체 공정율 및 Stage별 계획·실적·지연 현황 · 총 {fmt(itemCount)}건</p></div></header>
+    <header className="topbar"><div><h1>WBS 통계</h1><p>Stage별 예상공정율·공정율·진척율·지연율 현황 · 총 {fmt(itemCount)}건</p></div></header>
     <div className="content">
       <section className="kpi-grid">
-        <div className="kpi"><span>전체 목표(today)</span><strong>{pct(overall.planned)}%</strong><small>계획 공정율 ({fmt(stats.plannedCount)}건)</small></div>
-        <div className="kpi"><span>전체 실적</span><strong>{pct(overall.actual)}%</strong><small>실적 공정율 ({fmt(stats.actualCount)}건)</small></div>
-        <div className="kpi"><span>전체 진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}%</strong><small>실적/계획 ({fmt(stats.actualCount)}/{fmt(stats.plannedCount)}건)</small></div>
+        <div className="kpi"><span>예상공정율</span><strong>{pct(overall.planned)}%</strong><small>계획종료 도래 ÷ 전체 ({fmt(stats.plannedCount)}/{fmt(itemCount)}건)</small></div>
+        <div className="kpi"><span>공정율</span><strong>{pct(overall.actual)}%</strong><small>완료 ÷ 전체</small></div>
+        <div className="kpi"><span>진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}%</strong><small>공정율 ÷ 예상공정율</small></div>
         <div className="kpi"><span>전체 지연율</span><strong className={delayRate > 0 ? "critical" : undefined}>{pct(delayRate)}%</strong><small>지연 {fmt(delayedCount)}/{fmt(delayTrackedCount)}건</small></div>
       </section>
 
@@ -22,7 +22,7 @@ export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
         <div className="panel-head"><h2>Stage별 공정율</h2><span>{stages.length}개 Stage · 총 {fmt(itemCount)}건</span></div>
         {stages.length ? <>
           <WbsStageChart stages={stages} />
-          <div className="table-wrap"><table><thead><tr><th>Stage</th><th data-numeric>Task 건수</th><th data-numeric>계획건수</th><th data-numeric>실적건수</th><th data-numeric>공정율</th><th>상태</th><th data-numeric>계획</th><th data-numeric>실적</th><th data-numeric>지연건수</th><th data-numeric>지연율</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>Stage</th><th data-numeric>Task 건수</th><th data-numeric>계획건수</th><th data-numeric>실적건수</th><th data-numeric>진척율</th><th>상태</th><th data-numeric>예상공정율</th><th data-numeric>공정율</th><th data-numeric>지연건수</th><th data-numeric>지연율</th></tr></thead>
             <tbody>{stages.map((stage) => <tr key={stage.stage}>
               <td>{stage.stage}</td>
               <td data-numeric>{fmt(stage.itemCount)}건</td>

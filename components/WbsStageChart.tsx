@@ -22,8 +22,8 @@ export function WbsStageChart({ stages }: { stages: WbsStageChartDatum[] }) {
       data: {
         labels: stages.map((s) => (s.delayed ? `⚠ ${s.stage}` : s.stage)),
         datasets: [
-          { label: "계획", data: stages.map((s) => Math.round(s.planned * 100)), backgroundColor: planned, borderRadius: 4, maxBarThickness: 24 },
-          { label: "실적", data: stages.map((s) => Math.round(s.actual * 100)), backgroundColor: actual, borderRadius: 4, maxBarThickness: 24 },
+          { label: "예상공정율", data: stages.map((s) => Math.round(s.planned * 100)), backgroundColor: planned, borderRadius: 4, maxBarThickness: 24 },
+          { label: "공정율", data: stages.map((s) => Math.round(s.actual * 100)), backgroundColor: actual, borderRadius: 4, maxBarThickness: 24 },
         ],
       },
       options: {
@@ -45,5 +45,5 @@ export function WbsStageChart({ stages }: { stages: WbsStageChartDatum[] }) {
     });
   }, [stages]);
 
-  return <div className="wbs-stage-chart"><canvas ref={canvasRef} role="img" aria-label="Stage별 계획 대비 실적 공정율 막대 그래프. 아래 표에 동일한 수치가 있습니다." /></div>;
+  return <div className="wbs-stage-chart"><canvas ref={canvasRef} role="img" aria-label="Stage별 예상공정율 대비 공정율 막대 그래프. 아래 표에 동일한 수치가 있습니다." /></div>;
 }

@@ -37,16 +37,16 @@ export function WbsGroupTasksScreen({ tasks }: { tasks: WbsGroupTasks }) {
     <header className="topbar"><div><h1>{groupTitle} {titleSuffix} 조회</h1><p>{description} 총 {items.length}건</p></div><div className="topbar-actions"><Link className="button secondary" href={weekRange ? "/wbs/weekly-stats" : "/wbs/group-stats"}>{weekRange ? "주간 통계로" : "업무그룹별 통계로"}</Link></div></header>
     <div className="content">
       <section className="kpi-grid">
-        <div className="kpi"><span>목표(today)</span><strong>{pct(overall.planned)}</strong><small>계획 공정율</small></div>
-        <div className="kpi"><span>실적</span><strong>{pct(overall.actual)}</strong><small>실적 공정율</small></div>
-        <div className="kpi"><span>진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}</strong><small>실적/계획</small></div>
+        <div className="kpi"><span>예상공정율</span><strong>{pct(overall.planned)}</strong><small>계획종료 도래 ÷ 전체</small></div>
+        <div className="kpi"><span>공정율</span><strong>{pct(overall.actual)}</strong><small>완료 ÷ 전체</small></div>
+        <div className="kpi"><span>진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}</strong><small>공정율 ÷ 예상공정율</small></div>
       </section>
 
       <section className="panel">
         <div className="panel-head"><h2>담당자별 작업현황</h2><span>{owners.length}명</span></div>
         {owners.length ? <>
           <WbsStageChart stages={chartData} />
-          <div className="table-wrap"><table><thead><tr><th>담당자</th><th>Task 건수</th><th>완료 건수</th><th>목표</th><th>실적</th><th>진척율</th><th>상태</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>담당자</th><th>Task 건수</th><th>완료 건수</th><th>예상공정율</th><th>공정율</th><th>진척율</th><th>상태</th></tr></thead>
             <tbody>{owners.map((row) => <tr key={row.owner}>
               <td>{row.ownerLoginId ? <Link className="table-link" href={`/wbs/by-owner/${row.ownerLoginId}`}>{row.owner}</Link> : row.owner}</td>
               <td>{row.itemCount}건</td>

@@ -16,9 +16,9 @@ export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
     <header className="topbar"><div><h1>WBS 업무그룹별 통계</h1><p>사용자관리에서 지정한 업무그룹 기준 WBS 담당자별 공정율 현황</p></div></header>
     <div className="content">
       <section className="kpi-grid">
-        <div className="kpi"><span>전체 목표(today)</span><strong>{pct(overall.planned)}%</strong><small>계획 공정율</small></div>
-        <div className="kpi"><span>전체 실적</span><strong>{pct(overall.actual)}%</strong><small>실적 공정율</small></div>
-        <div className="kpi"><span>전체 진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}%</strong><small>실적/계획</small></div>
+        <div className="kpi"><span>예상공정율</span><strong>{pct(overall.planned)}%</strong><small>계획종료 도래 ÷ 전체</small></div>
+        <div className="kpi"><span>공정율</span><strong>{pct(overall.actual)}%</strong><small>완료 ÷ 전체</small></div>
+        <div className="kpi"><span>진척율</span><strong className={overall.progressIndex < 1 ? "critical" : undefined}>{pct(overall.progressIndex)}%</strong><small>공정율 ÷ 예상공정율</small></div>
         <div className="kpi"><span>전체 지연율</span><strong className={delayRate > 0 ? "critical" : undefined}><Link className="table-link" href="/mp-wbs/group-tasks?delayed=1">{pct(delayRate)}%</Link></strong><small>지연 {fmt(delayedCount)}/{fmt(delayTrackedCount)}건</small></div>
       </section>
 
@@ -26,7 +26,7 @@ export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
         <div className="panel-head"><h2>업무그룹별 공정율</h2><span>{groups.length}개 그룹</span></div>
         {groups.length ? <>
           <WbsStageChart stages={chartData} />
-          <div className="table-wrap"><table><thead><tr><th>업무그룹</th><th data-numeric>담당 인원</th><th data-numeric>Task 건수</th><th data-numeric>목표</th><th data-numeric>실적</th><th data-numeric>진척율</th><th data-numeric>지연율</th><th>상태</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>업무그룹</th><th data-numeric>담당 인원</th><th data-numeric>Task 건수</th><th data-numeric>예상공정율</th><th data-numeric>공정율</th><th data-numeric>진척율</th><th data-numeric>지연율</th><th>상태</th></tr></thead>
             <tbody>{groups.map((group) => <tr key={group.groupLabel}>
               <td><Link className="table-link" href={`/mp-wbs/group-tasks?group=${encodeURIComponent(group.groupLabel)}`}>{group.groupLabel}</Link></td>
               <td data-numeric>{fmt(group.memberCount)}명</td>
