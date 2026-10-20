@@ -151,20 +151,26 @@ export async function wbsSubtreeDisplayIds(projectId: string, wbs: string | unde
 // ---------------------------------------------------------------------------
 
 export type UtSheetRow = {
-  caseId: string; wbsItemId: string; scenarioId: string; caseStatus: string; scenarioStatus: string; todo: string[];
-  unit: string; wbsDisplayId: string; caseDisplayId: string; caseName: string; precondition: string; inputData: string; steps: string; expectedResult: string;
+  caseId: string | null; wbsItemId: string; scenarioId: string | null; caseStatus: string | null; scenarioStatus: string | null; todo: string[];
+  unit: string; wbsDisplayId: string; wbsName: string; caseDisplayId: string; caseName: string; precondition: string; inputData: string; steps: string; expectedResult: string;
   actualResult: string; verdict: string | null; errorContent: string; ownerName: string | null; executedOn: string | null; executorName: string | null;
   screenId: string; screenName: string; requirementId: string; defectId: string | null; fixedAt: string | null; fixerName: string | null;
-  verificationResult: string | null; verifiedAt: string | null; verifierName: string | null; done: "완료" | "진행중" | "미수행";
+  verificationResult: string | null; verifiedAt: string | null; verifierName: string | null; done: "완료" | "진행중" | "미수행" | "미등록";
 };
 
 export type UtSheetFilters = { wbs?: string; q?: string; verdict?: string; todo?: string };
 
+/** 단위테스트 목록 — WBS 기준(2026-10-21 사용자 확정): 단위테스트 대상 Task(개발 단계 Leaf + 대상 체크)마다 케이스 행을,
+ *  케이스가 없는 대상 Task는 "미등록" 1행을 WBS 경로 순서로 보여 준다. 대상이 아닌 Task의 케이스는 목록에서 제외한다. */
 export async function listUtCaseSheet(projectId: string, viewer: UtActor, filters: UtSheetFilters = {}) {
   const prisma = getPrisma();
-  const wbsIds = filters.wbs ? await subtreeIds(projectId, filters.wbs) : null;
+  const allItems = await listWbsItems(projectId);
+  const parentIds = new Set(allItems.filter((i) => i.parentId).map((i) => i.parentId!));
+  const node = filters.wbs ? allItems.find((i) => i.id === filters.wbs) : null;
+  const targets = allItems.filter((i) => isUtTargetTask({ ...i, isLeaf: !parentIds.has(i.id) })
+    && (!filters.wbs || (!!node && (i.path === node.path || i.path.startsWith(`${node.path}.`)))));
   const cases = await prisma.utCase.findMany({
-    where: { projectId, isActive: true, scenario: { archivedAt: null }, ...(wbsIds ? { wbsItemId: { in: wbsIds } } : {}) },
+    where: { projectId, isActive: true, scenario: { archivedAt: null }, wbsItemId: { in: targets.map((t) => t.id) } },
     include: {
       scenario: { select: { id: true, status: true, plUserId: true, group: { select: { label: true } }, program: { select: { name: true, screenId: true } }, requirement: { select: { displayId: true } }, wbsItem: { select: { displayId: true, path: true, owner: { select: { name: true } } } } } },
       executions: { orderBy: { roundNo: "desc" }, take: 1, include: { executor: { select: { name: true } } } },
@@ -175,7 +181,8 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
   });
   const me = viewer.userId;
   const manager = isUtManager(viewer);
-  const rows: UtSheetRow[] = cases.map((c) => {
+  const targetById = new Map(targets.map((t) => [t.id, t]));
+  const caseRows: UtSheetRow[] = cases.map((c) => {
     const e = c.executions[0] ?? null;
     const d = c.defects[0] ?? null;
     const openDefects = c.defects.filter((x) => x.status !== "VERIFIED");
@@ -188,7 +195,7 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
     if ((c.status === "DRAFT") && c.createdBy === me) todo.push("draft");
     return {
       caseId: c.id, wbsItemId: c.wbsItemId, scenarioId: c.scenario.id, caseStatus: c.status, scenarioStatus: c.scenario.status, todo,
-      unit: c.scenario.group.label, wbsDisplayId: c.scenario.wbsItem.displayId, caseDisplayId: c.displayId, caseName: c.name, precondition: c.precondition, inputData: c.inputData, steps: c.steps, expectedResult: c.expectedResult,
+      unit: c.scenario.group.label, wbsDisplayId: c.scenario.wbsItem.displayId, wbsName: targetById.get(c.wbsItemId)?.name ?? "", caseDisplayId: c.displayId, caseName: c.name, precondition: c.precondition, inputData: c.inputData, steps: c.steps, expectedResult: c.expectedResult,
       actualResult: e?.actualResult || e?.naReason || "", verdict: e?.verdict ?? null, errorContent: d?.description ?? (e?.verdict === "FAIL" ? e.actualResult : ""),
       ownerName: c.scenario.wbsItem.owner?.name ?? null, executedOn: dateOnly(e?.executedOn), executorName: e?.executor.name ?? null,
       screenId: c.scenario.program?.screenId ?? "", screenName: c.scenario.program?.name ?? "", requirementId: c.scenario.requirement?.displayId ?? "",
@@ -197,9 +204,18 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
       done: !e ? "미수행" : c.status === "PL_CONFIRMED" && openDefects.length === 0 ? "완료" : "진행중",
     };
   });
+  const byWbs = new Map<string, UtSheetRow[]>();
+  for (const r of caseRows) byWbs.set(r.wbsItemId, [...(byWbs.get(r.wbsItemId) ?? []), r]);
+  const rows: UtSheetRow[] = targets.flatMap((t) => byWbs.get(t.id) ?? [{
+    caseId: null, wbsItemId: t.id, scenarioId: null, caseStatus: null, scenarioStatus: null, todo: [],
+    unit: "", wbsDisplayId: t.displayId, wbsName: t.name, caseDisplayId: "", caseName: "", precondition: "", inputData: "", steps: "", expectedResult: "",
+    actualResult: "", verdict: null, errorContent: "", ownerName: t.ownerName, executedOn: null, executorName: null,
+    screenId: "", screenName: "", requirementId: "", defectId: null, fixedAt: null, fixerName: null,
+    verificationResult: null, verifiedAt: null, verifierName: null, done: "미등록",
+  }]);
   const q = filters.q?.trim().toLowerCase();
   return rows.filter((r) =>
     (!filters.verdict || (filters.verdict === "NONE" ? r.verdict === null : r.verdict === filters.verdict)) &&
     (!filters.todo || (filters.todo === "any" ? r.todo.length > 0 : r.todo.includes(filters.todo))) &&
-    (!q || [r.caseDisplayId, r.caseName, r.unit, r.wbsDisplayId, r.requirementId, r.screenId].some((v) => v.toLowerCase().includes(q))));
+    (!q || [r.caseDisplayId, r.caseName, r.unit, r.wbsDisplayId, r.wbsName, r.requirementId, r.screenId].some((v) => v.toLowerCase().includes(q))));
 }

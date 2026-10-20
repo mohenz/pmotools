@@ -16,7 +16,8 @@ export function UtCaseModal() {
   const caseId = search.get("case") ?? undefined;
   const isNew = search.get("new") === "1";
   const scenario = search.get("scenario") ?? undefined;
-  const wbs = search.get("wbs") ?? undefined;
+  // newWbs — 목록의 "미등록" 행에서 연 신규 등록(목록 트리 필터 wbs와 분리). 없으면 트리에서 선택한 wbs로 미리 채운다.
+  const wbs = search.get("newWbs") ?? search.get("wbs") ?? undefined;
   const open = Boolean(caseId || isNew);
   const [data, setData] = useState<Omit<Payload, "modal"> | null>(null);
   const [error, setError] = useState("");
@@ -37,9 +38,9 @@ export function UtCaseModal() {
 
   const replaceParams = (next: UtCaseNavParams | null) => {
     const params = new URLSearchParams(search.toString());
-    ["case", "new", "scenario"].forEach((k) => params.delete(k));
+    ["case", "new", "scenario", "newWbs"].forEach((k) => params.delete(k));
     if (next?.caseId) params.set("case", next.caseId);
-    else if (next) { params.set("new", "1"); if (next.scenario) params.set("scenario", next.scenario); if (next.wbs) params.set("wbs", next.wbs); }
+    else if (next) { params.set("new", "1"); if (next.scenario) params.set("scenario", next.scenario); if (next.wbs) params.set("newWbs", next.wbs); }
     router.replace(`${pathname}${params.toString() ? `?${params}` : ""}`, { scroll: false });
   };
 
