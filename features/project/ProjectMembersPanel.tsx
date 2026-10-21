@@ -11,7 +11,10 @@ type Candidate = { userId: string; loginId: string; name: string; role: string }
 // 프로젝트별 사용자 배정 — 사용자 관리의 사용자별 배정과 같은 데이터를 프로젝트 기준으로 다룬다.
 export function ProjectMembersPanel({ projectId, members, candidates }: { projectId: string; members: Member[]; candidates: Candidate[] }) {
   const router = useRouter();
-  const [pending, setPending] = useState(""), [message, setMessage] = useState(""), [selected, setSelected] = useState("");
+  const [pending, setPending] = useState(""), [message, setMessage] = useState(""), [selected, setSelected] = useState(""), [query, setQuery] = useState("");
+  // 이름·아이디·계정 역할로 후보를 좁힌다(2026-10-21 사용자 요청).
+  const keyword = query.trim().toLowerCase();
+  const filtered = keyword ? candidates.filter((user) => `${user.name} ${user.loginId} ${ROLE_LABEL[user.role] ?? user.role}`.toLowerCase().includes(keyword)) : candidates;
 
   async function assign(userId: string, assigned: boolean) {
     setPending(userId); setMessage("");
@@ -19,16 +22,24 @@ export function ProjectMembersPanel({ projectId, members, candidates }: { projec
     const payload = await response.json().catch(() => null);
     setPending("");
     if (!response.ok) { setMessage(payload?.error?.message ?? "배정을 저장하지 못했습니다."); return; }
-    setSelected(""); router.refresh();
+    setSelected(""); setQuery(""); router.refresh();
   }
 
   return <section className="panel">
     <div className="panel-head"><div><h2>배정된 사용자</h2><p className="group-description">운영자·일반은 배정된 프로젝트에만 접근합니다. 슈퍼관리자·관리자는 배정 없이도 모든 프로젝트에 접근하며, 담당자·참석자 목록에 나오려면 배정합니다.</p></div><span>{members.length}명</span></div>
     <WarningDialog message={message} onClose={() => setMessage("")} />
     <div className="project-members-add">
+      <input type="search" className="project-members-search" value={query} placeholder="이름·아이디 검색" aria-label="배정할 사용자 검색"
+        onChange={(event) => {
+          const next = event.target.value.trim().toLowerCase();
+          const matches = next ? candidates.filter((user) => `${user.name} ${user.loginId} ${ROLE_LABEL[user.role] ?? user.role}`.toLowerCase().includes(next)) : candidates;
+          setQuery(event.target.value);
+          // 결과가 1명이면 바로 선택하고, 선택했던 사용자가 결과에서 빠지면 선택을 비운다.
+          setSelected(matches.length === 1 ? matches[0].userId : matches.some((user) => user.userId === selected) ? selected : "");
+        }} />
       <select value={selected} onChange={(event) => setSelected(event.target.value)} aria-label="배정할 사용자">
-        <option value="">배정할 사용자 선택 ({candidates.length}명)</option>
-        {candidates.map((user) => <option value={user.userId} key={user.userId}>{user.name} ({user.loginId}) · {ROLE_LABEL[user.role] ?? user.role}</option>)}
+        <option value="">배정할 사용자 선택 ({keyword ? `${filtered.length}/${candidates.length}` : candidates.length}명)</option>
+        {filtered.map((user) => <option value={user.userId} key={user.userId}>{user.name} ({user.loginId}) · {ROLE_LABEL[user.role] ?? user.role}</option>)}
       </select>
       <button className="button primary" type="button" disabled={!selected || pending === selected} onClick={() => assign(selected, true)}>배정</button>
     </div>

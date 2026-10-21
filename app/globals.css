@@ -867,6 +867,10 @@ a.history-item:hover { background: var(--accent); }
 @media (max-width: 850px) { .requirement-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 850px) { .requirement-pagination { align-items: stretch; flex-direction: column; }.page-size-form,.page-links { flex-wrap: wrap; }.page-summary { text-align: center; } }
 .settings-content { max-width: 1360px; }
+.project-members-add { display: flex; gap: 8px; align-items: center; }
+.project-members-add .project-members-search { flex: 0 0 220px; }
+.project-members-add select { flex: 1 1 auto; min-width: 0; }
+.project-members-add .button { flex: none; }
 .user-management-content { max-width: none; }
 .group-settings-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: start; gap: 13px; }
 .group-list-panel { padding: 11px; }
