@@ -22,13 +22,13 @@ const executionSchema = z.object({
 /** 내 수행 목록 — 내가 수행 담당자이고 수행 가능(승인·수행중)한 케이스. 반려 건 우선. */
 export async function listMyUtExecutionTargets(projectIds: string[], userId: string) {
   const rows = await getPrisma().utCase.findMany({
-    where: { projectId: { in: projectIds }, executorId: userId, isActive: true, status: { in: ["APPROVED", "IN_EXECUTION"] }, scenario: { archivedAt: null } },
-    include: { scenario: { select: { id: true, displayId: true, name: true, wbsItem: { select: { displayId: true, name: true } } } }, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { roundNo: true, verdict: true, approvalStatus: true } } },
+    where: { projectId: { in: projectIds }, executorId: userId, isActive: true, status: { in: ["APPROVED", "IN_EXECUTION"] } },
+    include: { wbsItem: { select: { displayId: true, name: true } }, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { roundNo: true, verdict: true, approvalStatus: true } } },
     orderBy: [{ plannedDate: "asc" }, { displayId: "asc" }],
   });
   return rows.map((c) => ({
     id: c.id, displayId: c.displayId, name: c.name, caseType: c.caseType, plannedDate: dateOnly(c.plannedDate), status: c.status,
-    scenarioId: c.scenario.id, scenarioDisplayId: c.scenario.displayId, scenarioName: c.scenario.name, wbsDisplayId: c.scenario.wbsItem?.displayId ?? "", wbsName: c.scenario.wbsItem?.name ?? "",
+    wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "",
     precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
     lastRound: c.executions[0]?.roundNo ?? null, lastVerdict: c.executions[0]?.verdict ?? null, lastRejected: c.executions[0]?.approvalStatus === "REJECTED",
   })).sort((a, b) => Number(b.lastRejected) - Number(a.lastRejected));
@@ -38,8 +38,8 @@ export async function registerUtExecution(actor: UtActor, caseId: string, input:
   const data = executionSchema.parse(input);
   await assertNotLocked(actor.projectId);
   const prisma = getPrisma();
-  const c = await prisma.utCase.findUnique({ where: { id: caseId }, include: { scenario: { select: { archivedAt: true } }, executions: { select: { roundNo: true } } } });
-  if (!c || c.projectId !== actor.projectId || !c.isActive || c.scenario.archivedAt) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
+  const c = await prisma.utCase.findUnique({ where: { id: caseId }, include: { executions: { select: { roundNo: true } } } });
+  if (!c || c.projectId !== actor.projectId || !c.isActive) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
   if (c.executorId !== actor.userId) throw new DomainError("FORBIDDEN", "배정된 수행 담당자만 결과를 등록할 수 있습니다.");
   if (!canExecuteCase(c.status)) throw new DomainError("INVALID_STATE", "승인되었거나 재수행 대기인 케이스만 수행 결과를 등록할 수 있습니다.");
   for (const file of files) assertEvidenceFile(file);
@@ -76,9 +76,9 @@ export async function listUtApprovalInbox(projectIds: string[], userId: string, 
   const rows = await getPrisma().utExecution.findMany({
     where: step === "QC"
       ? { projectId: { in: projectIds }, approvalStatus: "QC_PENDING", case: { qcUserId: userId } }
-      : { projectId: { in: projectIds }, approvalStatus: "PL_PENDING", case: { scenario: { plUserId: userId } } },
+      : { projectId: { in: projectIds }, approvalStatus: "PL_PENDING", case: { plUserId: userId } },
     include: {
-      case: { select: { id: true, displayId: true, name: true, expectedResult: true, scenario: { select: { id: true, displayId: true, wbsItem: { select: { displayId: true } } } } } },
+      case: { select: { id: true, displayId: true, name: true, expectedResult: true, wbsItem: { select: { displayId: true } } } },
       executor: { select: { name: true } },
       evidences: { select: { id: true, fileName: true, sizeBytes: true, views: { where: { viewerId: userId }, select: { id: true }, take: 1 } } },
       approvals: { include: { approver: { select: { name: true } } } },
@@ -89,7 +89,7 @@ export async function listUtApprovalInbox(projectIds: string[], userId: string, 
     id: e.id, roundNo: e.roundNo, verdict: e.verdict, executedOn: dateOnly(e.executedOn), actualResult: e.actualResult, naReason: e.naReason, executorName: e.executor.name,
     waitingDays: Math.floor((Date.now() - e.createdAt.getTime()) / 86_400_000),
     caseId: e.case.id, caseDisplayId: e.case.displayId, caseName: e.case.name, expectedResult: e.case.expectedResult,
-    scenarioId: e.case.scenario.id, scenarioDisplayId: e.case.scenario.displayId, wbsDisplayId: e.case.scenario.wbsItem?.displayId ?? "",
+    wbsDisplayId: e.case.wbsItem?.displayId ?? "",
     evidences: e.evidences.map((v) => ({ id: v.id, fileName: v.fileName, sizeBytes: v.sizeBytes, viewed: v.views.length > 0 })),
     qcComment: e.approvals.find((a) => a.step === "QC")?.comment ?? "", qcApprover: e.approvals.find((a) => a.step === "QC")?.approver.name ?? null,
   }));
@@ -111,10 +111,10 @@ export async function decideUtApproval(actor: UtActor, executionId: string, inpu
   }).parse(input);
   await assertNotLocked(actor.projectId);
   const prisma = getPrisma();
-  const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: { include: { scenario: { select: { plUserId: true } } } }, evidences: { select: { id: true, views: { where: { viewerId: actor.userId }, select: { id: true }, take: 1 } } } } });
+  const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: true, evidences: { select: { id: true, views: { where: { viewerId: actor.userId }, select: { id: true }, take: 1 } } } } });
   if (!e || e.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "수행 결과를 찾을 수 없습니다.");
   const hasViewedEvidence = e.evidences.length > 0 && e.evidences.every((v) => v.views.length > 0);
-  await rule(() => assertApprover({ step: data.step, actorId: actor.userId, executorId: e.executorId, qcUserId: e.case.qcUserId, plUserId: e.case.scenario.plUserId, hasViewedEvidence, verdict: e.verdict }));
+  await rule(() => assertApprover({ step: data.step, actorId: actor.userId, executorId: e.executorId, qcUserId: e.case.qcUserId, plUserId: e.case.plUserId, hasViewedEvidence, verdict: e.verdict }));
   if (data.step === "PL" && e.case.qcUserId === actor.userId) throw new DomainError("FORBIDDEN", "QC 확인자는 PL 확인을 할 수 없습니다.");
   await assertUtCode(actor.projectId, data.rejectReasonCodeId, "ut_reject_reason", "반려 사유");
   const next = await rule(() => applyApproval({ approvalStatus: e.approvalStatus, verdict: e.verdict, step: data.step, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment }));

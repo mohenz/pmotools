@@ -3,9 +3,9 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_SCENARIO_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
+import { UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
 import type { getUtCaseEditor, UtTreeNode } from "@/lib/server/mp/ut/grid";
-import type { getUtFormOptions } from "@/lib/server/mp/ut/scenarios";
+import type { getUtFormOptions } from "@/lib/server/mp/ut/cases";
 import { json, utApi } from "@/features/mp/ut/client";
 import { STATUS_BAND, dot, today } from "@/features/mp/ut/format";
 
@@ -13,7 +13,8 @@ type Editor = Awaited<ReturnType<typeof getUtCaseEditor>>;
 type Options = Awaited<ReturnType<typeof getUtFormOptions>>;
 
 // 단위테스트 정보확인/처리 — 케이스 정보 입력·수정, 검토요청·PL 승인, 판정·증적 등록, QC·PL 확인, 결함 등록·조치·검증, 이력(2026-10-20 화면 2개 체계).
-export type UtCaseNavParams = { caseId?: string; scenario?: string; wbs?: string };
+// 시나리오 없이 케이스가 WBS Task에 바로 속한다(2026-10-21 사용자 확정).
+export type UtCaseNavParams = { caseId?: string; wbs?: string };
 export type UtCaseModalControl = { close: () => void; reload: () => void; open: (params: UtCaseNavParams) => void };
 
 export function UtCaseScreen({ editor, options, leaves, projectCode, userId, modal }: { editor: Editor; options: Options; leaves: UtTreeNode[]; projectCode: string; userId: string; modal?: UtCaseModalControl }) {
@@ -23,12 +24,11 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   const goTo = (params: UtCaseNavParams) => {
     if (modal) return modal.open(params);
     if (params.caseId) return router.push(`/mp-ut/cases/${params.caseId}`);
-    router.replace(params.scenario ? `/mp-ut/cases/new?scenario=${params.scenario}` : `/mp-ut/cases/new?wbs=${params.wbs ?? ""}`);
+    router.replace(`/mp-ut/cases/new?wbs=${params.wbs ?? ""}`);
   };
-  const { scenario, case: c } = editor;
+  const { case: c } = editor;
   // 신규 등록에서는 Leaf WBS만 미리 채운다(트리에서 상위 WBS를 고른 상태로 열 수 있음).
-  const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (editor.scenario || editor.wbsItemId === UT_NO_WBS || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
-  const [scenarioId, setScenarioId] = useState(scenario?.id ?? "new");
+  const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (c || editor.wbsItemId === UT_NO_WBS || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
   const [wbsQuery, setWbsQuery] = useState("");
   const noWbs = editor.wbsItemId === UT_NO_WBS;
   const fixedLeaf = leaves.find((l) => l.id === editor.wbsItemId) ?? null;
@@ -46,7 +46,6 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   }
   const formValues = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const f = new FormData(event.currentTarget); return { f, v: (n: string) => ((f.get(n) as string) ?? "").trim() }; };
   const readOnly = !editor.editable;
-  const isNewScenario = scenarioId === "new";
   const leafOptions = useMemo(() => { const k = wbsQuery.trim().toLowerCase(); return (k ? leaves.filter((l) => `${l.displayId} ${l.code} ${l.name}`.toLowerCase().includes(k)) : leaves).slice(0, 300); }, [wbsQuery, leaves]);
   const members = options.members;
 
@@ -54,77 +53,60 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
     event.preventDefault(); setPending(true); setMessage(null);
     const f = new FormData(event.currentTarget);
     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
-    const scenarioData = { name: v("scenarioName"), groupId: v("groupId"), priority: v("priority"), plUserId: v("plUserId") || null, programId: v("programId") || null, requirementId: v("requirementId") || null };
-    const caseData = { caseType: v("caseType"), name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"), priority: v("priority"), executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null };
+    const data = {
+      groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
+      caseType: v("caseType"), name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
+      priority: v("priority"), executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
+    };
     try {
-      let sid = scenarioId;
-      if (isNewScenario) sid = (await utApi<{ id: string }>("scenarios", json("POST", { wbsItemId: wbsItemId === UT_NO_WBS ? null : wbsItemId, ...scenarioData }))).id;
-      else if (scenario && sid === scenario.id) await utApi(`scenarios/${sid}`, json("PATCH", { ...scenarioData, version: scenario.version }));
-      if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...caseData, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); refresh(); }
-      else { const created = await utApi<{ id: string }>(`scenarios/${sid}/cases`, json("POST", caseData)); router.refresh(); goTo({ caseId: created.id }); }
+      if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...data, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); refresh(); }
+      else { const created = await utApi<{ id: string }>("cases", json("POST", { wbsItemId: wbsItemId === UT_NO_WBS ? null : wbsItemId, ...data })); router.refresh(); goTo({ caseId: created.id }); }
     } catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
     finally { setPending(false); }
   }
 
-  async function requestReview() {
-    if (!scenario) return;
-    setPending(true); setMessage(null);
-    try { await utApi(`scenarios/${scenario.id}/review`, json("POST")); setMessage({ tone: "ok", text: "검토를 요청했습니다." }); refresh(); }
-    catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
-    finally { setPending(false); }
-  }
-
-  const sc = scenario && scenarioId === scenario.id ? scenario : null;
   return <>
     <header className="topbar">
-      <div><h1>테스트 케이스 정보</h1><p>{c ? <><span className="mono">{c.displayId}</span> <span className={`badge ${STATUS_BAND[c.status]}`}>{UT_CASE_STATUS_LABEL[c.status]}</span></> : "신규 케이스"}{scenario && <> · 시나리오 <span className="mono">{scenario.displayId}</span> <span className={`badge ${STATUS_BAND[scenario.status]}`}>{UT_SCENARIO_STATUS_LABEL[scenario.status]}</span></>}</p></div>
+      <div><h1>테스트 케이스 정보</h1><p>{c ? <><span className="mono">{c.displayId}</span> <span className={`badge ${STATUS_BAND[c.status]}`}>{UT_CASE_STATUS_LABEL[c.status]}</span></> : "신규 케이스"}</p></div>
       <div className="topbar-actions">
-        {c && scenario && editor.editable && <button type="button" className="button secondary" onClick={() => goTo({ scenario: scenario.id })}>+ 같은 시나리오에 케이스 추가</button>}
+        {c && editor.wbsItemId && <button type="button" className="button secondary" onClick={() => goTo({ wbs: editor.wbsItemId! })}>+ 같은 WBS에 케이스 추가</button>}
         {modal ? <button type="button" className="button secondary" onClick={modal.close}>닫기</button> : <Link className="button secondary" href={`/mp-ut${editor.wbsItemId ? `?wbs=${editor.wbsItemId}` : ""}`}>목록</Link>}
       </div>
     </header>
     <div className="content ut-edit">
       {message && <p className={`action-message ${message.tone === "ok" ? "ut-ok" : ""}`} role="status">{message.text}</p>}
-      {scenario?.status === "REJECTED" && scenario.rejectReason && <p className="action-message">반려 사유: {scenario.rejectReason}</p>}
-      {readOnly && <p className="ut-hint">작성중·반려 상태의 시나리오만 작성자 또는 PM/PMO가 수정할 수 있습니다.</p>}
+      {c?.status === "REJECTED" && c.rejectReason && <p className="action-message">반려 사유: {c.rejectReason}</p>}
+      {readOnly && <p className="ut-hint">작성중·반려 상태의 케이스만 작성자 또는 PM/PMO가 수정할 수 있습니다.</p>}
       <form className="panel form-panel" onSubmit={save}>
         <fieldset disabled={readOnly || pending} className="ut-fieldset">
           <h2 className="ut-section">식별</h2>
-          <div className="form-grid triple">
+          <div className="form-grid">
             <label>프로젝트 코드<input value={projectCode} readOnly /></label>
-            <label>시나리오 ID<input value={sc?.displayId ?? "저장 시 자동 채번"} readOnly /></label>
             <label>케이스 ID<input value={c?.displayId ?? "저장 시 자동 채번"} readOnly /></label>
           </div>
           {/* 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다(2026-10-21 사용자 요청). */}
-          {scenario ? <label>WBS ID<input value={scenario.wbsDisplayId ? `${scenario.wbsDisplayId} ${scenario.wbsName}` : "WBS 없음"} readOnly /></label>
+          {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>
           : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
           : fixedLeaf ? <label>WBS ID<input value={`${fixedLeaf.displayId} · ${fixedLeaf.code} ${fixedLeaf.name}`} readOnly /></label> : <>
             <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
-            <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); setScenarioId("new"); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
+            <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
               <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
               {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
             </select>
           </>}
-          {!c && wbsItemId && <label>시나리오<select value={scenarioId} onChange={(e) => { const value = e.target.value; setScenarioId(value); goTo(value === "new" ? { wbs: wbsItemId } : { scenario: value }); }}>
-            {editor.wbsScenarios.filter((s) => s.status === "DRAFT" || s.status === "REJECTED").map((s) => <option key={s.id} value={s.id}>{s.displayId} {s.name}</option>)}
-            <option value="new">+ 새 시나리오</option>
-          </select></label>}
 
           <h2 className="ut-section">대상</h2>
+          <label>케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
           <div className="form-grid">
-            <label>시나리오명<input name="scenarioName" required maxLength={200} defaultValue={sc?.name ?? ""} key={`sn-${scenarioId}`} /></label>
-            <label>케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
-          </div>
-          <div className="form-grid">
-            <label>프로그램 ID · 화면 ID(선택)<select name="programId" defaultValue={sc?.programId ?? ""} key={`pg-${scenarioId}`}><option value="">미지정</option>{options.programs.map((p) => <option key={p.id} value={p.id}>{p.programCode} {p.name}{p.screenId ? ` (${p.screenId})` : ""}</option>)}</select></label>
-            <label>요구사항 ID(선택)<select name="requirementId" defaultValue={sc?.requirementId ?? ""} key={`rq-${scenarioId}`}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
+            <label>프로그램 ID · 화면 ID(선택)<select name="programId" defaultValue={c?.programId ?? ""}><option value="">미지정</option>{options.programs.map((p) => <option key={p.id} value={p.id}>{p.programCode} {p.name}{p.screenId ? ` (${p.screenId})` : ""}</option>)}</select></label>
+            <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
           </div>
 
           <h2 className="ut-section">분류</h2>
           <div className="form-grid triple">
             <label>케이스 유형<select name="caseType" defaultValue={c?.caseType ?? "NORMAL"}>{(Object.keys(UT_CASE_TYPE_LABEL) as UtCaseType[]).map((t) => <option key={t} value={t}>{UT_CASE_TYPE_LABEL[t]}</option>)}</select></label>
-            <label>우선순위<select name="priority" defaultValue={c?.priority ?? sc?.priority ?? "M"} key={`pr-${scenarioId}`}><option value="H">H — 결제·주문·권한·저장·정산</option><option value="M">M — 조회·변경</option><option value="L">L — 표시·문구</option></select></label>
-            <label>업무단위<select name="groupId" required defaultValue={sc?.groupId ?? ""} key={`gr-${scenarioId}`}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
+            <label>우선순위<select name="priority" defaultValue={c?.priority ?? "M"}><option value="H">H — 결제·주문·권한·저장·정산</option><option value="M">M — 조회·변경</option><option value="L">L — 표시·문구</option></select></label>
+            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
           </div>
 
           <h2 className="ut-section">내용</h2>
@@ -142,23 +124,22 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
           </div>
           <div className="form-grid">
             <label>QC 확인자<select name="qcUserId" defaultValue={c?.qcUserId ?? ""}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-            <label>PL 확인자<select name="plUserId" defaultValue={sc?.plUserId ?? ""} key={`pl-${scenarioId}`}><option value="">미지정</option>{members.filter((m) => m.id !== userId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+            <label>PL 확인자<select name="plUserId" defaultValue={c?.plUserId ?? ""}><option value="">미지정</option>{members.filter((m) => m.id !== userId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
           </div>
-          <div className="form-actions"><button className="button primary" disabled={pending || (!scenario && !wbsItemId)}>{pending ? "저장 중…" : "저장"}</button></div>
+          <div className="form-actions"><button className="button primary" disabled={pending || (!c && !wbsItemId)}>{pending ? "저장 중…" : "저장"}</button></div>
         </fieldset>
       </form>
 
-      {scenario && <section className="panel">
-        <div className="panel-head"><h2>작성 검토 체크리스트</h2><span>시나리오 {scenario.displayId} · 케이스 {scenario.caseCount}건 · PL 검토 시 수기 확인</span></div>
-        <ul className="ut-checklist">{scenario.checklist.map((i) => <li key={i.key} className={i.ok ? "ok" : "ng"}>{i.ok ? "✔" : "✖"} {i.message}</li>)}</ul>
-        {scenario.missing.length > 0 && <p className="ut-missing">필수 항목 누락: {scenario.missing.map((m) => `${m.displayId}(${m.fields.join(", ")})`).join(" / ")}</p>}
-        {editor.canRequestReview && <div className="form-actions"><button className="button primary" disabled={pending} onClick={requestReview}>검토요청</button></div>}
+      {c && <section className="panel">
+        <div className="panel-head"><h2>작성 검토 체크리스트</h2><span>같은 WBS 케이스 기준 · PL 검토 시 수기 확인</span></div>
+        <ul className="ut-checklist">{editor.checklist.map((i) => <li key={i.key} className={i.ok ? "ok" : "ng"}>{i.ok ? "✔" : "✖"} {i.message}</li>)}</ul>
+        {c.missing.length > 0 && <p className="ut-missing">필수 항목 누락: {c.missing.join(", ")}</p>}
+        {editor.canRequestReview && <div className="form-actions"><button className="button primary" disabled={pending} onClick={() => void act(() => utApi(`cases/${c.id}/review`, json("POST")), "검토를 요청했습니다.")}>검토요청</button></div>}
       </section>}
 
-
-      {editor.canDecideReview && scenario && <section className="panel">
-        <div className="panel-head"><h2>PL 검토</h2><span>시나리오 {scenario.displayId} · 작성자 {editor.writerName}</span></div>
-        <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); const decision = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ?? "APPROVED"; void act(() => utApi(`scenarios/${scenario.id}/decision`, json("POST", { decision, reason: v("reason") })), decision === "APPROVED" ? "승인했습니다." : "반려했습니다."); }}>
+      {editor.canDecideReview && c && <section className="panel">
+        <div className="panel-head"><h2>PL 검토</h2><span>케이스 {c.displayId} · 작성자 {editor.writerName}</span></div>
+        <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); const decision = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ?? "APPROVED"; void act(() => utApi(`cases/${c.id}/decision`, json("POST", { decision, reason: v("reason") })), decision === "APPROVED" ? "승인했습니다." : "반려했습니다."); }}>
           <label>반려 사유(반려 시 필수)<input name="reason" maxLength={1000} /></label>
           <button className="button primary" name="decision" value="APPROVED" disabled={pending}>승인</button>
           <button className="button secondary" name="decision" value="REJECTED" disabled={pending}>반려</button>

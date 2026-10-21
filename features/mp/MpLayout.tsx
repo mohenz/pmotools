@@ -18,7 +18,7 @@ async function missingSetup(projectId: string, feature: Feature) {
   }
   if (feature === "ut") {
     const groups = await prisma.groups.count({ where: { projectId, groupType: "WORK_MODULE", isActive: true } });
-    return groups ? null : "이 프로젝트에 업무그룹이 없어 단위테스트 시나리오를 등록할 수 없습니다. 이 프로젝트로 전환한 뒤 설정 → 그룹 관리에서 업무그룹을 등록해 주세요.";
+    return groups ? null : "이 프로젝트에 업무그룹이 없어 단위테스트 케이스를 등록할 수 없습니다. 이 프로젝트로 전환한 뒤 설정 → 그룹 관리에서 업무그룹을 등록해 주세요.";
   }
   return null;
 }

@@ -5,8 +5,7 @@
 // ---------------------------------------------------------------------------
 
 export type UtCaseType = "NORMAL" | "EXCEPTION" | "BOUNDARY";
-export type UtCaseStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "IN_EXECUTION" | "QC_PENDING" | "PL_PENDING" | "PL_CONFIRMED";
-export type UtScenarioStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "REJECTED";
+export type UtCaseStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "REJECTED" | "IN_EXECUTION" | "QC_PENDING" | "PL_PENDING" | "PL_CONFIRMED";
 export type UtVerdict = "PASS" | "FAIL" | "BLOCKED" | "NA";
 export type UtApprovalStatus = "QC_PENDING" | "PL_PENDING" | "APPROVED" | "REJECTED";
 export type UtApprovalStep = "QC" | "PL";
@@ -15,8 +14,7 @@ export type UtDefectStatus = "REGISTERED" | "FIXED" | "VERIFIED" | "REFIX";
 export type UtVerificationResult = "PASS" | "FAIL";
 
 export const UT_CASE_TYPE_LABEL: Record<UtCaseType, string> = { NORMAL: "정상", EXCEPTION: "예외", BOUNDARY: "경계" };
-export const UT_CASE_STATUS_LABEL: Record<UtCaseStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", IN_EXECUTION: "수행중", QC_PENDING: "Pass(QC대기)", PL_PENDING: "QC확인(PL대기)", PL_CONFIRMED: "PL확인완료" };
-export const UT_SCENARIO_STATUS_LABEL: Record<UtScenarioStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", REJECTED: "반려" };
+export const UT_CASE_STATUS_LABEL: Record<UtCaseStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", REJECTED: "반려", IN_EXECUTION: "수행중", QC_PENDING: "Pass(QC대기)", PL_PENDING: "QC확인(PL대기)", PL_CONFIRMED: "PL확인완료" };
 export const UT_VERDICT_LABEL: Record<UtVerdict, string> = { PASS: "Pass", FAIL: "Fail", BLOCKED: "Blocked", NA: "N/A" };
 export const UT_DEFECT_STATUS_LABEL: Record<UtDefectStatus, string> = { REGISTERED: "등록", FIXED: "조치완료", VERIFIED: "검증완료", REFIX: "재조치" };
 export const UT_VERIFICATION_LABEL: Record<UtVerificationResult, string> = { PASS: "적합", FAIL: "부적합" };
@@ -44,16 +42,11 @@ export class UtRuleError extends Error {
 // 채번(4.7)
 // ---------------------------------------------------------------------------
 
-/** UTS-{WBS displayId에서 "WBS-" 제외}-{순번 2자리} */
-export function scenarioDisplayId(wbsDisplayId: string | null, seq: number) {
-  // WBS 없이 등록하는 테스트(2026-10-21 사용자 확정)는 프로젝트 단위 3자리 순번.
-  if (!wbsDisplayId) return `UTS-NOWBS-${String(seq).padStart(3, "0")}`;
-  return `UTS-${wbsDisplayId.replace(/^WBS-/, "")}-${String(seq).padStart(2, "0")}`;
-}
-
-/** {시나리오 ID}-{순번 3자리} */
-export function caseDisplayId(scenarioDisplayIdValue: string, seq: number) {
-  return `${scenarioDisplayIdValue}-${String(seq).padStart(3, "0")}`;
+/** 케이스 ID — UTC-{WBS displayId에서 "WBS-" 제외}-{순번 3자리}. 시나리오는 두지 않는다(2026-10-21 사용자 확정).
+ *  WBS 없이 등록하는 테스트는 프로젝트 단위 UTC-NOWBS-{순번 4자리}. */
+export function caseDisplayId(wbsDisplayId: string | null, seq: number) {
+  if (!wbsDisplayId) return `UTC-NOWBS-${String(seq).padStart(4, "0")}`;
+  return `UTC-${wbsDisplayId.replace(/^WBS-/, "")}-${String(seq).padStart(3, "0")}`;
 }
 
 /** DF-{yyMMdd}-{순번 4자리}. date는 "YYYY-MM-DD" */
@@ -62,7 +55,7 @@ export function defectDisplayId(date: string, seq: number) {
 }
 
 // ---------------------------------------------------------------------------
-// 케이스 작성 — 필수 필드(입력 검증, 유지)와 PL 검토 체크리스트(수기 확인, 차단하지 않음 — AU-06 보류)
+// 케이스 작성 — 필수 필드(입력 검증, 유지)와 PL 검토 체크리스트(같은 WBS Task의 케이스 묶음 기준, 수기 확인·차단하지 않음 — AU-06 보류)
 // ---------------------------------------------------------------------------
 
 export type UtCaseDraft = {
@@ -140,10 +133,10 @@ export function assertSeparation(input: { executorId?: string | null; qcUserId?:
 }
 
 // ---------------------------------------------------------------------------
-// 시나리오 검토(6장 2~3단계)
+// 케이스 검토(6장 2~3단계) — 시나리오 제거로 케이스 단위(2026-10-21)
 // ---------------------------------------------------------------------------
 
-export function nextScenarioStatus(current: UtScenarioStatus, action: "REQUEST" | "APPROVE" | "REJECT" | "EDIT"): UtScenarioStatus {
+export function nextCaseReviewStatus(current: UtCaseStatus, action: "REQUEST" | "APPROVE" | "REJECT" | "EDIT"): UtCaseStatus {
   switch (action) {
     case "REQUEST":
       if (current === "DRAFT" || current === "REJECTED") return "REVIEW_REQUESTED";
@@ -156,7 +149,7 @@ export function nextScenarioStatus(current: UtScenarioStatus, action: "REQUEST" 
       if (current === "DRAFT" || current === "REJECTED") return current;
       break;
   }
-  throw new UtRuleError("INVALID_TRANSITION", `현재 상태(${UT_SCENARIO_STATUS_LABEL[current]})에서는 처리할 수 없습니다.`);
+  throw new UtRuleError("INVALID_TRANSITION", `현재 상태(${UT_CASE_STATUS_LABEL[current]})에서는 처리할 수 없습니다.`);
 }
 
 // ---------------------------------------------------------------------------

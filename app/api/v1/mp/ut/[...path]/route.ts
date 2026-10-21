@@ -4,9 +4,8 @@ import { mutationErrorResponse } from "@/lib/server/http";
 import { DomainError } from "@/lib/server/errors";
 import type { UtActor } from "@/lib/server/mp/ut/common";
 import {
-  archiveUtScenario, createUtCase, createUtScenario, decideUtScenarioReview, getPlReference, getUtFormOptions, getUtScenarioDetail, listUtReviewInbox,
-  listUtScenarios, listUtWbsLeaves, reassignUtScenarioPl, requestUtScenarioReview, setUtCaseActive, updateUtCase, updateUtScenario,
-} from "@/lib/server/mp/ut/scenarios";
+  createUtCase, decideUtCaseReview, getPlReference, getUtFormOptions, listUtReviewInbox, listUtWbsLeaves, reassignUtCasePl, requestUtCaseReview, setUtCaseActive, updateUtCase,
+} from "@/lib/server/mp/ut/cases";
 import { decideUtApproval, listMyUtExecutionTargets, listUtApprovalInbox, openUtEvidence, registerUtExecution } from "@/lib/server/mp/ut/executions";
 import { fixUtDefect, listUtDefectActions, listUtRunRows, registerUtDefect, updateUtDefect, verifyUtDefect } from "@/lib/server/mp/ut/defects";
 import { cancelUtMilestone, confirmUtDevComplete, declareUtDevComplete, getUtSettings, listUtMilestones, recordUtComplete, saveUtSettings, setUtLock } from "@/lib/server/mp/ut/milestones";
@@ -40,8 +39,6 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const sp = request.nextUrl.searchParams;
     const [a, id, b] = path;
     if (a === "options") return ok({ ...(await getUtFormOptions(actor.projectId)), wbsLeaves: await listUtWbsLeaves(actor.projectId), plReference: await getPlReference(actor.projectId, actor.userId) });
-    if (a === "scenarios" && !id) return ok(await listUtScenarios(projectIds, { q: sp.get("q") ?? undefined, status: sp.get("status") ?? undefined, wbsItemId: sp.get("wbsItemId") ?? undefined, groupId: sp.get("groupId") ?? undefined, mine: sp.get("mine") ?? undefined, userId: actor.userId }));
-    if (a === "scenarios" && id && !b) return ok(await getUtScenarioDetail(projectIds, id, actor));
     if (a === "inbox") {
       const [targets, reviews, qc, pl] = await Promise.all([listMyUtExecutionTargets(projectIds, actor.userId), listUtReviewInbox(projectIds, actor.userId), listUtApprovalInbox(projectIds, actor.userId, "QC"), listUtApprovalInbox(projectIds, actor.userId, "PL")]);
       return ok({ targets, reviews, qc, pl });
@@ -51,7 +48,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       return new NextResponse(new Uint8Array(file.bytes), { headers: { "content-type": file.mimeType, "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`, "cache-control": "private, no-store" } });
     }
     if (a === "runs" && !id) {
-      const rows = await listUtRunRows(projectIds, actor, { q: sp.get("q") ?? undefined, defectOnly: sp.get("defectOnly") === "1" || sp.get("defect") === "any", openOnly: sp.get("openOnly") === "1" || sp.get("defect") === "open", scenarioId: sp.get("scenarioId") ?? undefined });
+      const rows = await listUtRunRows(projectIds, actor, { q: sp.get("q") ?? undefined, defectOnly: sp.get("defectOnly") === "1" || sp.get("defect") === "any", openOnly: sp.get("openOnly") === "1" || sp.get("defect") === "open", caseId: sp.get("caseId") ?? undefined });
       if (sp.get("format") === "xlsx") {
         const buffer = await buildUtRunWorkbook(rows);
         return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_수행결함관리.xlsx")}` } });
@@ -59,10 +56,10 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       return ok(rows);
     }
     if (a === "editor") {
-      // 정보확인/처리 모달용 — 케이스(caseId) 또는 신규(scenario·wbs) 편집 데이터와 선택지
+      // 정보확인/처리 모달용 — 케이스(caseId) 또는 신규(wbs) 편집 데이터와 선택지
       const caseId = sp.get("caseId") || undefined;
       const [editor, options, tree, project] = await Promise.all([
-        getUtCaseEditor(actor.projectId, actor, { caseId, scenarioId: sp.get("scenario") || undefined, wbs: sp.get("wbs") || undefined }),
+        getUtCaseEditor(actor.projectId, actor, { caseId, wbs: sp.get("wbs") || undefined }),
         getUtFormOptions(actor.projectId), caseId ? Promise.resolve([]) : getUtWbsTree(actor.projectId),
         getPrisma().project.findUnique({ where: { id: actor.projectId }, select: { code: true } }),
       ]);
@@ -86,10 +83,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   try {
     const [a, id, b] = (await params).path;
     const actor = await writeActor();
-    if (a === "scenarios" && !id) return ok(await createUtScenario(actor, await body(request)), 201);
-    if (a === "scenarios" && id && b === "cases") return ok(await createUtCase(actor, id, await body(request)), 201);
-    if (a === "scenarios" && id && b === "review") return ok(await requestUtScenarioReview(actor, id));
-    if (a === "scenarios" && id && b === "decision") return ok(await decideUtScenarioReview(actor, id, await body(request)));
+    if (a === "cases" && !id) return ok(await createUtCase(actor, await body(request)), 201);
+    if (a === "cases" && id && b === "review") return ok(await requestUtCaseReview(actor, id));
+    if (a === "cases" && id && b === "decision") return ok(await decideUtCaseReview(actor, id, await body(request)));
     if (a === "cases" && id && b === "executions") {
       const form = await request.formData();
       const files = form.getAll("evidence").filter((f): f is File => typeof f !== "string" && f.size > 0);
@@ -115,7 +111,6 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   try {
     const [a, id] = (await params).path;
     const actor = await writeActor();
-    if (a === "scenarios" && id) return ok(await updateUtScenario(actor, id, await body(request)));
     if (a === "cases" && id) return ok(await updateUtCase(actor, id, await body(request)));
     if (a === "defects" && id) return ok(await updateUtDefect(actor, id, await body(request)));
     throw new DomainError("NOT_FOUND", "요청한 경로가 없습니다.");
@@ -128,20 +123,9 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
   try {
     const [a, id, b] = (await params).path;
     const actor = await writeActor();
-    if (a === "scenarios" && id && b === "pl") return ok(await reassignUtScenarioPl(actor, id, await body(request)));
+    if (a === "cases" && id && b === "pl") return ok(await reassignUtCasePl(actor, id, await body(request)));
     if (a === "cases" && id && b === "active") return ok(await setUtCaseActive(actor, id, Boolean((await body(request)).isActive)));
     if (a === "settings" && !id) return ok(await saveUtSettings(actor, await body(request)));
-    throw new DomainError("NOT_FOUND", "요청한 경로가 없습니다.");
-  } catch (error) {
-    return mutationErrorResponse(error);
-  }
-}
-
-export async function DELETE(_request: NextRequest, { params }: Ctx) {
-  try {
-    const [a, id] = (await params).path;
-    const actor = await writeActor();
-    if (a === "scenarios" && id) return ok(await archiveUtScenario(actor, id));
     throw new DomainError("NOT_FOUND", "요청한 경로가 없습니다.");
   } catch (error) {
     return mutationErrorResponse(error);

@@ -5,9 +5,13 @@
 
 BEGIN;
 
+-- 20261021150000_ut_remove_scenario 이후에는 ut_scenarios가 없다. 시나리오 구조로 되돌리려면 SQL이 아니라
+-- 적용 전 백업(D:\Workspace\logs\db_backups\local_mydb_before_ut_remove_scenario_20261021.dump)으로 복원한다.
+-- 아래 UT 전체 원복은 그대로 사용 가능(DROP ... IF EXISTS).
+
 -- 20261021120000_ut_optional_wbs 원복 — WBS 없는 테스트(wbsItemId NULL)가 있으면 실패하므로 먼저 정리할 것.
 -- (아래에서 UT 테이블 전체를 DROP하는 경우에는 불필요)
--- ALTER TABLE "ut_scenarios" ALTER COLUMN "wbsItemId" SET NOT NULL; -- ut_cases·ut_executions·ut_approvals·ut_defects 동일
+-- ALTER TABLE "ut_cases" ALTER COLUMN "wbsItemId" SET NOT NULL; -- ut_executions·ut_approvals·ut_defects 동일
 
 -- 20261021090000_wbs_unit_test_target 원복(WBS 단위테스트 대상 체크 값)
 ALTER TABLE "wbs_items" DROP COLUMN IF EXISTS "isUnitTestTarget";

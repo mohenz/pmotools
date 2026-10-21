@@ -45,7 +45,7 @@ export function UtWbsTree({ nodes }: { nodes: UtTreeNode[] }) {
         <div className={`ut-tree-row${selected === n.id ? " active" : ""}`} style={{ paddingLeft: depth * 12 }}>
           {kids.length ? <button type="button" className="ut-tree-fold" aria-label={expanded ? "접기" : "펼치기"} onClick={() => setOpen((s) => { const x = new Set(s); if (x.has(n.id)) x.delete(n.id); else x.add(n.id); return x; })}>{expanded ? "▾" : "▸"}</button> : <span className="ut-tree-fold" />}
           <button type="button" className="ut-tree-label" title={`${n.displayId} ${n.code}`} onClick={() => go(n.id)}><span className="mono">{n.code}</span> {n.name}</button>
-          {n.scenarioCount > 0 && <span className="ut-tree-count">{n.caseCount}</span>}
+          {n.caseCount > 0 && <span className="ut-tree-count">{n.caseCount}</span>}
         </div>
         {sub && <ul>{sub}</ul>}
       </li>;

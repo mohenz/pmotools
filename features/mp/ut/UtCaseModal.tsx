@@ -8,14 +8,13 @@ import { UtCaseScreen, type UtCaseNavParams } from "@/screens/mp/ut/UtCaseScreen
 
 type Payload = Parameters<typeof UtCaseScreen>[0];
 
-// 테스트 케이스 정보확인/처리 모달 — 목록 주소의 ?case={id} 또는 ?new=1(&scenario=·&wbs=)로 연다(2026-10-20 사용자 요청).
+// 테스트 케이스 정보확인/처리 모달 — 목록 주소의 ?case={id} 또는 ?new=1(&newWbs=)로 연다(2026-10-20 사용자 요청).
 export function UtCaseModal() {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
   const caseId = search.get("case") ?? undefined;
   const isNew = search.get("new") === "1";
-  const scenario = search.get("scenario") ?? undefined;
   // newWbs — 목록의 "미등록" 행에서 연 신규 등록(목록 트리 필터 wbs와 분리). 없으면 트리에서 선택한 wbs로 미리 채운다.
   const wbs = search.get("newWbs") ?? search.get("wbs") ?? undefined;
   const open = Boolean(caseId || isNew);
@@ -29,18 +28,17 @@ export function UtCaseModal() {
     setError("");
     const params = new URLSearchParams();
     if (caseId) params.set("caseId", caseId);
-    if (!caseId && scenario) params.set("scenario", scenario);
     if (!caseId && wbs) params.set("wbs", wbs);
     try { setData(await utApi(`editor?${params}`)); } catch (e) { setError((e as Error).message); }
-  }, [open, caseId, scenario, wbs]);
+  }, [open, caseId, wbs]);
 
   useEffect(() => { setData(null); void load(); }, [load]);
 
   const replaceParams = (next: UtCaseNavParams | null) => {
     const params = new URLSearchParams(search.toString());
-    ["case", "new", "scenario", "newWbs"].forEach((k) => params.delete(k));
+    ["case", "new", "newWbs"].forEach((k) => params.delete(k));
     if (next?.caseId) params.set("case", next.caseId);
-    else if (next) { params.set("new", "1"); if (next.scenario) params.set("scenario", next.scenario); if (next.wbs) params.set("newWbs", next.wbs); }
+    else if (next) { params.set("new", "1"); if (next.wbs) params.set("newWbs", next.wbs); }
     router.replace(`${pathname}${params.toString() ? `?${params}` : ""}`, { scroll: false });
   };
 
@@ -65,7 +63,7 @@ export function UtCaseModal() {
     <div className="modal-card ut-case-modal">
       {error ? <><p className="action-message">{error}</p><div className="modal-actions"><button className="button secondary" onClick={() => replaceParams(null)}>닫기</button></div></>
         : !data ? <p className="ut-hint">불러오는 중…</p>
-        : <UtCaseScreen key={`${caseId ?? ""}|${scenario ?? ""}|${wbs ?? ""}`} {...data} modal={{ close: () => replaceParams(null), reload: () => void load(), open: (p) => replaceParams(p) }} />}
+        : <UtCaseScreen key={`${caseId ?? ""}|${wbs ?? ""}`} {...data} modal={{ close: () => replaceParams(null), reload: () => void load(), open: (p) => replaceParams(p) }} />}
     </div>
   </div>, document.body);
 }

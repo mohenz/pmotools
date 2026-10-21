@@ -1,7 +1,7 @@
 import { getMpScope } from "@/lib/server/mp/context";
 import { getPrisma } from "@/lib/server/db-pg";
 import { getUtCaseEditor } from "@/lib/server/mp/ut/grid";
-import { getUtFormOptions } from "@/lib/server/mp/ut/scenarios";
+import { getUtFormOptions } from "@/lib/server/mp/ut/cases";
 import { UtCaseScreen } from "@/screens/mp/ut/UtCaseScreen";
 
 export const dynamic = "force-dynamic";

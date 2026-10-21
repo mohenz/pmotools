@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { assertDevConfirm, utCompletionConditions } from "@/lib/domain/ut";
-import { listUtWbsLeaves } from "@/lib/server/mp/ut/scenarios";
+import { listUtWbsLeaves } from "@/lib/server/mp/ut/cases";
 import { listWbsItems } from "@/lib/server/mp/wbs";
 import { assertNotLocked, assertUtManager, dateOnly, isUtManager, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
 
@@ -13,16 +13,16 @@ import { assertNotLocked, assertUtManager, dateOnly, isUtManager, rule, toDate, 
 
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-/** 이정표 목록 + UT완료 조건 현황 + WBS 진척 대조(담당자 입력값). 시나리오가 있는 Leaf WBS만. */
+/** 이정표 목록 + UT완료 조건 현황 + WBS 진척 대조(담당자 입력값). 케이스가 있는 대상 Leaf WBS만. */
 export async function listUtMilestones(projectId: string, viewer: UtActor) {
   const prisma = getPrisma();
-  const scenarios = await prisma.utScenario.findMany({
-    where: { projectId, archivedAt: null },
-    select: { wbsItemId: true, plUserId: true, cases: { select: { isActive: true, status: true, executorId: true, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { verdict: true, approvalStatus: true, _count: { select: { evidences: true } } } }, defects: { select: { status: true, severity: true } } } } },
-  });
-  const byWbs = new Map<string, typeof scenarios>();
   // WBS 없이 등록한 테스트는 WBS 마일스톤 집계 대상이 아니다.
-  for (const s of scenarios) if (s.wbsItemId) byWbs.set(s.wbsItemId, [...(byWbs.get(s.wbsItemId) ?? []), s]);
+  const allCases = await prisma.utCase.findMany({
+    where: { projectId, wbsItemId: { not: null } },
+    select: { wbsItemId: true, plUserId: true, isActive: true, status: true, executorId: true, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { verdict: true, approvalStatus: true, _count: { select: { evidences: true } } } }, defects: { select: { status: true, severity: true } } },
+  });
+  const byWbs = new Map<string, typeof allCases>();
+  for (const c of allCases) byWbs.set(c.wbsItemId!, [...(byWbs.get(c.wbsItemId!) ?? []), c]);
   const [leaves, items, milestones] = await Promise.all([
     listUtWbsLeaves(projectId),
     listWbsItems(projectId),
@@ -32,14 +32,13 @@ export async function listUtMilestones(projectId: string, viewer: UtActor) {
   const msById = new Map(milestones.map((m) => [m.wbsItemId, m]));
   const manager = isUtManager(viewer);
   return leaves.filter((w) => byWbs.has(w.id)).map((w) => {
-    const list = byWbs.get(w.id)!;
-    const cases = list.flatMap((s) => s.cases);
+    const cases = byWbs.get(w.id)!;
     const cond = utCompletionConditions(
       cases.map((c) => ({ isActive: c.isActive, status: c.status, latest: c.executions[0] ? { verdict: c.executions[0].verdict, approvalStatus: c.executions[0].approvalStatus, evidenceCount: c.executions[0]._count.evidences } : null })),
       cases.flatMap((c) => c.defects),
     );
     const ms = msById.get(w.id);
-    const plIds = new Set(list.map((s) => s.plUserId).filter((id): id is string => !!id));
+    const plIds = new Set(cases.filter((c) => c.isActive).map((c) => c.plUserId).filter((id): id is string => !!id));
     const executors = new Set(cases.map((c) => c.executorId).filter((id): id is string => !!id));
     const item = itemById.get(w.id);
     return {
@@ -63,22 +62,21 @@ export async function listUtMilestones(projectId: string, viewer: UtActor) {
 async function loadWbsContext(actor: UtActor, wbsItemId: string) {
   await assertNotLocked(actor.projectId);
   const prisma = getPrisma();
-  const scenarios = await prisma.utScenario.findMany({ where: { projectId: actor.projectId, wbsItemId, archivedAt: null }, select: { plUserId: true, cases: { select: { status: true, executorId: true, isActive: true } } } });
-  if (!scenarios.length) throw new DomainError("NOT_FOUND", "단위테스트 시나리오가 있는 WBS만 이정표를 기록할 수 있습니다.");
+  const cases = (await prisma.utCase.findMany({ where: { projectId: actor.projectId, wbsItemId }, select: { plUserId: true, status: true, executorId: true, isActive: true } })).filter((c) => c.isActive);
+  if (!cases.length) throw new DomainError("NOT_FOUND", "단위테스트 케이스가 있는 WBS만 이정표를 기록할 수 있습니다.");
   const wbs = await prisma.wbsItem.findUnique({ where: { id: wbsItemId }, select: { projectId: true, ownerUserId: true } });
   if (!wbs || wbs.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "WBS를 찾을 수 없습니다.");
   const ms = await prisma.utWbsMilestone.findUnique({ where: { wbsItemId } });
-  return { scenarios, wbs, ms };
+  return { cases, wbs, ms };
 }
 
 /** 개발완료 선언(개발자) — 전제: PL 승인된 케이스 1건 이상(케이스 사후 작성 방지). */
 export async function declareUtDevComplete(actor: UtActor, wbsItemId: string, input: unknown) {
   const { devCompletedOn } = z.object({ devCompletedOn: ymd }).parse(input);
-  const { scenarios, wbs, ms } = await loadWbsContext(actor, wbsItemId);
-  const cases = scenarios.flatMap((s) => s.cases).filter((c) => c.isActive);
+  const { cases, wbs, ms } = await loadWbsContext(actor, wbsItemId);
   const isOwner = wbs.ownerUserId === actor.userId || cases.some((c) => c.executorId === actor.userId);
   if (!isOwner && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "WBS 담당자 또는 케이스 수행 담당자만 개발완료를 선언할 수 있습니다.");
-  if (!cases.some((c) => c.status !== "DRAFT" && c.status !== "REVIEW_REQUESTED")) throw new DomainError("INVALID_STATE", "PL 승인된 케이스가 1건 이상 있어야 개발완료를 선언할 수 있습니다.");
+  if (!cases.some((c) => !["DRAFT", "REVIEW_REQUESTED", "REJECTED"].includes(c.status))) throw new DomainError("INVALID_STATE", "PL 승인된 케이스가 1건 이상 있어야 개발완료를 선언할 수 있습니다.");
   if (ms?.devCompletedOn) throw new DomainError("INVALID_STATE", "이미 개발완료가 선언되었습니다.");
   await getPrisma().utWbsMilestone.upsert({
     where: { wbsItemId },
@@ -92,9 +90,9 @@ export async function declareUtDevComplete(actor: UtActor, wbsItemId: string, in
 /** 개발완료 확인(PL) — 승인 또는 반려(사유 필수, 선언 취소). 선언자 ≠ 확인자. */
 export async function confirmUtDevComplete(actor: UtActor, wbsItemId: string, input: unknown) {
   const data = z.object({ decision: z.enum(["APPROVED", "REJECTED"]), reason: z.string().max(1000).default(""), version: z.number().int().positive() }).parse(input);
-  const { scenarios, ms } = await loadWbsContext(actor, wbsItemId);
-  const isPl = scenarios.some((s) => s.plUserId === actor.userId);
-  if (!isPl && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "이 WBS 시나리오의 PL 또는 PM/PMO만 확인할 수 있습니다.");
+  const { cases, ms } = await loadWbsContext(actor, wbsItemId);
+  const isPl = cases.some((c) => c.plUserId === actor.userId);
+  if (!isPl && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "이 WBS 케이스의 PL 또는 PM/PMO만 확인할 수 있습니다.");
   if (!ms?.devCompletedOn || ms.devConfirmedBy) throw new DomainError("INVALID_STATE", "확인 대기 중인 개발완료 선언이 없습니다.");
   await rule(() => assertDevConfirm({ declaredBy: ms.devDeclaredBy, confirmerId: actor.userId }));
   if (data.decision === "REJECTED" && !data.reason.trim()) throw new DomainError("INVALID_STATE", "반려 사유를 입력해 주세요.");
@@ -110,9 +108,9 @@ export async function confirmUtDevComplete(actor: UtActor, wbsItemId: string, in
 /** UT완료 기록(PL) — 4개 조건 현황은 화면에서 확인. 1단계는 조건 미충족이어도 차단하지 않는다(AU-04 보류). */
 export async function recordUtComplete(actor: UtActor, wbsItemId: string, input: unknown) {
   const { utCompletedOn, note } = z.object({ utCompletedOn: ymd, note: z.string().max(1000).default("") }).parse(input);
-  const { scenarios, ms } = await loadWbsContext(actor, wbsItemId);
-  const isPl = scenarios.some((s) => s.plUserId === actor.userId);
-  if (!isPl && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "이 WBS 시나리오의 PL 또는 PM/PMO만 UT완료를 기록할 수 있습니다.");
+  const { cases, ms } = await loadWbsContext(actor, wbsItemId);
+  const isPl = cases.some((c) => c.plUserId === actor.userId);
+  if (!isPl && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "이 WBS 케이스의 PL 또는 PM/PMO만 UT완료를 기록할 수 있습니다.");
   if (ms?.utCompletedOn) throw new DomainError("INVALID_STATE", "이미 UT완료가 기록되었습니다.");
   await getPrisma().utWbsMilestone.upsert({
     where: { wbsItemId },

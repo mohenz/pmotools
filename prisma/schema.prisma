@@ -102,10 +102,8 @@ model User {
   importBatches                 ImportBatch[]                 @relation("ImportBatchUploader")
   utLockedProjects              UtProjectSetting[]            @relation("UtProjectLocker")
   utCreatedPrograms             UtProgram[]                   @relation("UtProgramCreator")
-  utWrittenScenarios            UtScenario[]                  @relation("UtScenarioWriter")
-  utPlScenarios                 UtScenario[]                  @relation("UtScenarioPl")
-  utApprovedScenarios           UtScenario[]                  @relation("UtScenarioApprover")
-  utCreatedScenarios            UtScenario[]                  @relation("UtScenarioCreator")
+  utPlCases                     UtCase[]                      @relation("UtCasePl")
+  utApprovedCases               UtCase[]                      @relation("UtCaseApprover")
   utExecutorCases               UtCase[]                      @relation("UtCaseExecutor")
   utQcCases                     UtCase[]                      @relation("UtCaseQc")
   utCreatedCases                UtCase[]                      @relation("UtCaseCreator")
@@ -241,7 +239,7 @@ model Project {
   meetingMinuteSequence     MeetingMinuteSequence?
   utSetting                 UtProjectSetting?
   utPrograms                UtProgram[]
-  utScenarios               UtScenario[]
+  utCases                   UtCase[]
 
   @@index([parentId])
   importBatches ImportBatch[]
@@ -309,7 +307,7 @@ model Groups {
   workLogs        WorkLog[]
   actionItems     ActionItem[]
   utPrograms       UtProgram[]  @relation("UtProgramGroup")
-  utScenarios      UtScenario[] @relation("UtScenarioGroup")
+  utCases          UtCase[]     @relation("UtCaseGroup")
   utCauseDefects   UtDefect[]   @relation("UtDefectCauseGroup")
   utVendorDefects  UtDefect[]   @relation("UtDefectVendorGroup")
 
@@ -623,7 +621,7 @@ model Requirement {
   category CommonCode?         @relation("RequirementCategory", fields: [categoryCodeId], references: [id])
   events   RequirementEvent[]
   changes  RequirementChange[]
-  utScenarios UtScenario[]
+  utCases  UtCase[]
 
   @@unique([projectId, requirementId])
   @@index([projectId, archivedAt])
@@ -1489,7 +1487,7 @@ model WbsItem {
   delayedTasks WbsDelayedTask[]
   actionItems  ActionItem[]
   utProgramMaps  UtWbsProgramMap[]
-  utScenarios    UtScenario[]
+  utCases        UtCase[]
   utMilestone    UtWbsMilestone?
   utMigrationsFrom UtWbsMigration[] @relation("UtMigrationFrom")
   utMigrationsTo   UtWbsMigration[] @relation("UtMigrationTo")
@@ -1841,17 +1839,11 @@ enum UtCaseType {
   BOUNDARY  // 경계
 }
 
-enum UtScenarioStatus {
-  DRAFT            // 작성중
-  REVIEW_REQUESTED // 검토요청
-  APPROVED         // 승인
-  REJECTED         // 반려
-}
-
 enum UtCaseStatus {
   DRAFT            // 작성중
   REVIEW_REQUESTED // 검토요청
   APPROVED         // 승인
+  REJECTED         // 반려(PL 검토) — 시나리오 제거로 케이스 단위 검토(2026-10-21)
   IN_EXECUTION     // 수행중(최초 수행 등록 또는 Fail·반려 후 재수행 대기)
   QC_PENDING       // Pass(QC대기)
   PL_PENDING       // QC확인(PL대기)
@@ -1955,7 +1947,7 @@ model UtProgram {
   group     Groups?           @relation("UtProgramGroup", fields: [groupId], references: [id], onDelete: SetNull)
   creator   User              @relation("UtProgramCreator", fields: [createdBy], references: [id])
   wbsMaps   UtWbsProgramMap[]
-  scenarios UtScenario[]
+  cases     UtCase[]
 
   @@unique([projectId, programCode])
   @@map("ut_programs")
@@ -1973,57 +1965,21 @@ model UtWbsProgramMap {
   @@map("ut_wbs_program_maps")
 }
 
-model UtScenario {
-  id                String           @id @default(uuid())
+// 테스트 케이스 — 시나리오 없이 WBS Task(또는 WBS 없음)에 바로 속한다(2026-10-21 사용자 확정: 단위테스트 단계에는 시나리오 불필요).
+model UtCase {
+  id                String       @id @default(uuid())
   projectId         String
-  wbsItemId         String? // WBS 없이 등록하는 테스트는 null(2026-10-21 사용자 확정)
-  displayId         String // UTS-{WBS displayId에서 "WBS-" 제외}-{순번 2자리}, WBS 없음은 UTS-NOWBS-{순번 3자리}
+  wbsItemId         String? // WBS 없이 등록한 테스트는 null(2026-10-21). 이관 처리에서만 변경
+  displayId         String // UTC-{WBS displayId에서 "WBS-" 제외}-{순번 3자리}, WBS 없음은 UTC-NOWBS-{순번 4자리}
   seq               Int
   groupId           String // 업무단위 = Groups(WORK_MODULE), 수기 선택(4.4)
   programId         String?
   requirementId     String?
-  name              String
-  priority          UtPriority       @default(M)
-  writerId          String
-  plUserId          String? // PL 수기 지정(4.4)
-  status            UtScenarioStatus @default(DRAFT)
+  plUserId          String? // PL 확인자 수기 지정(4.4)
   reviewRequestedAt DateTime?
   approvedAt        DateTime?
   approvedBy        String?
-  rejectReason      String           @default("")
-  createdBy         String
-  updatedBy         String?
-  version           Int              @default(1)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  archivedAt        DateTime?
-
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wbsItem     WbsItem?        @relation(fields: [wbsItemId], references: [id], onDelete: Restrict)
-  group       Groups          @relation("UtScenarioGroup", fields: [groupId], references: [id], onDelete: Restrict)
-  program     UtProgram?      @relation(fields: [programId], references: [id], onDelete: SetNull)
-  requirement Requirement?    @relation(fields: [requirementId], references: [id], onDelete: SetNull)
-  writer      User            @relation("UtScenarioWriter", fields: [writerId], references: [id])
-  pl          User?           @relation("UtScenarioPl", fields: [plUserId], references: [id])
-  approver    User?           @relation("UtScenarioApprover", fields: [approvedBy], references: [id])
-  creator     User            @relation("UtScenarioCreator", fields: [createdBy], references: [id])
-  cases       UtCase[]
-  migrations  UtWbsMigration[]
-
-  @@unique([projectId, displayId])
-  @@index([projectId, archivedAt, status])
-  @@index([wbsItemId])
-  @@index([plUserId, status])
-  @@map("ut_scenarios")
-}
-
-model UtCase {
-  id             String       @id @default(uuid())
-  projectId      String // 시나리오 값 복사
-  scenarioId     String
-  wbsItemId      String? // 시나리오 값 복사(이관 처리에서만 변경) — WBS 없이 등록한 테스트는 null(2026-10-21)
-  displayId      String // {시나리오 ID}-{순번 3자리}
-  seq            Int
+  rejectReason      String       @default("")
   caseType       UtCaseType
   name           String // 테스트 대상(검증 규칙 1개)
   precondition   String       @default("")
@@ -2042,7 +1998,14 @@ model UtCase {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  scenario   UtScenario    @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsItem     WbsItem?         @relation(fields: [wbsItemId], references: [id], onDelete: Restrict)
+  group       Groups           @relation("UtCaseGroup", fields: [groupId], references: [id], onDelete: Restrict)
+  program     UtProgram?       @relation(fields: [programId], references: [id], onDelete: SetNull)
+  requirement Requirement?     @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  pl          User?            @relation("UtCasePl", fields: [plUserId], references: [id])
+  approver    User?            @relation("UtCaseApprover", fields: [approvedBy], references: [id])
+  migrations  UtWbsMigration[]
   executor   User?         @relation("UtCaseExecutor", fields: [executorId], references: [id])
   qc         User?         @relation("UtCaseQc", fields: [qcUserId], references: [id])
   creator    User          @relation("UtCaseCreator", fields: [createdBy], references: [id])
@@ -2050,8 +2013,9 @@ model UtCase {
   defects    UtDefect[]
 
   @@unique([projectId, displayId])
-  @@index([scenarioId])
+  @@index([projectId, isActive, status])
   @@index([wbsItemId])
+  @@index([plUserId, status])
   @@index([executorId, status])
   @@index([qcUserId, status])
   @@map("ut_cases")
@@ -2230,14 +2194,14 @@ model UtWbsMilestone {
 model UtWbsMigration {
   id            String          @id @default(uuid())
   projectId     String
-  scenarioId    String
+  caseId        String
   fromWbsItemId String
   toWbsItemId   String
   changeType    UtWbsChangeType
   migratedBy    String
   migratedAt    DateTime        @default(now())
 
-  scenario UtScenario @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+  case     UtCase     @relation(fields: [caseId], references: [id], onDelete: Restrict)
   fromWbs  WbsItem    @relation("UtMigrationFrom", fields: [fromWbsItemId], references: [id], onDelete: Restrict)
   toWbs    WbsItem    @relation("UtMigrationTo", fields: [toWbsItemId], references: [id], onDelete: Restrict)
   migrator User       @relation("UtMigrationMigrator", fields: [migratedBy], references: [id])
@@ -2247,7 +2211,7 @@ model UtWbsMigration {
 }
 
 model UtSequence {
-  scope String @id // scenario:{wbsItemId} · case:{scenarioId} · defect:{projectId}:{yyMMdd}
+  scope String @id // case:{wbsItemId} · case:nowbs:{projectId} · defect:{projectId}:{yyMMdd}
   value Int    @default(0)
 
   @@map("ut_sequences")

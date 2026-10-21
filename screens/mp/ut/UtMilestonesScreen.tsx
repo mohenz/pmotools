@@ -24,7 +24,7 @@ export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: R
   const ask = (label: string, fallback = "") => window.prompt(label, fallback);
 
   return <>
-    <header className="topbar"><div><h1>WBS 이정표 기록</h1><p>UT-013 · 개발완료·UT완료 수기 기록 · 시나리오가 있는 Leaf WBS {rows.length}건{mismatches ? ` · 진척 불일치 ${mismatches}건` : ""}</p></div></header>
+    <header className="topbar"><div><h1>WBS 이정표 기록</h1><p>UT-013 · 개발완료·UT완료 수기 기록 · 케이스가 있는 Leaf WBS {rows.length}건{mismatches ? ` · 진척 불일치 ${mismatches}건` : ""}</p></div></header>
     <div className="content ut-split">
       <UtWbsTree nodes={tree} />
       <div className="ut-main">
@@ -57,7 +57,7 @@ export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: R
               </tr>;
             })}</tbody>
           </table>
-          {!rows.length && <p className="empty">시나리오가 등록된 WBS가 없습니다.</p>}
+          {!rows.length && <p className="empty">케이스가 등록된 WBS가 없습니다.</p>}
         </div>
       </section>
       </div>

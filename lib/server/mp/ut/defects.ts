@@ -41,10 +41,10 @@ export async function registerUtDefect(actor: UtActor, executionId: string, inpu
   const data = defectSchema.parse(input);
   await assertNotLocked(actor.projectId);
   const prisma = getPrisma();
-  const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: { include: { scenario: { select: { plUserId: true } } } } } });
+  const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: true } });
   if (!e || e.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "수행 결과를 찾을 수 없습니다.");
   if (e.verdict !== "FAIL") throw new DomainError("INVALID_STATE", "Fail 판정 결과에만 결함을 등록할 수 있습니다.");
-  const allowed = [e.executorId, e.case.qcUserId, e.case.scenario.plUserId].includes(actor.userId) || isUtManager(actor);
+  const allowed = [e.executorId, e.case.qcUserId, e.case.plUserId].includes(actor.userId) || isUtManager(actor);
   if (!allowed) throw new DomainError("FORBIDDEN", "수행자·QC·PL 또는 PM/PMO만 결함을 등록할 수 있습니다.");
   await assertDefectRefs(actor.projectId, data);
   const foundAt = dateOnly(e.executedOn) ?? koreaToday();
@@ -59,10 +59,10 @@ export async function registerUtDefect(actor: UtActor, executionId: string, inpu
 export async function updateUtDefect(actor: UtActor, defectId: string, input: unknown) {
   const data = defectSchema.extend({ version: z.number().int().positive() }).parse(input);
   await assertNotLocked(actor.projectId);
-  const d = await getPrisma().utDefect.findUnique({ where: { id: defectId }, include: { case: { include: { scenario: { select: { plUserId: true } } } } } });
+  const d = await getPrisma().utDefect.findUnique({ where: { id: defectId }, include: { case: true } });
   if (!d || d.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "결함을 찾을 수 없습니다.");
   if (d.status === "VERIFIED") throw new DomainError("INVALID_STATE", "검증완료된 결함은 수정할 수 없습니다.");
-  const allowed = [d.createdBy, d.case.scenario.plUserId].includes(actor.userId) || isUtManager(actor);
+  const allowed = [d.createdBy, d.case.plUserId].includes(actor.userId) || isUtManager(actor);
   if (!allowed) throw new DomainError("FORBIDDEN", "등록자·PL 또는 PM/PMO만 수정할 수 있습니다.");
   await assertDefectRefs(actor.projectId, data);
   const { version, ...rest } = data;
@@ -117,23 +117,23 @@ export async function verifyUtDefect(actor: UtActor, defectId: string, input: un
 
 export type UtRunRow = {
   executionId: string; wbsItemId: string | null; defectId: string | null; defectDisplayId: string | null; defectStatus: string | null; severity: string | null; version: number | null;
-  scenarioId: string; verdict: string; roundNo: number; canFix: boolean; canVerify: boolean;
+  verdict: string; roundNo: number; canFix: boolean; canVerify: boolean;
   /** 13개 열 */ unit: string; caseDisplayId: string; caseName: string; steps: string; description: string; executorName: string; executedOn: string | null; screenId: string;
   fixedAt: string | null; fixerName: string | null; verificationResult: string | null; verifiedAt: string | null; verifierName: string | null;
 };
 
-export async function listUtRunRows(projectIds: string[], viewer: UtActor, filters: { q?: string; defectOnly?: boolean; openOnly?: boolean; scenarioId?: string } = {}) {
+export async function listUtRunRows(projectIds: string[], viewer: UtActor, filters: { q?: string; defectOnly?: boolean; openOnly?: boolean; caseId?: string } = {}) {
   const q = filters.q?.trim();
   const executions = await getPrisma().utExecution.findMany({
     where: {
       projectId: { in: projectIds },
-      ...(filters.scenarioId ? { case: { scenarioId: filters.scenarioId } } : {}),
+      ...(filters.caseId ? { caseId: filters.caseId } : {}),
       ...(filters.defectOnly || filters.openOnly ? { defects: { some: filters.openOnly ? { status: { not: "VERIFIED" } } : {} } } : {}),
       ...(q ? { OR: [{ case: { displayId: { contains: q, mode: "insensitive" } } }, { case: { name: { contains: q, mode: "insensitive" } } }, { defects: { some: { description: { contains: q, mode: "insensitive" } } } }] } : {}),
     },
     include: {
       executor: { select: { name: true } },
-      case: { select: { displayId: true, name: true, steps: true, executorId: true, qcUserId: true, scenario: { select: { id: true, group: { select: { label: true } }, program: { select: { screenId: true } } } } } },
+      case: { select: { displayId: true, name: true, steps: true, executorId: true, qcUserId: true, group: { select: { label: true } }, program: { select: { screenId: true } } } },
       defects: { orderBy: { displayId: "asc" }, include: { fixer: { select: { name: true } }, verifier: { select: { name: true } } } },
     },
     orderBy: [{ case: { displayId: "asc" } }, { roundNo: "asc" }],
@@ -143,9 +143,9 @@ export async function listUtRunRows(projectIds: string[], viewer: UtActor, filte
   const rows: UtRunRow[] = [];
   for (const e of executions) {
     const base = {
-      executionId: e.id, wbsItemId: e.wbsItemId, scenarioId: e.case.scenario.id, verdict: e.verdict, roundNo: e.roundNo,
-      unit: e.case.scenario.group.label, caseDisplayId: e.case.displayId, caseName: e.case.name, steps: e.case.steps,
-      executorName: e.executor.name, executedOn: dateOnly(e.executedOn), screenId: e.case.scenario.program?.screenId ?? "",
+      executionId: e.id, wbsItemId: e.wbsItemId, verdict: e.verdict, roundNo: e.roundNo,
+      unit: e.case.group.label, caseDisplayId: e.case.displayId, caseName: e.case.name, steps: e.case.steps,
+      executorName: e.executor.name, executedOn: dateOnly(e.executedOn), screenId: e.case.program?.screenId ?? "",
     };
     const defects = filters.openOnly ? e.defects.filter((d) => d.status !== "VERIFIED") : e.defects;
     if (!defects.length) {
