@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { utApi } from "@/features/mp/ut/client";
 import { UtCaseScreen, type UtCaseNavParams } from "@/screens/mp/ut/UtCaseScreen";
 
@@ -10,7 +10,6 @@ type Payload = Parameters<typeof UtCaseScreen>[0];
 
 // 테스트 케이스 정보확인/처리 모달 — 목록 주소의 ?case={id} 또는 ?new=1(&newWbs=)로 연다(2026-10-20 사용자 요청).
 export function UtCaseModal() {
-  const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
   const caseId = search.get("case") ?? undefined;
@@ -39,7 +38,8 @@ export function UtCaseModal() {
     ["case", "new", "newWbs"].forEach((k) => params.delete(k));
     if (next?.caseId) params.set("case", next.caseId);
     else if (next) { params.set("new", "1"); if (next.wbs) params.set("newWbs", next.wbs); }
-    router.replace(`${pathname}${params.toString() ? `?${params}` : ""}`, { scroll: false });
+    // 서버 재렌더링 없이 주소만 바꾼다(2026-10-21 로딩속도 개선) — 목록 갱신이 필요한 저장 후에는 화면 쪽에서 router.refresh()를 부른다.
+    window.history.replaceState(null, "", `${pathname}${params.toString() ? `?${params}` : ""}`);
   };
 
   useEffect(() => {

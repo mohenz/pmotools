@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
 import type { UtSheetRow, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import { STATUS_BAND, dot } from "@/features/mp/ut/format";
 import { UtPagination, type UtPageSize } from "@/features/mp/ut/UtPagination";
 import { UtWbsTree } from "@/features/mp/ut/UtWbsTree";
 import { UtCaseModal } from "@/features/mp/ut/UtCaseModal";
+import { UtModalLink } from "@/features/mp/ut/UtModalLink";
 
 export const UT_TODO_LABEL: Record<string, string> = { review: "검토 대기", execute: "수행 대상", qc: "QC 확인 대기", pl: "PL 확인 대기", defect: "결함 조치·검증 대기", draft: "작성중" };
 
@@ -27,7 +27,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
           <select name="verdict" defaultValue={filters.verdict ?? ""} aria-label="테스트 결과"><option value="">전체 결과</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BLOCKED">BLOCKED</option><option value="NA">N/A</option><option value="NONE">미수행</option></select>
           <select name="todo" defaultValue={filters.todo ?? ""} aria-label="처리 대기"><option value="">전체 케이스</option><option value="any">내 처리 대기 전체</option>{Object.entries(UT_TODO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <button className="button secondary" type="submit">조회</button>
-          {canCreate && <Link className="button primary filter-primary-action" href={keep({ new: "1" })} scroll={false}>+ 신규 등록</Link>}
+          {canCreate && <UtModalLink className="button primary filter-primary-action" href={keep({ new: "1" })}>+ 신규 등록</UtModalLink>}
         </form>
         <section className="panel compact">
           {rows.length ? <div className="table-wrap wbs-table-wrap"><table className="ut-table ut-sheet">
@@ -39,10 +39,10 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
               <td>{r.unit}</td>
               <td className="mono" title={r.wbsName}>{r.wbsDisplayId || "WBS 없음"}</td>
               {r.caseId ? <>
-                <td className="mono"><Link className="table-link" href={keep({ case: r.caseId })} scroll={false}>{r.caseDisplayId}</Link>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
-                <td className="title-cell"><Link className="table-link" href={keep({ case: r.caseId })} scroll={false}>{r.caseName}</Link></td>
+                <td className="mono"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseDisplayId}</UtModalLink>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
+                <td className="title-cell"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseName}</UtModalLink></td>
               </> : <>
-                <td>{canCreate ? <Link className="table-link" href={keep({ new: "1", ...(r.wbsItemId ? { newWbs: r.wbsItemId } : {}) })} scroll={false}>+ 케이스 등록</Link> : "–"}</td>
+                <td>{canCreate ? <UtModalLink className="table-link" href={keep({ new: "1", ...(r.wbsItemId ? { newWbs: r.wbsItemId } : {}) })}>+ 케이스 등록</UtModalLink> : "–"}</td>
                 <td className="title-cell ut-hint">{r.wbsName} · 케이스 미등록</td>
               </>}
               <td className="ut-pre">{r.precondition}</td>
