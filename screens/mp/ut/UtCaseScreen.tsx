@@ -55,7 +55,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
     const f = new FormData(event.currentTarget);
     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
     const data = {
-      displayId: v("displayId"), caseTypeCodeId: c?.caseTypeCodeId ?? null, groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
+      displayId: v("displayId"), caseTypeCodeId: v("caseTypeCodeId"), groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
       name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
       executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
     };
@@ -102,9 +102,11 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
           </div>
 
-          {/* 화면 노출 순서(2026-10-21 사용자 확정): 테스트케이스명 → 사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자 → 테스트예정일 → QC확인자 → PL확인자 */}
+          {/* 화면 노출 순서(2026-10-21 사용자 확정): 테스트케이스명 → 케이스유형 → 사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자 → 테스트예정일 → QC확인자 → PL확인자 */}
           <h2 className="ut-section">테스트 케이스</h2>
           <label>테스트케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
+          {/* 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21 사용자 확정) */}
+          <label>케이스유형<select name="caseTypeCodeId" required defaultValue={c?.caseTypeCodeId ?? ""}><option value="" disabled>선택</option>{options.codes.caseTypes.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
           <label>사전조건<textarea name="precondition" rows={4} maxLength={2000} defaultValue={c?.precondition ?? ""} /></label>
           <label>입력데이터<textarea name="inputData" rows={4} maxLength={2000} defaultValue={c?.inputData ?? ""} /></label>
           <label>테스트스텝<textarea name="steps" rows={4} maxLength={4000} defaultValue={c?.steps ?? ""} placeholder={"1. …\n2. …"} /></label>

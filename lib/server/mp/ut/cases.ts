@@ -22,7 +22,7 @@ const caseFields = {
   programId: optionalId,
   requirementId: optionalId,
   plUserId: optionalId,
-  caseTypeCodeId: optionalId, // 케이스유형 — 공통코드 ut_case_type(화면·기능·API)
+  caseTypeCodeId: z.string({ error: "케이스유형을 선택해 주세요." }).uuid("케이스유형을 선택해 주세요."), // 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21)
   name: z.string().trim().min(1).max(200),
   precondition: z.string().max(2000).default(""),
   steps: z.string().max(4000).default(""),
@@ -70,9 +70,9 @@ export async function getPlReference(projectId: string, writerId: string) {
 // 등록·수정·비활성
 // ---------------------------------------------------------------------------
 
-async function assertCaseRefs(projectId: string, data: { groupId: string; caseTypeCodeId: string | null; plUserId: string | null; programId: string | null; requirementId: string | null; executorId: string | null; qcUserId: string | null }) {
+async function assertCaseRefs(projectId: string, data: { groupId: string; caseTypeCodeId: string; plUserId: string | null; programId: string | null; requirementId: string | null; executorId: string | null; qcUserId: string | null }) {
   const prisma = getPrisma();
-  if (data.caseTypeCodeId) {
+  {
     const code = await prisma.commonCode.findUnique({ where: { id: data.caseTypeCodeId }, select: { projectId: true, groupCode: true, isActive: true } });
     if (!code || code.projectId !== projectId || code.groupCode !== "ut_case_type" || !code.isActive) throw new DomainError("INVALID_CODE", "케이스유형을 확인해 주세요.");
   }
