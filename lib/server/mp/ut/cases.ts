@@ -19,7 +19,8 @@ const caseFields = {
   // 케이스 ID — 수기 입력(2026-10-21 사용자 확정)
   displayId: z.string().trim().superRefine((v, ctx) => { const message = caseDisplayIdError(v); if (message) ctx.addIssue({ code: "custom", message }); }),
   groupId: z.string().uuid(),
-  programId: optionalId,
+  screenId: z.string().trim().max(100).default(""), // 화면ID — 수기 입력(2026-10-21 사용자 확정)
+  screenName: z.string().trim().max(200).default(""), // 화면명 — 수기 입력
   requirementId: optionalId,
   plUserId: optionalId,
   caseTypeCodeId: z.string({ error: "케이스유형을 선택해 주세요." }).uuid("케이스유형을 선택해 주세요."), // 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21)
@@ -49,15 +50,14 @@ export async function listUtWbsLeaves(projectId: string) {
 /** 등록·수정 화면 선택지 — 업무단위(업무그룹), 구성원, 프로그램, 요구사항, 공통코드. */
 export async function getUtFormOptions(projectId: string) {
   const prisma = getPrisma();
-  const [groups, companies, members, programs, requirements, codes] = await Promise.all([
+  const [groups, companies, members, requirements, codes] = await Promise.all([
     prisma.groups.findMany({ where: { projectId, groupType: "WORK_MODULE", isActive: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { id: true, code: true, label: true, leaderId: true } }),
     prisma.groups.findMany({ where: { projectId, groupType: "COMPANY", isActive: true }, orderBy: [{ sortOrder: "asc" }, { label: "asc" }], select: { id: true, code: true, label: true } }),
     listProjectMembers(projectId),
-    prisma.utProgram.findMany({ where: { projectId, archivedAt: null }, orderBy: { programCode: "asc" }, select: { id: true, programCode: true, name: true, screenId: true } }),
     prisma.requirement.findMany({ where: { projectId, archivedAt: null }, orderBy: { displayId: "asc" }, select: { id: true, displayId: true, title: true } }),
     listUtCodes(projectId),
   ]);
-  return { groups, companies, members, programs, requirements, codes };
+  return { groups, companies, members, requirements, codes };
 }
 
 /** PL 지정 참고(4.4) — 작성자 소속 업무그룹과 리더. 선택은 사람이 한다. */
@@ -70,7 +70,7 @@ export async function getPlReference(projectId: string, writerId: string) {
 // 등록·수정·비활성
 // ---------------------------------------------------------------------------
 
-async function assertCaseRefs(projectId: string, data: { groupId: string; caseTypeCodeId: string; plUserId: string | null; programId: string | null; requirementId: string | null; executorId: string | null; qcUserId: string | null }) {
+async function assertCaseRefs(projectId: string, data: { groupId: string; caseTypeCodeId: string; plUserId: string | null; requirementId: string | null; executorId: string | null; qcUserId: string | null }) {
   const prisma = getPrisma();
   {
     const code = await prisma.commonCode.findUnique({ where: { id: data.caseTypeCodeId }, select: { projectId: true, groupCode: true, isActive: true } });
@@ -78,10 +78,6 @@ async function assertCaseRefs(projectId: string, data: { groupId: string; caseTy
   }
   const group = await prisma.groups.findUnique({ where: { id: data.groupId }, select: { projectId: true, groupType: true, isActive: true } });
   if (!group || group.projectId !== projectId || group.groupType !== "WORK_MODULE" || !group.isActive) throw new DomainError("INVALID_CODE", "업무단위(업무그룹)를 확인해 주세요.");
-  if (data.programId) {
-    const program = await prisma.utProgram.findUnique({ where: { id: data.programId }, select: { projectId: true, archivedAt: true } });
-    if (!program || program.projectId !== projectId || program.archivedAt) throw new DomainError("INVALID_CODE", "프로그램을 확인해 주세요.");
-  }
   if (data.requirementId) {
     const req = await prisma.requirement.findUnique({ where: { id: data.requirementId }, select: { projectId: true, archivedAt: true } });
     if (!req || req.projectId !== projectId || req.archivedAt) throw new DomainError("INVALID_CODE", "요구사항을 확인해 주세요.");

@@ -55,7 +55,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
     const f = new FormData(event.currentTarget);
     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
     const data = {
-      displayId: v("displayId"), caseTypeCodeId: v("caseTypeCodeId"), groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
+      displayId: v("displayId"), caseTypeCodeId: v("caseTypeCodeId"), groupId: v("groupId"), screenId: v("screenId"), screenName: v("screenName"), requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
       name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
       executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
     };
@@ -98,7 +98,9 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
           <div className="form-grid">
             <label>프로젝트 코드<input value={projectCode} readOnly /></label>
             <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
-            <label>프로그램 ID · 화면 ID(선택)<select name="programId" defaultValue={c?.programId ?? ""}><option value="">미지정</option>{options.programs.map((p) => <option key={p.id} value={p.id}>{p.programCode} {p.name}{p.screenId ? ` (${p.screenId})` : ""}</option>)}</select></label>
+            {/* 화면ID·화면명 — 수기 입력(2026-10-21 사용자 확정, 프로그램 목록 선택 대체) */}
+            <label>화면ID<input name="screenId" maxLength={100} defaultValue={c?.screenId ?? ""} placeholder="예: SCR-ORD-001" /></label>
+            <label>화면명<input name="screenName" maxLength={200} defaultValue={c?.screenName ?? ""} placeholder="예: 주문서 작성" /></label>
             <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
           </div>
 
@@ -176,9 +178,12 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
         </form>
       </section>}
 
-      {c && (c.defects.length > 0 || editor.canRegisterDefect) && <section className="panel">
+      {/* 결함 영역은 항상 표시(2026-10-21 사용자 요청) — 등록은 최근 테스트결과가 FAIL일 때만 가능 */}
+      <section className="panel">
         <div className="panel-head"><h2>결함</h2><span>결함 ID · 조치일 · 조치자 · 검증결과 · 검증일자 · 검증자</span></div>
-        {c.defects.length > 0 && <div className="table-wrap"><table className="ut-table">
+        {!c ? <p className="ut-hint">케이스를 저장한 뒤 결함을 등록할 수 있습니다.</p>
+        : !c.defects.length ? <p className="ut-hint">등록된 결함이 없습니다.{editor.canRegisterDefect ? "" : " 결함은 최근 테스트결과가 FAIL일 때 수행 담당자·QC·PL·PM/PMO가 등록합니다."}</p>
+        : <div className="table-wrap"><table className="ut-table">
           <thead><tr><th>결함 ID</th><th>상태</th><th>오류내용</th><th>조치 담당</th><th>조치일</th><th>조치자</th><th>검증결과</th><th>검증일자</th><th>검증자</th><th /></tr></thead>
           <tbody>{c.defects.map((d) => [
             <tr key={d.id}>
@@ -205,7 +210,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             d.actions.length > 0 && <tr key={`${d.id}-hist`}><td colSpan={10}><small className="ut-hint">이력: {d.actions.map((a) => `${dot(a.actedOn)} ${a.actionType === "FIX" ? "조치" : `검증(${a.verificationResult ? UT_VERIFICATION_LABEL[a.verificationResult as UtVerificationResult] : ""})`} ${a.actorName}${a.note ? ` — ${a.note}` : ""}`).join(" / ")}</small></td></tr>,
           ])}</tbody>
         </table></div>}
-        {editor.canRegisterDefect && latest && <form className="ut-exec-form" onSubmit={(e) => { const { v } = formValues(e); void act(() => utApi(`executions/${latest.id}/defects`, json("POST", { description: v("description"), severity: v("severity"), defectTypeCodeId: v("defectTypeCodeId") || null, causeGroupId: v("causeGroupId") || null, vendorGroupId: v("vendorGroupId") || null, assigneeId: v("assigneeId") || null })), "결함을 등록했습니다."); }}>
+        {c && editor.canRegisterDefect && latest && <form className="ut-exec-form" onSubmit={(e) => { const { v } = formValues(e); void act(() => utApi(`executions/${latest.id}/defects`, json("POST", { description: v("description"), severity: v("severity"), defectTypeCodeId: v("defectTypeCodeId") || null, causeGroupId: v("causeGroupId") || null, vendorGroupId: v("vendorGroupId") || null, assigneeId: v("assigneeId") || null })), "결함을 등록했습니다."); }}>
           <strong>결함 등록 — {latest.roundNo}차 FAIL</strong>
           <label>오류내용<textarea name="description" rows={2} required defaultValue={latest.actualResult} /></label>
           <div className="form-grid triple">
@@ -219,7 +224,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
           </div>
           <div className="form-actions"><button className="button primary" disabled={pending}>결함 등록</button></div>
         </form>}
-      </section>}
+      </section>
 
       {c && c.executions.length > 0 && <section className="panel">
         <div className="panel-head"><h2>수행 이력</h2><span>차수별 테스트 결과·증적·QC/PL 확인</span></div>

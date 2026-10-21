@@ -56,7 +56,7 @@ export async function getUtCaseEditor(projectId: string, viewer: UtActor, params
     checklist: siblings.length ? reviewChecklist(siblings.map((x) => ({ ...x, plannedDate: dateOnly(x.plannedDate) }))) : [],
     case: c ? {
       id: c.id, displayId: c.displayId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "",
-      groupId: c.groupId, programId: c.programId, requirementId: c.requirementId, plUserId: c.plUserId, rejectReason: c.rejectReason, isActive: c.isActive,
+      groupId: c.groupId, screenId: c.screenId, screenName: c.screenName, requirementId: c.requirementId, plUserId: c.plUserId, rejectReason: c.rejectReason, isActive: c.isActive,
       caseTypeCodeId: c.caseTypeCodeId, name: c.name, precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
       executorId: c.executorId, qcUserId: c.qcUserId, plannedDate: dateOnly(c.plannedDate), status: c.status, version: c.version,
       missing: missingCaseFields({ ...c, plannedDate: dateOnly(c.plannedDate) }),
@@ -118,7 +118,7 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
   const cases = await prisma.utCase.findMany({
     where: { projectId, isActive: true, OR: [{ wbsItemId: { in: targets.map((t) => t.id) } }, ...(withNoWbs ? [{ wbsItemId: null }] : [])] },
     include: {
-      group: { select: { label: true } }, program: { select: { name: true, screenId: true } }, requirement: { select: { displayId: true } },
+      group: { select: { label: true } }, requirement: { select: { displayId: true } },
       wbsItem: { select: { displayId: true, name: true, owner: { select: { name: true } } } },
       executions: { orderBy: { roundNo: "desc" }, take: 1, include: { executor: { select: { name: true } } } },
       defects: { orderBy: { createdAt: "desc" }, include: { fixer: { select: { name: true } }, verifier: { select: { name: true } } } },
@@ -144,7 +144,7 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
       unit: c.group.label, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", caseDisplayId: c.displayId, caseName: c.name, precondition: c.precondition, inputData: c.inputData, steps: c.steps, expectedResult: c.expectedResult,
       actualResult: e?.actualResult || e?.naReason || "", verdict: e?.verdict ?? null, errorContent: d?.description ?? (e?.verdict === "FAIL" ? e.actualResult : ""),
       ownerName: c.wbsItem?.owner?.name ?? null, executedOn: dateOnly(e?.executedOn), executorName: e?.executor.name ?? null,
-      screenId: c.program?.screenId ?? "", screenName: c.program?.name ?? "", requirementId: c.requirement?.displayId ?? "",
+      screenId: c.screenId, screenName: c.screenName, requirementId: c.requirement?.displayId ?? "",
       defectId: d?.displayId ?? null, fixedAt: dateOnly(d?.fixedAt), fixerName: d?.fixer?.name ?? null,
       verificationResult: d?.verificationResult ?? null, verifiedAt: dateOnly(d?.verifiedAt), verifierName: d?.verifier?.name ?? null,
       done: !e ? "미수행" : c.status === "PL_CONFIRMED" && openDefects.length === 0 ? "완료" : "진행중",

@@ -133,7 +133,7 @@ export async function listUtRunRows(projectIds: string[], viewer: UtActor, filte
     },
     include: {
       executor: { select: { name: true } },
-      case: { select: { displayId: true, name: true, steps: true, executorId: true, qcUserId: true, group: { select: { label: true } }, program: { select: { screenId: true } } } },
+      case: { select: { displayId: true, name: true, steps: true, executorId: true, qcUserId: true, group: { select: { label: true } }, screenId: true } },
       defects: { orderBy: { displayId: "asc" }, include: { fixer: { select: { name: true } }, verifier: { select: { name: true } } } },
     },
     orderBy: [{ case: { displayId: "asc" } }, { roundNo: "asc" }],
@@ -145,7 +145,7 @@ export async function listUtRunRows(projectIds: string[], viewer: UtActor, filte
     const base = {
       executionId: e.id, wbsItemId: e.wbsItemId, verdict: e.verdict, roundNo: e.roundNo,
       unit: e.case.group.label, caseDisplayId: e.case.displayId, caseName: e.case.name, steps: e.case.steps,
-      executorName: e.executor.name, executedOn: dateOnly(e.executedOn), screenId: e.case.program?.screenId ?? "",
+      executorName: e.executor.name, executedOn: dateOnly(e.executedOn), screenId: e.case.screenId,
     };
     const defects = filters.openOnly ? e.defects.filter((d) => d.status !== "VERIFIED") : e.defects;
     if (!defects.length) {
