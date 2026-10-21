@@ -427,6 +427,7 @@ model CommonCode {
   utExecutionEnvs        UtExecution[] @relation("UtExecutionEnv")
   utApprovalRejectReasons UtApproval[] @relation("UtApprovalRejectReason")
   utDefectTypes          UtDefect[]    @relation("UtDefectType")
+  utCaseTypes            UtCase[]      @relation("UtCaseTypeCode")
 
   @@unique([groupId, code])
   @@map("common_codes")
@@ -1827,18 +1828,6 @@ model BatchJobLog {
 // 수행 결과·승인·증적·결함 조치 이력은 INSERT 전용(수기 마이그레이션의 트리거로 강제) — 4.3 규칙 6.
 // ---------------------------------------------------------------------------
 
-enum UtPriority {
-  H
-  M
-  L
-}
-
-enum UtCaseType {
-  NORMAL    // 정상
-  EXCEPTION // 예외
-  BOUNDARY  // 경계
-}
-
 enum UtCaseStatus {
   DRAFT            // 작성중
   REVIEW_REQUESTED // 검토요청
@@ -1980,13 +1969,12 @@ model UtCase {
   approvedAt        DateTime?
   approvedBy        String?
   rejectReason      String       @default("")
-  caseType       UtCaseType
+  caseTypeCodeId String? // 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 2026-10-21 사용자 확정
   name           String // 테스트 대상(검증 규칙 1개)
   precondition   String       @default("")
   steps          String       @default("") // 테스트스텝
   inputData      String       @default("")
   expectedResult String       @default("")
-  priority       UtPriority   @default(M)
   executorId     String?
   plannedDate    DateTime?    @db.Date
   qcUserId       String?
@@ -2005,6 +1993,7 @@ model UtCase {
   requirement Requirement?     @relation(fields: [requirementId], references: [id], onDelete: SetNull)
   pl          User?            @relation("UtCasePl", fields: [plUserId], references: [id])
   approver    User?            @relation("UtCaseApprover", fields: [approvedBy], references: [id])
+  caseTypeCode CommonCode?     @relation("UtCaseTypeCode", fields: [caseTypeCodeId], references: [id], onDelete: SetNull)
   migrations  UtWbsMigration[]
   executor   User?         @relation("UtCaseExecutor", fields: [executorId], references: [id])
   qc         User?         @relation("UtCaseQc", fields: [qcUserId], references: [id])

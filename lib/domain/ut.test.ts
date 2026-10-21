@@ -5,7 +5,7 @@ import {
   type UtCaseDraft,
 } from "@/lib/domain/ut";
 
-const draft = (over: Partial<UtCaseDraft> = {}): UtCaseDraft => ({ caseType: "NORMAL", name: "수량 검증", precondition: "재고 10개", steps: "1. 수량 입력", inputData: "수량 = 3", expectedResult: "장바구니에 3개 저장", executorId: "dev", plannedDate: "2026-11-01", qcUserId: "qc", ...over });
+const draft = (over: Partial<UtCaseDraft> = {}): UtCaseDraft => ({ name: "수량 검증", precondition: "재고 10개", steps: "1. 수량 입력", inputData: "수량 = 3", expectedResult: "장바구니에 3개 저장", executorId: "dev", plannedDate: "2026-11-01", qcUserId: "qc", ...over });
 
 describe("채번 (4.7)", () => {
   it("케이스 ID(수기 입력 검증)·결함 ID", () => {
@@ -23,18 +23,16 @@ describe("케이스 작성", () => {
     expect(missingCaseFields(draft({ steps: " ", qcUserId: null }))).toEqual(["테스트스텝", "QC 확인자"]);
   });
 
-  it("체크리스트 — 정상 1·예외+경계 2 기준, 차단 없이 결과만", () => {
-    const ok = reviewChecklist([draft(), draft({ caseType: "BOUNDARY", inputData: "10" }), draft({ caseType: "EXCEPTION", inputData: "0" })], { highPriority: false });
+  it("체크리스트 — 차단 없이 결과만(유형·우선순위 항목 없음)", () => {
+    const ok = reviewChecklist([draft(), draft({ inputData: "10" }), draft({ inputData: "0" })]);
     expect(ok.every((i) => i.ok)).toBe(true);
-    const short = reviewChecklist([draft()], { highPriority: false });
-    expect(short.find((i) => i.key === "edge")!.ok).toBe(false);
+    expect(ok.map((i) => i.key)).toEqual(["ambiguous", "length", "duplicate"]);
   });
 
-  it("모호어만 있는 예상결과·중복·H등급 권고", () => {
-    const items = reviewChecklist([draft({ expectedResult: "정상 처리 확인" }), draft({ caseType: "EXCEPTION" }), draft({ caseType: "EXCEPTION" })], { highPriority: true });
+  it("모호어만 있는 예상결과·중복", () => {
+    const items = reviewChecklist([draft({ expectedResult: "정상 처리 확인" }), draft(), draft()]);
     expect(items.find((i) => i.key === "ambiguous")!.ok).toBe(false);
     expect(items.find((i) => i.key === "duplicate")!.ok).toBe(false);
-    expect(items.find((i) => i.key === "high")!.ok).toBe(false);
   });
 });
 

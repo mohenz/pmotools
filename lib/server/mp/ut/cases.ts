@@ -12,7 +12,6 @@ import { assertActiveMember, assertNotLocked, dateOnly, isUtManager, listUtCodes
 // 시나리오 없이 케이스가 WBS Task(또는 WBS 없음)에 바로 속한다(2026-10-21 사용자 확정).
 // ---------------------------------------------------------------------------
 
-const priority = z.enum(["H", "M", "L"]);
 const optionalId = z.string().uuid().nullable().optional().transform((v) => v ?? null);
 const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().transform((v) => v ?? null);
 
@@ -23,13 +22,12 @@ const caseFields = {
   programId: optionalId,
   requirementId: optionalId,
   plUserId: optionalId,
-  caseType: z.enum(["NORMAL", "EXCEPTION", "BOUNDARY"]),
+  caseTypeCodeId: optionalId, // 케이스유형 — 공통코드 ut_case_type(화면·기능·API)
   name: z.string().trim().min(1).max(200),
   precondition: z.string().max(2000).default(""),
   steps: z.string().max(4000).default(""),
   inputData: z.string().max(2000).default(""),
   expectedResult: z.string().max(1000).default(""),
-  priority: priority.default("M"),
   executorId: optionalId,
   plannedDate: optionalDate,
   qcUserId: optionalId,
@@ -72,8 +70,12 @@ export async function getPlReference(projectId: string, writerId: string) {
 // 등록·수정·비활성
 // ---------------------------------------------------------------------------
 
-async function assertCaseRefs(projectId: string, data: { groupId: string; plUserId: string | null; programId: string | null; requirementId: string | null; executorId: string | null; qcUserId: string | null }) {
+async function assertCaseRefs(projectId: string, data: { groupId: string; caseTypeCodeId: string | null; plUserId: string | null; programId: string | null; requirementId: string | null; executorId: string | null; qcUserId: string | null }) {
   const prisma = getPrisma();
+  if (data.caseTypeCodeId) {
+    const code = await prisma.commonCode.findUnique({ where: { id: data.caseTypeCodeId }, select: { projectId: true, groupCode: true, isActive: true } });
+    if (!code || code.projectId !== projectId || code.groupCode !== "ut_case_type" || !code.isActive) throw new DomainError("INVALID_CODE", "케이스유형을 확인해 주세요.");
+  }
   const group = await prisma.groups.findUnique({ where: { id: data.groupId }, select: { projectId: true, groupType: true, isActive: true } });
   if (!group || group.projectId !== projectId || group.groupType !== "WORK_MODULE" || !group.isActive) throw new DomainError("INVALID_CODE", "업무단위(업무그룹)를 확인해 주세요.");
   if (data.programId) {
@@ -197,5 +199,5 @@ export async function decideUtCaseReview(actor: UtActor, caseId: string, input: 
 /** 검토함 — 내가 PL이고 검토요청 상태인 케이스. */
 export async function listUtReviewInbox(projectIds: string[], userId: string) {
   const rows = await getPrisma().utCase.findMany({ where: { projectId: { in: projectIds }, isActive: true, status: "REVIEW_REQUESTED" satisfies UtCaseStatus, plUserId: userId }, include: { wbsItem: { select: { displayId: true, name: true } }, creator: { select: { name: true } } }, orderBy: { reviewRequestedAt: "asc" } });
-  return rows.map((c) => ({ id: c.id, displayId: c.displayId, name: c.name, caseType: c.caseType, priority: c.priority, wbsItemId: c.wbsItemId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", writerName: c.creator.name, requestedAt: c.reviewRequestedAt?.toISOString() ?? null }));
+  return rows.map((c) => ({ id: c.id, displayId: c.displayId, name: c.name, wbsItemId: c.wbsItemId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", writerName: c.creator.name, requestedAt: c.reviewRequestedAt?.toISOString() ?? null }));
 }

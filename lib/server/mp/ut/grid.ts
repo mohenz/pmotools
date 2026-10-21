@@ -53,12 +53,12 @@ export async function getUtCaseEditor(projectId: string, viewer: UtActor, params
   const latest = c?.executions[0];
   return {
     wbsItemId: wbsId,
-    checklist: siblings.length ? reviewChecklist(siblings.map((x) => ({ ...x, plannedDate: dateOnly(x.plannedDate) })), { highPriority: siblings.some((x) => x.priority === "H") }) : [],
+    checklist: siblings.length ? reviewChecklist(siblings.map((x) => ({ ...x, plannedDate: dateOnly(x.plannedDate) }))) : [],
     case: c ? {
       id: c.id, displayId: c.displayId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "",
       groupId: c.groupId, programId: c.programId, requirementId: c.requirementId, plUserId: c.plUserId, rejectReason: c.rejectReason, isActive: c.isActive,
-      caseType: c.caseType, name: c.name, precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
-      priority: c.priority, executorId: c.executorId, qcUserId: c.qcUserId, plannedDate: dateOnly(c.plannedDate), status: c.status, version: c.version,
+      caseTypeCodeId: c.caseTypeCodeId, name: c.name, precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
+      executorId: c.executorId, qcUserId: c.qcUserId, plannedDate: dateOnly(c.plannedDate), status: c.status, version: c.version,
       missing: missingCaseFields({ ...c, plannedDate: dateOnly(c.plannedDate) }),
       executions: c.executions.map((e) => ({ id: e.id, roundNo: e.roundNo, verdict: e.verdict, executedOn: dateOnly(e.executedOn), executorName: e.executor.name, actualResult: e.actualResult, naReason: e.naReason, approvalStatus: e.approvalStatus, evidences: e.evidences.map((v) => ({ id: v.id, fileName: v.fileName, viewed: v.views.length > 0 })), approvals: e.approvals.map((a) => ({ step: a.step, decision: a.decision, approverName: a.approver.name, comment: a.comment })) })),
       defects: c.defects.map((d) => ({

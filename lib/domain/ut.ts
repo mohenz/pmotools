@@ -4,7 +4,6 @@
 // 채번·조회용 집계뿐이며, 11장 "유지한 시스템 처리"에 해당한다.
 // ---------------------------------------------------------------------------
 
-export type UtCaseType = "NORMAL" | "EXCEPTION" | "BOUNDARY";
 export type UtCaseStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "REJECTED" | "IN_EXECUTION" | "QC_PENDING" | "PL_PENDING" | "PL_CONFIRMED";
 export type UtVerdict = "PASS" | "FAIL" | "BLOCKED" | "NA";
 export type UtApprovalStatus = "QC_PENDING" | "PL_PENDING" | "APPROVED" | "REJECTED";
@@ -13,7 +12,6 @@ export type UtDecision = "APPROVED" | "REJECTED";
 export type UtDefectStatus = "REGISTERED" | "FIXED" | "VERIFIED" | "REFIX";
 export type UtVerificationResult = "PASS" | "FAIL";
 
-export const UT_CASE_TYPE_LABEL: Record<UtCaseType, string> = { NORMAL: "정상", EXCEPTION: "예외", BOUNDARY: "경계" };
 export const UT_CASE_STATUS_LABEL: Record<UtCaseStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", REJECTED: "반려", IN_EXECUTION: "수행중", QC_PENDING: "Pass(QC대기)", PL_PENDING: "QC확인(PL대기)", PL_CONFIRMED: "PL확인완료" };
 export const UT_VERDICT_LABEL: Record<UtVerdict, string> = { PASS: "Pass", FAIL: "Fail", BLOCKED: "Blocked", NA: "N/A" };
 export const UT_DEFECT_STATUS_LABEL: Record<UtDefectStatus, string> = { REGISTERED: "등록", FIXED: "조치완료", VERIFIED: "검증완료", REFIX: "재조치" };
@@ -63,7 +61,6 @@ export function defectDisplayId(date: string, seq: number) {
 
 export type UtCaseDraft = {
   displayId?: string;
-  caseType: UtCaseType;
   name: string;
   precondition: string;
   steps: string;
@@ -93,10 +90,9 @@ export function missingCaseFields(c: UtCaseDraft): string[] {
 
 export type UtChecklistItem = { key: string; ok: boolean; message: string };
 
-/** PL 검토 체크리스트(5장) — 결과만 보여 주고 차단하지 않는다. */
-export function reviewChecklist(cases: UtCaseDraft[], options: { highPriority: boolean }): UtChecklistItem[] {
-  const normal = cases.filter((c) => c.caseType === "NORMAL").length;
-  const edge = cases.filter((c) => c.caseType !== "NORMAL").length;
+/** PL 검토 체크리스트(5장) — 결과만 보여 주고 차단하지 않는다.
+ *  정상·예외·경계 유형과 우선순위(H등급)는 화면에서 삭제되어(2026-10-21) 해당 항목은 두지 않는다. */
+export function reviewChecklist(cases: UtCaseDraft[]): UtChecklistItem[] {
   const ambiguous = cases.filter((c) => {
     const text = c.expectedResult.replace(/\s+/g, " ").trim();
     if (!text) return false;
@@ -111,16 +107,10 @@ export function reviewChecklist(cases: UtCaseDraft[], options: { highPriority: b
   }
   const duplicates = [...seen.values()].filter((n) => n > 1).length;
   const items: UtChecklistItem[] = [
-    { key: "normal", ok: normal >= 1, message: `정상 케이스 1건 이상 (현재 ${normal}건)` },
-    { key: "edge", ok: edge >= 2, message: `예외+경계 케이스 2건 이상 (현재 ${edge}건)` },
     { key: "ambiguous", ok: ambiguous.length === 0, message: ambiguous.length ? `예상결과가 모호어만으로 된 케이스 ${ambiguous.length}건` : "예상결과 모호어 없음" },
     { key: "length", ok: tooLong.length === 0, message: tooLong.length ? `예상결과 ${EXPECTED_RESULT_MAX}자 초과 ${tooLong.length}건` : `예상결과 ${EXPECTED_RESULT_MAX}자 이내` },
     { key: "duplicate", ok: duplicates === 0, message: duplicates ? `입력데이터·예상결과가 같은 중복 ${duplicates}묶음` : "중복 케이스 없음" },
   ];
-  if (options.highPriority) {
-    const hasEmptyOrAuth = cases.some((c) => c.caseType === "EXCEPTION" && /빈 ?값|권한 ?없음/.test(`${c.name} ${c.inputData} ${c.precondition}`));
-    items.push({ key: "high", ok: hasEmptyOrAuth, message: "H등급: 예외에 '빈 값' 또는 '권한 없음' 포함(권고)" });
-  }
   return items;
 }
 

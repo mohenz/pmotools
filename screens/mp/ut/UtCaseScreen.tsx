@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
+import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerificationResult } from "@/lib/domain/ut";
 import type { getUtCaseEditor, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import type { getUtFormOptions } from "@/lib/server/mp/ut/cases";
 import { json, utApi } from "@/features/mp/ut/client";
@@ -54,9 +54,9 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
     const f = new FormData(event.currentTarget);
     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
     const data = {
-      displayId: v("displayId"), groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
-      caseType: v("caseType"), name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
-      priority: v("priority"), executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
+      displayId: v("displayId"), caseTypeCodeId: c?.caseTypeCodeId ?? null, groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
+      name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
+      executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
     };
     try {
       if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...data, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); refresh(); }
@@ -79,11 +79,6 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
       {readOnly && <p className="ut-hint">작성중·반려 상태의 케이스만 작성자 또는 PM/PMO가 수정할 수 있습니다.</p>}
       <form className="panel form-panel" onSubmit={save}>
         <fieldset disabled={readOnly || pending} className="ut-fieldset">
-          <h2 className="ut-section">식별</h2>
-          <div className="form-grid">
-            <label>프로젝트 코드<input value={projectCode} readOnly /></label>
-            <label>케이스 ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
-          </div>
           {/* 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다(2026-10-21 사용자 요청). */}
           {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>
           : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
@@ -95,37 +90,33 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             </select>
           </>}
 
-          <h2 className="ut-section">대상</h2>
-          <label>케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
+          {/* 화면 노출 순서(2026-10-21 사용자 확정): 테스트케이스ID → 명 → 사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자 → 테스트예정일 → QC확인자 → PL확인자 */}
+          <h2 className="ut-section">테스트 케이스</h2>
+          <label>테스트케이스ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
+          <label>테스트케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
+          <label>사전조건<textarea name="precondition" rows={4} maxLength={2000} defaultValue={c?.precondition ?? ""} /></label>
+          <label>입력데이터<textarea name="inputData" rows={4} maxLength={2000} defaultValue={c?.inputData ?? ""} /></label>
+          <label>테스트스텝<textarea name="steps" rows={4} maxLength={4000} defaultValue={c?.steps ?? ""} placeholder={"1. …\n2. …"} /></label>
+          <label>예상결과<textarea name="expectedResult" rows={4} maxLength={1000} defaultValue={c?.expectedResult ?? ""} placeholder="확인 가능한 결과" /></label>
+          {/* 실제결과·테스트결과는 아래 '테스트 수행 결과 등록'에서 차수별로 입력하며, 여기서는 최근 차수를 보여 준다. */}
+          <label>실제결과<textarea rows={2} readOnly value={latest ? (latest.verdict === "NA" ? latest.naReason : latest.actualResult) || "–" : "수행 전"} /></label>
+          <label>테스트결과<input readOnly value={latest ? `${UT_VERDICT_LABEL[latest.verdict]} (${latest.roundNo}차)` : "수행 전"} /></label>
           <div className="form-grid">
+            <label>수행담당자<select name="executorId" defaultValue={c?.executorId ?? userId}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+            <label>테스트예정일<input type="date" name="plannedDate" defaultValue={c?.plannedDate ?? ""} /></label>
+          </div>
+          <div className="form-grid">
+            <label>QC확인자<select name="qcUserId" defaultValue={c?.qcUserId ?? ""}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+            <label>PL확인자<select name="plUserId" defaultValue={c?.plUserId ?? ""}><option value="">미지정</option>{members.filter((m) => m.id !== userId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+          </div>
+
+          <h2 className="ut-section">기타 정보</h2>
+          <div className="form-grid triple">
+            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
             <label>프로그램 ID · 화면 ID(선택)<select name="programId" defaultValue={c?.programId ?? ""}><option value="">미지정</option>{options.programs.map((p) => <option key={p.id} value={p.id}>{p.programCode} {p.name}{p.screenId ? ` (${p.screenId})` : ""}</option>)}</select></label>
             <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
           </div>
-
-          <h2 className="ut-section">분류</h2>
-          <div className="form-grid triple">
-            <label>케이스 유형<select name="caseType" defaultValue={c?.caseType ?? "NORMAL"}>{(Object.keys(UT_CASE_TYPE_LABEL) as UtCaseType[]).map((t) => <option key={t} value={t}>{UT_CASE_TYPE_LABEL[t]}</option>)}</select></label>
-            <label>우선순위<select name="priority" defaultValue={c?.priority ?? "M"}><option value="H">H — 결제·주문·권한·저장·정산</option><option value="M">M — 조회·변경</option><option value="L">L — 표시·문구</option></select></label>
-            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
-          </div>
-
-          <h2 className="ut-section">내용</h2>
-          <div className="form-grid">
-            <label>사전조건<textarea name="precondition" rows={2} defaultValue={c?.precondition ?? ""} /></label>
-            <label>입력데이터<textarea name="inputData" rows={2} defaultValue={c?.inputData ?? ""} /></label>
-          </div>
-          <label>테스트스텝<textarea name="steps" rows={4} defaultValue={c?.steps ?? ""} placeholder={"1. …\n2. …"} /></label>
-          <label>예상결과<input name="expectedResult" maxLength={200} defaultValue={c?.expectedResult ?? ""} placeholder="1문장, 확인 가능한 결과" /></label>
-
-          <h2 className="ut-section">계획</h2>
-          <div className="form-grid">
-            <label>수행 담당자<select name="executorId" defaultValue={c?.executorId ?? userId}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-            <label>예정일<input type="date" name="plannedDate" defaultValue={c?.plannedDate ?? ""} /></label>
-          </div>
-          <div className="form-grid">
-            <label>QC 확인자<select name="qcUserId" defaultValue={c?.qcUserId ?? ""}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-            <label>PL 확인자<select name="plUserId" defaultValue={c?.plUserId ?? ""}><option value="">미지정</option>{members.filter((m) => m.id !== userId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-          </div>
+          <label>프로젝트 코드<input value={projectCode} readOnly /></label>
           <div className="form-actions"><button className="button primary" disabled={pending || (!c && !wbsItemId)}>{pending ? "저장 중…" : "저장"}</button></div>
         </fieldset>
       </form>

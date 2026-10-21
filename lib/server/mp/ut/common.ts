@@ -53,6 +53,7 @@ const UT_CODE_GROUPS: { code: string; label: string; description: string; sortOr
   { code: "ut_reject_reason", label: "단위테스트 반려 사유", description: "QC·PL 결과 확인 반려 사유", sortOrder: 900, codes: [["EVIDENCE", "증적 불충분"], ["MISMATCH", "예상결과 불일치"], ["INVALID_CASE", "케이스 부적정"], ["ETC", "기타"]] },
   { code: "ut_env", label: "단위테스트 수행 환경", description: "단위테스트 수행 환경(DEV·STG 등)", sortOrder: 901, codes: [["DEV", "DEV"], ["STG", "STG"]] },
   { code: "ut_defect_type", label: "단위테스트 결함 유형", description: "단위테스트 결함 분류", sortOrder: 902, codes: [["FUNCTION", "기능"], ["UI", "화면"], ["DATA", "데이터"], ["INTERFACE", "인터페이스"], ["PERFORMANCE", "성능"], ["SECURITY", "보안"]] },
+  { code: "ut_case_type", label: "단위테스트 케이스유형", description: "단위테스트 케이스 분류(화면·기능·API)", sortOrder: 903, codes: [["SCREEN", "화면"], ["FUNCTION", "기능"], ["API", "API"]] },
 ];
 
 export async function ensureUtCommonCodes(projectId: string) {
@@ -74,6 +75,7 @@ export async function listUtCodes(projectId: string) {
     rejectReasons: codes.filter((c) => c.groupCode === "ut_reject_reason"),
     envs: codes.filter((c) => c.groupCode === "ut_env"),
     defectTypes: codes.filter((c) => c.groupCode === "ut_defect_type"),
+    caseTypes: codes.filter((c) => c.groupCode === "ut_case_type"),
   };
 }
 

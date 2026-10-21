@@ -27,7 +27,7 @@ export async function listMyUtExecutionTargets(projectIds: string[], userId: str
     orderBy: [{ plannedDate: "asc" }, { displayId: "asc" }],
   });
   return rows.map((c) => ({
-    id: c.id, displayId: c.displayId, name: c.name, caseType: c.caseType, plannedDate: dateOnly(c.plannedDate), status: c.status,
+    id: c.id, displayId: c.displayId, name: c.name, plannedDate: dateOnly(c.plannedDate), status: c.status,
     wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "",
     precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
     lastRound: c.executions[0]?.roundNo ?? null, lastVerdict: c.executions[0]?.verdict ?? null, lastRejected: c.executions[0]?.approvalStatus === "REJECTED",
