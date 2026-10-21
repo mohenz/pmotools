@@ -4,7 +4,7 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { listWbsItems } from "@/lib/server/mp/wbs";
 import { listProjectMembers } from "@/lib/server/users";
-import { assertSeparation, caseDisplayId, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, type UtCaseStatus } from "@/lib/domain/ut";
+import { assertSeparation, caseDisplayIdError, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, type UtCaseStatus } from "@/lib/domain/ut";
 import { assertActiveMember, assertNotLocked, dateOnly, isUtManager, listUtCodes, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
@@ -17,6 +17,8 @@ const optionalId = z.string().uuid().nullable().optional().transform((v) => v ??
 const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().transform((v) => v ?? null);
 
 const caseFields = {
+  // 케이스 ID — 수기 입력(2026-10-21 사용자 확정)
+  displayId: z.string().trim().superRefine((v, ctx) => { const message = caseDisplayIdError(v); if (message) ctx.addIssue({ code: "custom", message }); }),
   groupId: z.string().uuid(),
   programId: optionalId,
   requirementId: optionalId,
@@ -88,6 +90,16 @@ async function assertCaseRefs(projectId: string, data: { groupId: string; plUser
   await rule(() => assertSeparation({ executorId: data.executorId, qcUserId: data.qcUserId, plUserId: data.plUserId }));
 }
 
+/** 같은 프로젝트에 같은 케이스 ID가 있으면 막는다(대소문자 무시). DB 유일 제약은 동시 저장 대비. */
+async function assertUniqueDisplayId(projectId: string, displayId: string, exceptId?: string) {
+  const dup = await getPrisma().utCase.findFirst({ where: { projectId, displayId: { equals: displayId, mode: "insensitive" }, ...(exceptId ? { id: { not: exceptId } } : {}) }, select: { id: true } });
+  if (dup) throw new DomainError("DUPLICATE_CODE", `이미 사용 중인 케이스 ID입니다: ${displayId}`);
+}
+const duplicateIdError = (error: unknown, displayId: string) => {
+  if ((error as { code?: string })?.code === "P2002") throw new DomainError("DUPLICATE_CODE", `이미 사용 중인 케이스 ID입니다: ${displayId}`);
+  throw error;
+};
+
 export async function createUtCase(actor: UtActor, input: unknown) {
   const data = caseInputSchema.parse(input);
   await assertNotLocked(actor.projectId);
@@ -95,10 +107,12 @@ export async function createUtCase(actor: UtActor, input: unknown) {
   if (data.wbsItemId && !wbs) throw new DomainError("INVALID_CODE", "WBS에서 단위테스트 대상으로 체크된 개발 단계 최하위(Leaf) Task만 선택할 수 있습니다.");
   await assertCaseRefs(actor.projectId, data);
   if (data.plUserId === actor.userId) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
+  await assertUniqueDisplayId(actor.projectId, data.displayId);
   const created = await getPrisma().$transaction(async (tx) => {
+    // seq는 같은 WBS 안의 등록 순서(정렬 보조)로만 쓴다.
     const seq = await nextSequence(tx, data.wbsItemId ? `case:${data.wbsItemId}` : `case:nowbs:${actor.projectId}`);
-    return tx.utCase.create({ data: { ...data, plannedDate: toDate(data.plannedDate), projectId: actor.projectId, displayId: caseDisplayId(wbs?.displayId ?? null, seq), seq, createdBy: actor.userId } });
-  });
+    return tx.utCase.create({ data: { ...data, plannedDate: toDate(data.plannedDate), projectId: actor.projectId, seq, createdBy: actor.userId } });
+  }).catch((error) => duplicateIdError(error, data.displayId));
   await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_INSERT", "ut_cases", created.id, null, { displayId: created.displayId, wbsItemId: data.wbsItemId });
   return { id: created.id, displayId: created.displayId };
 }
@@ -118,10 +132,11 @@ export async function updateUtCase(actor: UtActor, caseId: string, input: unknow
   const before = await loadEditableCase(actor, caseId);
   await assertCaseRefs(actor.projectId, data);
   if (data.plUserId && data.plUserId === before.createdBy) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
+  await assertUniqueDisplayId(actor.projectId, data.displayId, caseId);
   const { version, plannedDate, ...rest } = data;
-  const result = await getPrisma().utCase.updateMany({ where: { id: caseId, version }, data: { ...rest, plannedDate: toDate(plannedDate), updatedBy: actor.userId, version: { increment: 1 } } });
+  const result = await getPrisma().utCase.updateMany({ where: { id: caseId, version }, data: { ...rest, plannedDate: toDate(plannedDate), updatedBy: actor.userId, version: { increment: 1 } } }).catch((error) => duplicateIdError(error, data.displayId));
   if (!result.count) versionConflict();
-  await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_UPDATE", "ut_cases", caseId, { name: before.name, groupId: before.groupId, plUserId: before.plUserId }, { version: version + 1 });
+  await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_UPDATE", "ut_cases", caseId, { displayId: before.displayId, name: before.name, groupId: before.groupId, plUserId: before.plUserId }, { displayId: data.displayId, version: version + 1 });
   return { ok: true };
 }
 

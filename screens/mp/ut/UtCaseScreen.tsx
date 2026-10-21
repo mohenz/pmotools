@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
+import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
 import type { getUtCaseEditor, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import type { getUtFormOptions } from "@/lib/server/mp/ut/cases";
 import { json, utApi } from "@/features/mp/ut/client";
@@ -54,7 +54,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
     const f = new FormData(event.currentTarget);
     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
     const data = {
-      groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
+      displayId: v("displayId"), groupId: v("groupId"), programId: v("programId") || null, requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
       caseType: v("caseType"), name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
       priority: v("priority"), executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
     };
@@ -82,7 +82,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
           <h2 className="ut-section">식별</h2>
           <div className="form-grid">
             <label>프로젝트 코드<input value={projectCode} readOnly /></label>
-            <label>케이스 ID<input value={c?.displayId ?? "저장 시 자동 채번"} readOnly /></label>
+            <label>케이스 ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
           </div>
           {/* 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다(2026-10-21 사용자 요청). */}
           {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>

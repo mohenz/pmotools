@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase, caseDisplayId,
-  defectDisplayId, isUtTargetStage, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, nextRoundNo, reviewChecklist, utCompletionConditions, validateExecution,
+  afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase,
+  caseDisplayIdError, defectDisplayId, isUtTargetStage, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, nextRoundNo, reviewChecklist, utCompletionConditions, validateExecution,
   type UtCaseDraft,
 } from "@/lib/domain/ut";
 
 const draft = (over: Partial<UtCaseDraft> = {}): UtCaseDraft => ({ caseType: "NORMAL", name: "수량 검증", precondition: "재고 10개", steps: "1. 수량 입력", inputData: "수량 = 3", expectedResult: "장바구니에 3개 저장", executorId: "dev", plannedDate: "2026-11-01", qcUserId: "qc", ...over });
 
 describe("채번 (4.7)", () => {
-  it("케이스·결함 ID(시나리오 없음)", () => {
-    expect(caseDisplayId("WBS-2026-000123", 3)).toBe("UTC-2026-000123-003");
-    expect(caseDisplayId(null, 7)).toBe("UTC-NOWBS-0007");
+  it("케이스 ID(수기 입력 검증)·결함 ID", () => {
+    expect(caseDisplayIdError("UTC-2026-000123-003")).toBeNull();
+    expect(caseDisplayIdError("  ")).not.toBeNull();
+    expect(caseDisplayIdError("UTC 001")).not.toBeNull();
+    expect(caseDisplayIdError("x".repeat(51))).not.toBeNull();
     expect(defectDisplayId("2026-10-20", 12)).toBe("DF-261020-0012");
   });
 });

@@ -42,11 +42,14 @@ export class UtRuleError extends Error {
 // 채번(4.7)
 // ---------------------------------------------------------------------------
 
-/** 케이스 ID — UTC-{WBS displayId에서 "WBS-" 제외}-{순번 3자리}. 시나리오는 두지 않는다(2026-10-21 사용자 확정).
- *  WBS 없이 등록하는 테스트는 프로젝트 단위 UTC-NOWBS-{순번 4자리}. */
-export function caseDisplayId(wbsDisplayId: string | null, seq: number) {
-  if (!wbsDisplayId) return `UTC-NOWBS-${String(seq).padStart(4, "0")}`;
-  return `UTC-${wbsDisplayId.replace(/^WBS-/, "")}-${String(seq).padStart(3, "0")}`;
+/** 케이스 ID는 작성자가 직접 입력한다(2026-10-21 사용자 확정) — 프로젝트 안에서 유일(대소문자 무시), 공백 불가, 50자 이내. */
+export const CASE_DISPLAY_ID_MAX = 50;
+export function caseDisplayIdError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return "케이스 ID를 입력해 주세요.";
+  if (v.length > CASE_DISPLAY_ID_MAX) return `케이스 ID는 ${CASE_DISPLAY_ID_MAX}자 이내로 입력해 주세요.`;
+  if (/\s/.test(v)) return "케이스 ID에는 공백을 넣을 수 없습니다.";
+  return null;
 }
 
 /** DF-{yyMMdd}-{순번 4자리}. date는 "YYYY-MM-DD" */
