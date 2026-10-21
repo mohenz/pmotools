@@ -30,6 +30,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (editor.scenario || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
   const [scenarioId, setScenarioId] = useState(scenario?.id ?? "new");
   const [wbsQuery, setWbsQuery] = useState("");
+  const fixedLeaf = leaves.find((l) => l.id === editor.wbsItemId) ?? null;
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
@@ -93,7 +94,9 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             <label>시나리오 ID<input value={sc?.displayId ?? "저장 시 자동 채번"} readOnly /></label>
             <label>케이스 ID<input value={c?.displayId ?? "저장 시 자동 채번"} readOnly /></label>
           </div>
-          {scenario ? <label>WBS ID<input value={`${scenario.wbsDisplayId} ${scenario.wbsName}`} readOnly /></label> : <>
+          {/* 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다(2026-10-21 사용자 요청). */}
+          {scenario ? <label>WBS ID<input value={`${scenario.wbsDisplayId} ${scenario.wbsName}`} readOnly /></label>
+          : fixedLeaf ? <label>WBS ID<input value={`${fixedLeaf.displayId} · ${fixedLeaf.code} ${fixedLeaf.name}`} readOnly /></label> : <>
             <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
             <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); setScenarioId("new"); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
               {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
