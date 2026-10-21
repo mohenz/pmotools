@@ -27,6 +27,9 @@ export function isUtTargetStage(stage: string | null | undefined) {
   return (stage ?? "").trim() === UT_TARGET_STAGE;
 }
 
+/** 목록·트리·등록 화면에서 "WBS 없음"(WBS 없이 등록한 테스트, 2026-10-21 사용자 확정)을 나타내는 값. */
+export const UT_NO_WBS = "none";
+
 /** 단위테스트 대상 Task(2026-10-21 사용자 확정) — WBS 기준: 개발 단계 Leaf이면서 WBS에서 "단위테스트 대상"이 체크된 Task.
  *  대상 여부는 WBS 항목에만 저장하고, 단위테스트 관리는 이를 읽기만 한다(별도 대상 테이블 없음). */
 export function isUtTargetTask(item: { stage: string | null | undefined; isUnitTestTarget: boolean; isLeaf: boolean }) {
@@ -42,7 +45,9 @@ export class UtRuleError extends Error {
 // ---------------------------------------------------------------------------
 
 /** UTS-{WBS displayId에서 "WBS-" 제외}-{순번 2자리} */
-export function scenarioDisplayId(wbsDisplayId: string, seq: number) {
+export function scenarioDisplayId(wbsDisplayId: string | null, seq: number) {
+  // WBS 없이 등록하는 테스트(2026-10-21 사용자 확정)는 프로젝트 단위 3자리 순번.
+  if (!wbsDisplayId) return `UTS-NOWBS-${String(seq).padStart(3, "0")}`;
   return `UTS-${wbsDisplayId.replace(/^WBS-/, "")}-${String(seq).padStart(2, "0")}`;
 }
 

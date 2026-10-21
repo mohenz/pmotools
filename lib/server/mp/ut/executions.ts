@@ -28,7 +28,7 @@ export async function listMyUtExecutionTargets(projectIds: string[], userId: str
   });
   return rows.map((c) => ({
     id: c.id, displayId: c.displayId, name: c.name, caseType: c.caseType, plannedDate: dateOnly(c.plannedDate), status: c.status,
-    scenarioId: c.scenario.id, scenarioDisplayId: c.scenario.displayId, scenarioName: c.scenario.name, wbsDisplayId: c.scenario.wbsItem.displayId, wbsName: c.scenario.wbsItem.name,
+    scenarioId: c.scenario.id, scenarioDisplayId: c.scenario.displayId, scenarioName: c.scenario.name, wbsDisplayId: c.scenario.wbsItem?.displayId ?? "", wbsName: c.scenario.wbsItem?.name ?? "",
     precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
     lastRound: c.executions[0]?.roundNo ?? null, lastVerdict: c.executions[0]?.verdict ?? null, lastRejected: c.executions[0]?.approvalStatus === "REJECTED",
   })).sort((a, b) => Number(b.lastRejected) - Number(a.lastRejected));
@@ -89,7 +89,7 @@ export async function listUtApprovalInbox(projectIds: string[], userId: string, 
     id: e.id, roundNo: e.roundNo, verdict: e.verdict, executedOn: dateOnly(e.executedOn), actualResult: e.actualResult, naReason: e.naReason, executorName: e.executor.name,
     waitingDays: Math.floor((Date.now() - e.createdAt.getTime()) / 86_400_000),
     caseId: e.case.id, caseDisplayId: e.case.displayId, caseName: e.case.name, expectedResult: e.case.expectedResult,
-    scenarioId: e.case.scenario.id, scenarioDisplayId: e.case.scenario.displayId, wbsDisplayId: e.case.scenario.wbsItem.displayId,
+    scenarioId: e.case.scenario.id, scenarioDisplayId: e.case.scenario.displayId, wbsDisplayId: e.case.scenario.wbsItem?.displayId ?? "",
     evidences: e.evidences.map((v) => ({ id: v.id, fileName: v.fileName, sizeBytes: v.sizeBytes, viewed: v.views.length > 0 })),
     qcComment: e.approvals.find((a) => a.step === "QC")?.comment ?? "", qcApprover: e.approvals.find((a) => a.step === "QC")?.approver.name ?? null,
   }));

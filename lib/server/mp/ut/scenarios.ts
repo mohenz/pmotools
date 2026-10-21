@@ -16,7 +16,7 @@ const optionalId = z.string().uuid().nullable().optional().transform((v) => v ??
 const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().transform((v) => v ?? null);
 
 export const scenarioInputSchema = z.object({
-  wbsItemId: z.string().uuid(),
+  wbsItemId: optionalId, // null = WBS 없이 등록(2026-10-21 사용자 확정)
   groupId: z.string().uuid(),
   name: z.string().trim().min(1).max(200),
   priority: priority.default("M"),
@@ -99,7 +99,7 @@ export async function listUtScenarios(projectIds: string[], filters: UtScenarioF
     const byStatus = (status: UtCaseStatus) => s.cases.filter((c) => c.status === status).length;
     return {
       id: s.id, displayId: s.displayId, name: s.name, status: s.status, priority: s.priority, projectCode: s.project.code,
-      wbsDisplayId: s.wbsItem.displayId, wbsName: s.wbsItem.name, groupLabel: s.group.label, writerName: s.writer.name, plName: s.pl?.name ?? null,
+      wbsDisplayId: s.wbsItem?.displayId ?? "", wbsName: s.wbsItem?.name ?? "", groupLabel: s.group.label, writerName: s.writer.name, plName: s.pl?.name ?? null,
       caseCount: s.cases.length, confirmedCount: byStatus("PL_CONFIRMED"), pendingCount: byStatus("QC_PENDING") + byStatus("PL_PENDING"),
       edgeCount: s.cases.filter((c) => c.caseType !== "NORMAL").length,
     };
@@ -134,7 +134,7 @@ export async function getUtScenarioDetail(projectIds: string[], scenarioId: stri
   const canEdit = EDITABLE.includes(s.status as never) && (s.writerId === viewer.userId || isUtManager(viewer));
   return {
     id: s.id, projectId: s.projectId, displayId: s.displayId, name: s.name, status: s.status, priority: s.priority, version: s.version,
-    wbs: { id: s.wbsItem.id, displayId: s.wbsItem.displayId, name: s.wbsItem.name, startDate: dateOnly(s.wbsItem.startDate), dueDate: dateOnly(s.wbsItem.dueDate) },
+    wbs: s.wbsItem ? { id: s.wbsItem.id, displayId: s.wbsItem.displayId, name: s.wbsItem.name, startDate: dateOnly(s.wbsItem.startDate), dueDate: dateOnly(s.wbsItem.dueDate) } : null,
     group: s.group, writer: s.writer, pl: s.pl, approverName: s.approver?.name ?? null, approvedAt: s.approvedAt?.toISOString() ?? null, rejectReason: s.rejectReason,
     program: s.program, requirement: s.requirement, programId: s.programId, requirementId: s.requirementId,
     cases: s.cases.map((c) => ({
@@ -179,14 +179,14 @@ async function assertScenarioRefs(projectId: string, data: { groupId: string; pl
 export async function createUtScenario(actor: UtActor, input: unknown) {
   const data = scenarioInputSchema.parse(input);
   await assertNotLocked(actor.projectId);
-  const leaves = await listUtWbsLeaves(actor.projectId);
-  const wbs = leaves.find((w) => w.id === data.wbsItemId);
-  if (!wbs) throw new DomainError("INVALID_CODE", "WBS에서 단위테스트 대상으로 체크된 개발 단계 최하위(Leaf) Task만 선택할 수 있습니다.");
+  const leaves = data.wbsItemId ? await listUtWbsLeaves(actor.projectId) : [];
+  const wbs = data.wbsItemId ? leaves.find((w) => w.id === data.wbsItemId) ?? null : null;
+  if (data.wbsItemId && !wbs) throw new DomainError("INVALID_CODE", "WBS에서 단위테스트 대상으로 체크된 개발 단계 최하위(Leaf) Task만 선택할 수 있습니다.");
   await assertScenarioRefs(actor.projectId, data);
   if (data.plUserId === actor.userId) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
   const created = await getPrisma().$transaction(async (tx) => {
-    const seq = await nextSequence(tx, `scenario:${data.wbsItemId}`);
-    return tx.utScenario.create({ data: { ...data, projectId: actor.projectId, displayId: scenarioDisplayId(wbs.displayId, seq), seq, writerId: actor.userId, createdBy: actor.userId } });
+    const seq = await nextSequence(tx, data.wbsItemId ? `scenario:${data.wbsItemId}` : `scenario:nowbs:${actor.projectId}`);
+    return tx.utScenario.create({ data: { ...data, projectId: actor.projectId, displayId: scenarioDisplayId(wbs?.displayId ?? null, seq), seq, writerId: actor.userId, createdBy: actor.userId } });
   });
   await writeAuditLog(actor.projectId, actor.userId, "UT_SCENARIO_INSERT", "ut_scenarios", created.id, null, { displayId: created.displayId, wbsItemId: data.wbsItemId });
   return { id: created.id, displayId: created.displayId };
@@ -325,5 +325,5 @@ export async function decideUtScenarioReview(actor: UtActor, scenarioId: string,
 /** 검토함 — 내가 PL이고 검토요청 상태인 시나리오. */
 export async function listUtReviewInbox(projectIds: string[], userId: string) {
   const rows = await getPrisma().utScenario.findMany({ where: { projectId: { in: projectIds }, archivedAt: null, status: "REVIEW_REQUESTED", plUserId: userId }, include: { wbsItem: { select: { id: true, displayId: true, name: true } }, writer: { select: { name: true } }, cases: { where: { isActive: true }, select: { caseType: true } } }, orderBy: { reviewRequestedAt: "asc" } });
-  return rows.map((s) => ({ id: s.id, displayId: s.displayId, name: s.name, priority: s.priority, wbsItemId: s.wbsItem.id, wbsDisplayId: s.wbsItem.displayId, wbsName: s.wbsItem.name, writerName: s.writer.name, caseCount: s.cases.length, normalCount: s.cases.filter((c) => c.caseType === "NORMAL").length, edgeCount: s.cases.filter((c) => c.caseType !== "NORMAL").length, requestedAt: s.reviewRequestedAt?.toISOString() ?? null }));
+  return rows.map((s) => ({ id: s.id, displayId: s.displayId, name: s.name, priority: s.priority, wbsItemId: s.wbsItemId, wbsDisplayId: s.wbsItem?.displayId ?? "", wbsName: s.wbsItem?.name ?? "", writerName: s.writer.name, caseCount: s.cases.length, normalCount: s.cases.filter((c) => c.caseType === "NORMAL").length, edgeCount: s.cases.filter((c) => c.caseType !== "NORMAL").length, requestedAt: s.reviewRequestedAt?.toISOString() ?? null }));
 }

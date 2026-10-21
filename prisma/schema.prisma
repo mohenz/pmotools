@@ -1976,8 +1976,8 @@ model UtWbsProgramMap {
 model UtScenario {
   id                String           @id @default(uuid())
   projectId         String
-  wbsItemId         String
-  displayId         String // UTS-{WBS displayId에서 "WBS-" 제외}-{순번 2자리}
+  wbsItemId         String? // WBS 없이 등록하는 테스트는 null(2026-10-21 사용자 확정)
+  displayId         String // UTS-{WBS displayId에서 "WBS-" 제외}-{순번 2자리}, WBS 없음은 UTS-NOWBS-{순번 3자리}
   seq               Int
   groupId           String // 업무단위 = Groups(WORK_MODULE), 수기 선택(4.4)
   programId         String?
@@ -1999,7 +1999,7 @@ model UtScenario {
   archivedAt        DateTime?
 
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wbsItem     WbsItem         @relation(fields: [wbsItemId], references: [id], onDelete: Restrict)
+  wbsItem     WbsItem?        @relation(fields: [wbsItemId], references: [id], onDelete: Restrict)
   group       Groups          @relation("UtScenarioGroup", fields: [groupId], references: [id], onDelete: Restrict)
   program     UtProgram?      @relation(fields: [programId], references: [id], onDelete: SetNull)
   requirement Requirement?    @relation(fields: [requirementId], references: [id], onDelete: SetNull)
@@ -2021,7 +2021,7 @@ model UtCase {
   id             String       @id @default(uuid())
   projectId      String // 시나리오 값 복사
   scenarioId     String
-  wbsItemId      String // 시나리오 값 복사(이관 처리에서만 변경)
+  wbsItemId      String? // 시나리오 값 복사(이관 처리에서만 변경) — WBS 없이 등록한 테스트는 null(2026-10-21)
   displayId      String // {시나리오 ID}-{순번 3자리}
   seq            Int
   caseType       UtCaseType
@@ -2061,7 +2061,7 @@ model UtExecution {
   id                String            @id @default(uuid())
   projectId         String
   caseId            String
-  wbsItemId         String
+  wbsItemId         String?
   roundNo           Int
   envCodeId         String? // CommonCode(ut_env)
   executorId        String
@@ -2091,7 +2091,7 @@ model UtApproval {
   id                 String         @id @default(uuid())
   projectId          String
   executionId        String
-  wbsItemId          String
+  wbsItemId          String?
   step               UtApprovalStep
   approverId         String
   decision           UtDecision
@@ -2147,7 +2147,7 @@ model UtDefect {
   displayId          String // DF-{yyMMdd}-{순번 4자리}
   executionId        String
   caseId             String
-  wbsItemId          String
+  wbsItemId          String?
   description        String // 결함내용(C9)
   severity           UtDefectSeverity      @default(MAJOR)
   defectTypeCodeId   String? // CommonCode(ut_defect_type)

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { UtTreeNode } from "@/lib/server/mp/ut/grid";
+import { UT_NO_WBS } from "@/lib/domain/ut";
 
 // 설계서 8장 — 목록 좌측 WBS 트리. WBS 단위테스트 대상 Task와 그 상위를 모두 보여 주며(2026-10-21), 노드를 고르면 ?wbs={id}로 해당 WBS 하위만 조회한다.
 export function UtWbsTree({ nodes }: { nodes: UtTreeNode[] }) {
@@ -54,6 +55,7 @@ export function UtWbsTree({ nodes }: { nodes: UtTreeNode[] }) {
     <div className="ut-tree-head">
       <strong>WBS</strong>
       <button type="button" className={`ut-tree-all${selected ? "" : " active"}`} onClick={() => go("")}>전체</button>
+      <button type="button" className={`ut-tree-all${selected === UT_NO_WBS ? " active" : ""}`} onClick={() => go(UT_NO_WBS)} title="WBS ID 없이 등록한 테스트">WBS 없음</button>
     </div>
     <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="WBS 코드·명 검색" aria-label="WBS 검색" />
     <ul className="ut-tree-list">{render(null, 0)}</ul>

@@ -21,7 +21,8 @@ export async function listUtMilestones(projectId: string, viewer: UtActor) {
     select: { wbsItemId: true, plUserId: true, cases: { select: { isActive: true, status: true, executorId: true, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { verdict: true, approvalStatus: true, _count: { select: { evidences: true } } } }, defects: { select: { status: true, severity: true } } } } },
   });
   const byWbs = new Map<string, typeof scenarios>();
-  for (const s of scenarios) byWbs.set(s.wbsItemId, [...(byWbs.get(s.wbsItemId) ?? []), s]);
+  // WBS 없이 등록한 테스트는 WBS 마일스톤 집계 대상이 아니다.
+  for (const s of scenarios) if (s.wbsItemId) byWbs.set(s.wbsItemId, [...(byWbs.get(s.wbsItemId) ?? []), s]);
   const [leaves, items, milestones] = await Promise.all([
     listUtWbsLeaves(projectId),
     listWbsItems(projectId),

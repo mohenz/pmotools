@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_SCENARIO_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
+import { UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_CASE_TYPE_LABEL, UT_DEFECT_STATUS_LABEL, UT_SCENARIO_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtCaseType, type UtVerificationResult } from "@/lib/domain/ut";
 import type { getUtCaseEditor, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import type { getUtFormOptions } from "@/lib/server/mp/ut/scenarios";
 import { json, utApi } from "@/features/mp/ut/client";
@@ -27,9 +27,10 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   };
   const { scenario, case: c } = editor;
   // 신규 등록에서는 Leaf WBS만 미리 채운다(트리에서 상위 WBS를 고른 상태로 열 수 있음).
-  const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (editor.scenario || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
+  const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (editor.scenario || editor.wbsItemId === UT_NO_WBS || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
   const [scenarioId, setScenarioId] = useState(scenario?.id ?? "new");
   const [wbsQuery, setWbsQuery] = useState("");
+  const noWbs = editor.wbsItemId === UT_NO_WBS;
   const fixedLeaf = leaves.find((l) => l.id === editor.wbsItemId) ?? null;
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState(false);
@@ -57,7 +58,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
     const caseData = { caseType: v("caseType"), name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"), priority: v("priority"), executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null };
     try {
       let sid = scenarioId;
-      if (isNewScenario) sid = (await utApi<{ id: string }>("scenarios", json("POST", { wbsItemId, ...scenarioData }))).id;
+      if (isNewScenario) sid = (await utApi<{ id: string }>("scenarios", json("POST", { wbsItemId: wbsItemId === UT_NO_WBS ? null : wbsItemId, ...scenarioData }))).id;
       else if (scenario && sid === scenario.id) await utApi(`scenarios/${sid}`, json("PATCH", { ...scenarioData, version: scenario.version }));
       if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...caseData, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); refresh(); }
       else { const created = await utApi<{ id: string }>(`scenarios/${sid}/cases`, json("POST", caseData)); router.refresh(); goTo({ caseId: created.id }); }
@@ -95,10 +96,12 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             <label>케이스 ID<input value={c?.displayId ?? "저장 시 자동 채번"} readOnly /></label>
           </div>
           {/* 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다(2026-10-21 사용자 요청). */}
-          {scenario ? <label>WBS ID<input value={`${scenario.wbsDisplayId} ${scenario.wbsName}`} readOnly /></label>
+          {scenario ? <label>WBS ID<input value={scenario.wbsDisplayId ? `${scenario.wbsDisplayId} ${scenario.wbsName}` : "WBS 없음"} readOnly /></label>
+          : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
           : fixedLeaf ? <label>WBS ID<input value={`${fixedLeaf.displayId} · ${fixedLeaf.code} ${fixedLeaf.name}`} readOnly /></label> : <>
             <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
             <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); setScenarioId("new"); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
+              <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
               {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
             </select>
           </>}

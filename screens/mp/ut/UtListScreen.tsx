@@ -35,14 +35,14 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
               <th>업무명</th><th>WBS ID</th><th>테스트 케이스 ID</th><th>테스트케이스명</th><th>사전조건</th><th>입력 데이터</th><th>테스트 케이스 상세</th><th>예상결과</th><th>실제결과</th><th>테스트 결과</th><th>오류내용</th><th>업무 담당자</th>
               <th>테스트 수행일</th><th>테스트 수행자</th><th>화면 ID</th><th>화면명</th><th>요구사항 ID</th><th>결함 ID</th><th>조치일</th><th>조치자</th><th>검증결과</th><th>검증일자</th><th>검증자</th><th>완료여부</th>
             </tr></thead>
-            <tbody>{rows.map((r) => <tr key={r.caseId ?? `wbs-${r.wbsItemId}`}>
+            <tbody>{rows.map((r) => <tr key={r.caseId ?? `wbs-${r.wbsItemId ?? ""}`}>
               <td>{r.unit}</td>
-              <td className="mono" title={r.wbsName}>{r.wbsDisplayId}</td>
+              <td className="mono" title={r.wbsName}>{r.wbsDisplayId || "WBS 없음"}</td>
               {r.caseId ? <>
                 <td className="mono"><Link className="table-link" href={keep({ case: r.caseId })} scroll={false}>{r.caseDisplayId}</Link>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
                 <td className="title-cell"><Link className="table-link" href={keep({ case: r.caseId })} scroll={false}>{r.caseName}</Link></td>
               </> : <>
-                <td>{canCreate ? <Link className="table-link" href={keep({ new: "1", newWbs: r.wbsItemId })} scroll={false}>+ 케이스 등록</Link> : "–"}</td>
+                <td>{canCreate ? <Link className="table-link" href={keep({ new: "1", ...(r.wbsItemId ? { newWbs: r.wbsItemId } : {}) })} scroll={false}>+ 케이스 등록</Link> : "–"}</td>
                 <td className="title-cell ut-hint">{r.wbsName} · 케이스 미등록</td>
               </>}
               <td className="ut-pre">{r.precondition}</td>
@@ -66,7 +66,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
               <td>{r.verifierName ?? "–"}</td>
               <td><span className={`badge ${r.done === "완료" ? "band-green" : r.done === "진행중" ? "band-yellow" : ""}`}>{r.done}</span></td>
             </tr>)}</tbody>
-          </table></div> : <div className="empty">{filters.wbs ? "선택한 WBS에 단위테스트 대상 Task가 없습니다." : "WBS에서 단위테스트 대상으로 체크된 Task가 없습니다."}</div>}
+          </table></div> : <div className="empty">{filters.wbs === "none" ? "WBS 없이 등록한 테스트가 없습니다." : filters.wbs ? "선택한 WBS에 단위테스트 대상 Task가 없습니다." : "WBS에서 단위테스트 대상으로 체크된 Task가 없습니다."}</div>}
         </section>
         <UtPagination basePath="/mp-ut" filters={filters} {...paging} />
       </div>

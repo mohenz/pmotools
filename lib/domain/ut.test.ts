@@ -10,6 +10,7 @@ const draft = (over: Partial<UtCaseDraft> = {}): UtCaseDraft => ({ caseType: "NO
 describe("채번 (4.7)", () => {
   it("시나리오·케이스·결함 ID", () => {
     expect(scenarioDisplayId("WBS-2026-000123", 1)).toBe("UTS-2026-000123-01");
+    expect(scenarioDisplayId(null, 7)).toBe("UTS-NOWBS-007");
     expect(caseDisplayId("UTS-2026-000123-01", 3)).toBe("UTS-2026-000123-01-003");
     expect(defectDisplayId("2026-10-20", 12)).toBe("DF-261020-0012");
   });

@@ -116,7 +116,7 @@ export async function verifyUtDefect(actor: UtActor, defectId: string, input: un
 // ---------------------------------------------------------------------------
 
 export type UtRunRow = {
-  executionId: string; wbsItemId: string; defectId: string | null; defectDisplayId: string | null; defectStatus: string | null; severity: string | null; version: number | null;
+  executionId: string; wbsItemId: string | null; defectId: string | null; defectDisplayId: string | null; defectStatus: string | null; severity: string | null; version: number | null;
   scenarioId: string; verdict: string; roundNo: number; canFix: boolean; canVerify: boolean;
   /** 13개 열 */ unit: string; caseDisplayId: string; caseName: string; steps: string; description: string; executorName: string; executedOn: string | null; screenId: string;
   fixedAt: string | null; fixerName: string | null; verificationResult: string | null; verifiedAt: string | null; verifierName: string | null;
