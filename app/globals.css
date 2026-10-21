@@ -1731,8 +1731,6 @@ a.history-item:hover { background: var(--accent); }
 .ut-file { display: inline-block; margin-right: 8px; }
 .ut-file.viewed { color: var(--success); }
 .ut-approval { display: block; }
-.ut-wbs-select { width: 100%; }
-.ut-wbs-pick { display: grid; gap: 6px; min-width: 0; }
 /* 테스트결과 — 체크박스 모양 단일 선택(2026-10-21) */
 .ut-field { display: grid; gap: 6px; font-size: 14px; font-weight: 500; color: var(--foreground); }
 .ut-verdict-checks { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; min-height: 36px; }

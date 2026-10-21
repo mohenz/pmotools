@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
@@ -29,7 +29,6 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   const { case: c } = editor;
   // 신규 등록에서는 Leaf WBS만 미리 채운다(트리에서 상위 WBS를 고른 상태로 열 수 있음).
   const [wbsItemId, setWbsItemId] = useState(editor.wbsItemId && (c || editor.wbsItemId === UT_NO_WBS || leaves.some((l) => l.id === editor.wbsItemId)) ? editor.wbsItemId : "");
-  const [wbsQuery, setWbsQuery] = useState("");
   const noWbs = editor.wbsItemId === UT_NO_WBS;
   const fixedLeaf = leaves.find((l) => l.id === editor.wbsItemId) ?? null;
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -47,7 +46,6 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   }
   const formValues = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const f = new FormData(event.currentTarget); return { f, v: (n: string) => ((f.get(n) as string) ?? "").trim() }; };
   const readOnly = !editor.editable;
-  const leafOptions = useMemo(() => { const k = wbsQuery.trim().toLowerCase(); return (k ? leaves.filter((l) => `${l.displayId} ${l.code} ${l.name}`.toLowerCase().includes(k)) : leaves).slice(0, 300); }, [wbsQuery, leaves]);
   const members = options.members;
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -85,13 +83,12 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>
             : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
             : fixedLeaf ? <label>WBS ID<input value={`${fixedLeaf.displayId} · ${fixedLeaf.code} ${fixedLeaf.name}`} readOnly /></label>
-            : <div className="ut-wbs-pick">
-              <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
-              <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
-                <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
-                {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
-              </select>
-            </div>}
+            : /* 등록 경로(목록 행·좌측 메뉴·상단 버튼)와 관계없이 같은 배치 — WBS가 정해지지 않았을 때만 한 줄 선택(2026-10-21 사용자 요청). 선택해도 입력값은 유지된다. */
+            <label>WBS ID<select required value={wbsItemId} onChange={(e) => setWbsItemId(e.target.value)}>
+              <option value="" disabled>WBS 선택(단위테스트 대상 Task)</option>
+              <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
+              {leaves.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
+            </select></label>}
             <label>테스트케이스ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
           </div>
           {/* 프로젝트 코드·업무단위·프로그램·요구사항은 WBS ID·테스트케이스ID 바로 아래(2026-10-21 사용자 요청). */}
