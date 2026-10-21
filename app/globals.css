@@ -1732,6 +1732,12 @@ a.history-item:hover { background: var(--accent); }
 .ut-file.viewed { color: var(--success); }
 .ut-approval { display: block; }
 .ut-wbs-select { width: 100%; }
+.ut-wbs-pick { display: grid; gap: 6px; min-width: 0; }
+/* 테스트결과 — 체크박스 모양 단일 선택(2026-10-21) */
+.ut-field { display: grid; gap: 6px; font-size: 14px; font-weight: 500; color: var(--foreground); }
+.ut-verdict-checks { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; min-height: 36px; }
+.ut-verdict-checks label, .form-panel .ut-verdict-checks label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500; }
+.ut-verdict-checks input[type="checkbox"] { flex: none; width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; }
 .ut-reference p { margin: 2px 0; font-size: 13px; }
 .ut-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
 .ut-tabs button { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); cursor: pointer; }

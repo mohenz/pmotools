@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerificationResult } from "@/lib/domain/ut";
+import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
 import type { getUtCaseEditor, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import type { getUtFormOptions } from "@/lib/server/mp/ut/cases";
 import { json, utApi } from "@/features/mp/ut/client";
@@ -37,6 +37,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [openDefect, setOpenDefect] = useState<{ id: string; kind: "fix" | "verify" } | null>(null);
   const latest = c?.executions[0] ?? null;
+  const [execVerdict, setExecVerdict] = useState<UtVerdict>("PASS");
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setPending(true); setMessage(null);
@@ -79,28 +80,41 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
       {readOnly && <p className="ut-hint">작성중·반려 상태의 케이스만 작성자 또는 PM/PMO가 수정할 수 있습니다.</p>}
       <form className="panel form-panel" onSubmit={save}>
         <fieldset disabled={readOnly || pending} className="ut-fieldset">
-          {/* 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다(2026-10-21 사용자 요청). */}
-          {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>
-          : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
-          : fixedLeaf ? <label>WBS ID<input value={`${fixedLeaf.displayId} · ${fixedLeaf.code} ${fixedLeaf.name}`} readOnly /></label> : <>
-            <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
-            <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
-              <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
-              {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
-            </select>
-          </>}
+          {/* WBS ID와 테스트케이스ID를 한 줄에(2026-10-21 사용자 요청). 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다. */}
+          <div className="form-grid">
+            {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>
+            : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
+            : fixedLeaf ? <label>WBS ID<input value={`${fixedLeaf.displayId} · ${fixedLeaf.code} ${fixedLeaf.name}`} readOnly /></label>
+            : <div className="ut-wbs-pick">
+              <label>WBS ID (Leaf)<input type="search" placeholder="WBS 코드·명 검색" value={wbsQuery} onChange={(e) => setWbsQuery(e.target.value)} /></label>
+              <select required size={6} value={wbsItemId} onChange={(e) => { setWbsItemId(e.target.value); goTo({ wbs: e.target.value }); }} aria-label="WBS 선택" className="ut-wbs-select">
+                <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
+                {leafOptions.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
+              </select>
+            </div>}
+            <label>테스트케이스ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
+          </div>
+          {/* 프로젝트 코드·업무단위·프로그램·요구사항은 WBS ID·테스트케이스ID 바로 아래(2026-10-21 사용자 요청). */}
+          <div className="form-grid">
+            <label>프로젝트 코드<input value={projectCode} readOnly /></label>
+            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
+            <label>프로그램 ID · 화면 ID(선택)<select name="programId" defaultValue={c?.programId ?? ""}><option value="">미지정</option>{options.programs.map((p) => <option key={p.id} value={p.id}>{p.programCode} {p.name}{p.screenId ? ` (${p.screenId})` : ""}</option>)}</select></label>
+            <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
+          </div>
 
-          {/* 화면 노출 순서(2026-10-21 사용자 확정): 테스트케이스ID → 명 → 사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자 → 테스트예정일 → QC확인자 → PL확인자 */}
+          {/* 화면 노출 순서(2026-10-21 사용자 확정): 테스트케이스명 → 사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자 → 테스트예정일 → QC확인자 → PL확인자 */}
           <h2 className="ut-section">테스트 케이스</h2>
-          <label>테스트케이스ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
           <label>테스트케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
           <label>사전조건<textarea name="precondition" rows={4} maxLength={2000} defaultValue={c?.precondition ?? ""} /></label>
           <label>입력데이터<textarea name="inputData" rows={4} maxLength={2000} defaultValue={c?.inputData ?? ""} /></label>
           <label>테스트스텝<textarea name="steps" rows={4} maxLength={4000} defaultValue={c?.steps ?? ""} placeholder={"1. …\n2. …"} /></label>
           <label>예상결과<textarea name="expectedResult" rows={4} maxLength={1000} defaultValue={c?.expectedResult ?? ""} placeholder="확인 가능한 결과" /></label>
-          {/* 실제결과·테스트결과는 아래 '테스트 수행 결과 등록'에서 차수별로 입력하며, 여기서는 최근 차수를 보여 준다. */}
-          <label>실제결과<textarea rows={2} readOnly value={latest ? (latest.verdict === "NA" ? latest.naReason : latest.actualResult) || "–" : "수행 전"} /></label>
-          <label>테스트결과<input readOnly value={latest ? `${UT_VERDICT_LABEL[latest.verdict]} (${latest.roundNo}차)` : "수행 전"} /></label>
+          {/* 실제결과·테스트결과는 아래 '테스트 수행 결과 등록'에서 차수별로 입력(증적 첨부)하며, 여기서는 최근 차수를 보여 준다. */}
+          <label>실제결과<textarea rows={4} readOnly value={latest ? (latest.verdict === "NA" ? latest.naReason : latest.actualResult) || "–" : "수행 전"} /></label>
+          <div className="ut-field">
+            <span>테스트결과{latest ? ` (${latest.roundNo}차)` : " (수행 전)"}</span>
+            <VerdictChecks value={latest?.verdict ?? null} disabled />
+          </div>
           <div className="form-grid">
             <label>수행담당자<select name="executorId" defaultValue={c?.executorId ?? userId}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
             <label>테스트예정일<input type="date" name="plannedDate" defaultValue={c?.plannedDate ?? ""} /></label>
@@ -110,13 +124,6 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
             <label>PL확인자<select name="plUserId" defaultValue={c?.plUserId ?? ""}><option value="">미지정</option>{members.filter((m) => m.id !== userId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
           </div>
 
-          <h2 className="ut-section">기타 정보</h2>
-          <div className="form-grid triple">
-            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
-            <label>프로그램 ID · 화면 ID(선택)<select name="programId" defaultValue={c?.programId ?? ""}><option value="">미지정</option>{options.programs.map((p) => <option key={p.id} value={p.id}>{p.programCode} {p.name}{p.screenId ? ` (${p.screenId})` : ""}</option>)}</select></label>
-            <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
-          </div>
-          <label>프로젝트 코드<input value={projectCode} readOnly /></label>
           <div className="form-actions"><button className="button primary" disabled={pending || (!c && !wbsItemId)}>{pending ? "저장 중…" : "저장"}</button></div>
         </fieldset>
       </form>
@@ -141,11 +148,11 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
         <div className="panel-head"><h2>테스트 수행 결과 등록</h2><span>{latest ? `${latest.roundNo + 1}차` : "1차"} · 증적 필수(Pass·Fail)</span></div>
         <form className="ut-exec-form" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget); void act(() => utApi(`cases/${c.id}/executions`, { method: "POST", body }), "수행 결과를 등록했습니다."); }}>
           <div className="form-grid triple">
-            <label>테스트 결과<select name="verdict" defaultValue="PASS"><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BLOCKED">BLOCKED</option><option value="NA">N/A</option></select></label>
+            <div className="ut-field"><span>테스트 결과</span><VerdictChecks value={execVerdict} onChange={setExecVerdict} /><input type="hidden" name="verdict" value={execVerdict} /></div>
             <label>테스트 수행일<input type="date" name="executedOn" defaultValue={today()} /></label>
             <label>수행 환경<select name="envCodeId" defaultValue=""><option value="">미지정</option>{options.codes.envs.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
           </div>
-          <label>실제결과(FAIL 필수)<textarea name="actualResult" rows={2} /></label>
+          <label>실제결과(FAIL 필수)<textarea name="actualResult" rows={4} /></label>
           <label>N/A 사유(N/A 필수)<input name="naReason" maxLength={1000} /></label>
           <label>증적 파일<input type="file" name="evidence" multiple /></label>
           <div className="form-actions"><button className="button primary" disabled={pending}>등록</button></div>
@@ -222,4 +229,13 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
       </section>}
     </div>
   </>;
+}
+
+const VERDICTS: UtVerdict[] = ["PASS", "FAIL", "BLOCKED", "NA"];
+
+/** 테스트결과 선택 — 체크박스 모양이지만 1개만 선택된다(2026-10-21 사용자 요청). disabled면 최근 결과 표시용. */
+function VerdictChecks({ value, onChange, disabled }: { value: UtVerdict | null; onChange?: (v: UtVerdict) => void; disabled?: boolean }) {
+  return <div className="ut-verdict-checks" role="radiogroup" aria-label="테스트결과">
+    {VERDICTS.map((v) => <label key={v}><input type="checkbox" role="radio" aria-checked={value === v} checked={value === v} disabled={disabled} onChange={() => onChange?.(v)} /> {UT_VERDICT_LABEL[v]}</label>)}
+  </div>;
 }
