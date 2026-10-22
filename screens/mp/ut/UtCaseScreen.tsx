@@ -37,6 +37,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   const [openDefect, setOpenDefect] = useState<{ id: string; kind: "fix" | "verify" } | null>(null);
   const latest = c?.executions[0] ?? null;
   const [execVerdict, setExecVerdict] = useState<UtVerdict>("PASS");
+  const [caseTypeId, setCaseTypeId] = useState(c?.caseTypeCodeId ?? "");
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setPending(true); setMessage(null);
@@ -49,7 +50,9 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
   const members = options.members;
 
   async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setPending(true); setMessage(null);
+    event.preventDefault();
+    if (!caseTypeId) { setMessage({ tone: "error", text: "케이스유형을 선택해 주세요." }); return; }
+    setPending(true); setMessage(null);
     const f = new FormData(event.currentTarget);
     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
     const data = {
@@ -105,7 +108,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
           <h2 className="ut-section">테스트 케이스</h2>
           <label>테스트케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
           {/* 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21 사용자 확정) */}
-          <label>케이스유형<select name="caseTypeCodeId" required defaultValue={c?.caseTypeCodeId ?? ""}><option value="" disabled>선택</option>{options.codes.caseTypes.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
+          <div className="ut-field"><span>케이스유형</span><SingleChecks label="케이스유형" items={options.codes.caseTypes.map((x) => ({ value: x.id, label: x.label }))} value={caseTypeId || null} onChange={setCaseTypeId} /><input type="hidden" name="caseTypeCodeId" value={caseTypeId} /></div>
           <label>사전조건<textarea name="precondition" rows={4} maxLength={2000} defaultValue={c?.precondition ?? ""} /></label>
           <label>입력데이터<textarea name="inputData" rows={4} maxLength={2000} defaultValue={c?.inputData ?? ""} /></label>
           <label>테스트스텝<textarea name="steps" rows={4} maxLength={4000} defaultValue={c?.steps ?? ""} placeholder={"1. …\n2. …"} /></label>
@@ -237,9 +240,13 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
 
 const VERDICTS: UtVerdict[] = ["PASS", "FAIL", "BLOCKED", "NA"];
 
-/** 테스트결과 선택 — 체크박스 모양이지만 1개만 선택된다(2026-10-21 사용자 요청). disabled면 최근 결과 표시용. */
-function VerdictChecks({ value, onChange, disabled }: { value: UtVerdict | null; onChange?: (v: UtVerdict) => void; disabled?: boolean }) {
-  return <div className="ut-verdict-checks" role="radiogroup" aria-label="테스트결과">
-    {VERDICTS.map((v) => <label key={v}><input type="checkbox" role="radio" aria-checked={value === v} checked={value === v} disabled={disabled} onChange={() => onChange?.(v)} /> {UT_VERDICT_LABEL[v]}</label>)}
+/** 단일 선택 체크박스 — 체크박스 모양이지만 1개만 선택된다(2026-10-21·22 사용자 요청: 테스트결과·케이스유형). disabled면 표시용. */
+function SingleChecks<T extends string>({ label, items, value, onChange, disabled }: { label: string; items: { value: T; label: string }[]; value: T | null; onChange?: (v: T) => void; disabled?: boolean }) {
+  return <div className="ut-verdict-checks" role="radiogroup" aria-label={label}>
+    {items.map((x) => <label key={x.value}><input type="checkbox" role="radio" aria-checked={value === x.value} checked={value === x.value} disabled={disabled} onChange={() => onChange?.(x.value)} /> {x.label}</label>)}
   </div>;
+}
+
+function VerdictChecks({ value, onChange, disabled }: { value: UtVerdict | null; onChange?: (v: UtVerdict) => void; disabled?: boolean }) {
+  return <SingleChecks label="테스트결과" items={VERDICTS.map((v) => ({ value: v, label: UT_VERDICT_LABEL[v] }))} value={value} onChange={onChange} disabled={disabled} />;
 }
