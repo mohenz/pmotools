@@ -2,7 +2,7 @@ import "server-only";
 import { getPrisma } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { listWbsItems } from "@/lib/server/mp/wbs";
-import { UT_NO_WBS, isUtTargetTask, missingCaseFields, reviewChecklist } from "@/lib/domain/ut";
+import { UT_NO_WBS, utReviewStatus, isUtTargetTask, missingCaseFields, reviewChecklist } from "@/lib/domain/ut";
 import { dateOnly, isUtManager, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
@@ -94,14 +94,14 @@ export async function wbsSubtreeDisplayIds(projectId: string, wbs: string | unde
 // ---------------------------------------------------------------------------
 
 export type UtSheetRow = {
-  caseId: string | null; wbsItemId: string | null; caseStatus: string | null; todo: string[];
+  caseId: string | null; wbsItemId: string | null; caseStatus: string | null; reviewStatus: string | null; todo: string[];
   unit: string; wbsDisplayId: string; wbsName: string; caseDisplayId: string; caseName: string; precondition: string; inputData: string; steps: string; expectedResult: string;
   actualResult: string; verdict: string | null; errorContent: string; ownerName: string | null; executedOn: string | null; executorName: string | null;
   screenId: string; screenName: string; requirementId: string; defectId: string | null; fixedAt: string | null; fixerName: string | null;
   verificationResult: string | null; verifiedAt: string | null; verifierName: string | null; done: "완료" | "진행중" | "미수행" | "미등록";
 };
 
-export type UtSheetFilters = { wbs?: string; q?: string; verdict?: string; todo?: string };
+export type UtSheetFilters = { wbs?: string; q?: string; verdict?: string; todo?: string; review?: string };
 
 /** 단위테스트 목록 — WBS 기준(2026-10-21 사용자 확정): 단위테스트 대상 Task(개발 단계 Leaf + 대상 체크)마다 케이스 행을,
  *  케이스가 없는 대상 Task는 "미등록" 1행을 WBS 경로 순서로 보여 준다. 대상이 아닌 Task의 케이스는 목록에서 제외한다.
@@ -140,7 +140,7 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
     if (openDefects.some((x) => ((x.status === "REGISTERED" || x.status === "REFIX") && ((x.assigneeId ?? c.executorId) === me || manager)) || (x.status === "FIXED" && x.fixedBy !== me && ([c.executorId, c.qcUserId].includes(me) || manager)))) todo.push("defect");
     if ((c.status === "DRAFT" || c.status === "REJECTED") && c.createdBy === me) todo.push("draft");
     return {
-      caseId: c.id, wbsItemId: c.wbsItemId, caseStatus: c.status, todo,
+      caseId: c.id, wbsItemId: c.wbsItemId, caseStatus: c.status, reviewStatus: utReviewStatus(c.status), todo,
       unit: c.group.label, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", caseDisplayId: c.displayId, caseName: c.name, precondition: c.precondition, inputData: c.inputData, steps: c.steps, expectedResult: c.expectedResult,
       actualResult: e?.actualResult || e?.naReason || "", verdict: e?.verdict ?? null, errorContent: d?.description ?? (e?.verdict === "FAIL" ? e.actualResult : ""),
       ownerName: c.wbsItem?.owner?.name ?? null, executedOn: dateOnly(e?.executedOn), executorName: e?.executor.name ?? null,
@@ -153,7 +153,7 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
   const byWbs = new Map<string, UtSheetRow[]>();
   for (const r of caseRows) if (r.wbsItemId) byWbs.set(r.wbsItemId, [...(byWbs.get(r.wbsItemId) ?? []), r]);
   const rows: UtSheetRow[] = targets.flatMap((t): UtSheetRow[] => byWbs.get(t.id) ?? [{
-    caseId: null, wbsItemId: t.id, caseStatus: null, todo: [],
+    caseId: null, wbsItemId: t.id, caseStatus: null, reviewStatus: null, todo: [],
     unit: "", wbsDisplayId: t.displayId, wbsName: t.name, caseDisplayId: "", caseName: "", precondition: "", inputData: "", steps: "", expectedResult: "",
     actualResult: "", verdict: null, errorContent: "", ownerName: t.ownerName, executedOn: null, executorName: null,
     screenId: "", screenName: "", requirementId: "", defectId: null, fixedAt: null, fixerName: null,
@@ -161,6 +161,7 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
   }]).concat(caseRows.filter((r) => !r.wbsItemId));
   const q = filters.q?.trim().toLowerCase();
   return rows.filter((r) =>
+    (!filters.review || r.reviewStatus === filters.review) &&
     (!filters.verdict || (filters.verdict === "NONE" ? r.verdict === null : r.verdict === filters.verdict)) &&
     (!filters.todo || (filters.todo === "any" ? r.todo.length > 0 : r.todo.includes(filters.todo))) &&
     (!q || [r.caseDisplayId, r.caseName, r.unit, r.wbsDisplayId, r.wbsName, r.requirementId, r.screenId].some((v) => v.toLowerCase().includes(q))));

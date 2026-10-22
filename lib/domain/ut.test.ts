@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase,
-  caseDisplayIdError, defectDisplayId, isUtTargetStage, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, nextRoundNo, reviewChecklist, utCompletionConditions, validateExecution,
+  caseDisplayIdError, defectDisplayId, utReviewStatus, isUtTargetStage, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, nextRoundNo, reviewChecklist, utCompletionConditions, validateExecution,
   type UtCaseDraft,
 } from "@/lib/domain/ut";
 
@@ -152,5 +152,16 @@ describe("단위테스트 대상 Task", () => {
     expect(isUtTargetTask({ stage: "개발", isUnitTestTarget: false, isLeaf: true })).toBe(false);
     expect(isUtTargetTask({ stage: "설계", isUnitTestTarget: true, isLeaf: true })).toBe(false);
     expect(isUtTargetTask({ stage: "개발", isUnitTestTarget: true, isLeaf: false })).toBe(false);
+  });
+});
+
+describe("PL 검토 상태", () => {
+  it("승인 이후 수행·확인 단계는 승인으로 본다", () => {
+    expect(utReviewStatus("DRAFT")).toBe("DRAFT");
+    expect(utReviewStatus("REVIEW_REQUESTED")).toBe("REVIEW_REQUESTED");
+    expect(utReviewStatus("REJECTED")).toBe("REJECTED");
+    expect(utReviewStatus("APPROVED")).toBe("APPROVED");
+    expect(utReviewStatus("QC_PENDING")).toBe("APPROVED");
+    expect(utReviewStatus("PL_CONFIRMED")).toBe("APPROVED");
   });
 });

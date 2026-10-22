@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       return ok({ editor, options, leaves: tree.filter((n) => n.isLeaf), projectCode: project?.code ?? "", userId: actor.userId });
     }
     if (a === "sheet") {
-      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
+      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, review: sp.get("review") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
       const buffer = await buildUtSheetWorkbook(rows);
       return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_목록.xlsx")}` } });
     }

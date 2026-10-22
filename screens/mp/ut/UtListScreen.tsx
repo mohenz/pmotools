@@ -1,4 +1,4 @@
-import { UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
+import { UT_REVIEW_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtReviewStatus, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
 import type { UtSheetRow, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import { STATUS_BAND, dot } from "@/features/mp/ut/format";
 import { UtPagination, type UtPageSize } from "@/features/mp/ut/UtPagination";
@@ -24,6 +24,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
           {filters.wbs && <input type="hidden" name="wbs" value={filters.wbs} />}
           {paging.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(paging.pageSize)} />}
           <input name="q" defaultValue={filters.q ?? ""} placeholder="케이스 ID·명, 업무명, 요구사항·화면 ID 검색" aria-label="검색어" />
+          <select name="review" defaultValue={filters.review ?? ""} aria-label="검토상태"><option value="">전체 검토상태</option>{(Object.keys(UT_REVIEW_STATUS_LABEL) as UtReviewStatus[]).map((k) => <option key={k} value={k}>{UT_REVIEW_STATUS_LABEL[k]}</option>)}</select>
           <select name="verdict" defaultValue={filters.verdict ?? ""} aria-label="테스트 결과"><option value="">전체 결과</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BLOCKED">BLOCKED</option><option value="NA">N/A</option><option value="NONE">미수행</option></select>
           <select name="todo" defaultValue={filters.todo ?? ""} aria-label="처리 대기"><option value="">전체 케이스</option><option value="any">내 처리 대기 전체</option>{Object.entries(UT_TODO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <button className="button secondary" type="submit">조회</button>
@@ -32,7 +33,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
         <section className="panel compact">
           {rows.length ? <div className="table-wrap wbs-table-wrap"><table className="ut-table ut-sheet">
             <thead><tr>
-              <th>업무명</th><th>WBS ID</th><th>테스트 케이스 ID</th><th>테스트케이스명</th><th>사전조건</th><th>입력 데이터</th><th>테스트 케이스 상세</th><th>예상결과</th><th>실제결과</th><th>테스트 결과</th><th>오류내용</th><th>업무 담당자</th>
+              <th>업무명</th><th>WBS ID</th><th>테스트 케이스 ID</th><th>테스트케이스명</th><th>검토상태</th><th>사전조건</th><th>입력 데이터</th><th>테스트 케이스 상세</th><th>예상결과</th><th>실제결과</th><th>테스트 결과</th><th>오류내용</th><th>업무 담당자</th>
               <th>테스트 수행일</th><th>테스트 수행자</th><th>화면 ID</th><th>화면명</th><th>요구사항 ID</th><th>결함 ID</th><th>조치일</th><th>조치자</th><th>검증결과</th><th>검증일자</th><th>검증자</th><th>완료여부</th>
             </tr></thead>
             <tbody>{rows.map((r) => <tr key={r.caseId ?? `wbs-${r.wbsItemId ?? ""}`}>
@@ -45,6 +46,7 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
                 <td>{canCreate ? <UtModalLink className="table-link" href={keep({ new: "1", ...(r.wbsItemId ? { newWbs: r.wbsItemId } : {}) })}>+ 케이스 등록</UtModalLink> : "–"}</td>
                 <td className="title-cell ut-hint">{r.wbsName} · 케이스 미등록</td>
               </>}
+              <td>{r.reviewStatus ? <span className={`badge ${STATUS_BAND[r.reviewStatus]}`}>{UT_REVIEW_STATUS_LABEL[r.reviewStatus as UtReviewStatus]}</span> : "–"}</td>
               <td className="ut-pre">{r.precondition}</td>
               <td className="ut-pre">{r.inputData}</td>
               <td className="ut-pre ut-steps">{r.steps}</td>

@@ -32,6 +32,13 @@ export function isUtTargetTask(item: { stage: string | null | undefined; isUnitT
   return item.isLeaf && item.isUnitTestTarget && isUtTargetStage(item.stage);
 }
 
+/** PL 검토 상태(목록 "검토상태" 열, 2026-10-22 사용자 확정) — 케이스 상태에서 읽는다. 승인 이후 수행·확인 단계는 모두 "승인". */
+export type UtReviewStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "REJECTED";
+export const UT_REVIEW_STATUS_LABEL: Record<UtReviewStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", REJECTED: "반려" };
+export function utReviewStatus(status: UtCaseStatus): UtReviewStatus {
+  return status === "DRAFT" || status === "REVIEW_REQUESTED" || status === "REJECTED" ? status : "APPROVED";
+}
+
 export class UtRuleError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
