@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "PMOTOOLS WBS 상세내용",
+  "short_name": "WBS 상세내용",
+  "version": "1.0.0",
+  "description": "PMOTOOLS에서 내가 담당인 WBS Task의 상세내용을 브라우저 옆 패널에서 작성·저장합니다.",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnlJB5gqj8EuuIEojU7Ozd/uX+R3+VWQF6CWO6pU6OcMZ9ABbtx5cxv2sBFZ32Ky8T2U7UjqI/KB6OQar8hPfg3bGlsOXx/lMhLxWXI0TEpFk2XiCc1KbmvSEgocAQLQXLYX1ivoo/EPexLsbNe5obQtxUhs49+O/opB+tzp2nIRV25OURww4WuU1lMyjV3aOybMMYISRdS+XdOp4eQOORxS5hrAExHscNlxr/LxVrnzAC+rMFbqtiVevgz19Z69qUq9+vORtDEHWPLOWzm0CWRad2LnhQEtwQH7DpBXH9nYRAcsEyzrREJYBusTreOY7avZdPqkMZhYOXH2FFDB+qwIDAQAB",
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "action": { "default_title": "WBS 상세내용 작성", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "background": { "service_worker": "service_worker.js" },
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": ["http://10.147.148.101:3020/*", "http://localhost:3020/*"]
+}

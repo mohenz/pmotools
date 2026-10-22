@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WBS 상세내용</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="who"><strong>WBS 상세내용</strong><span id="who"></span></div>
+    <div class="bar-actions">
+      <button id="btn-refresh" class="ghost" title="새로고침">↻</button>
+      <button id="btn-settings" class="ghost" title="설정">⚙</button>
+    </div>
+  </header>
+
+  <p id="message" class="message" role="status" hidden></p>
+
+  <!-- 설정 -->
+  <section id="view-settings" class="view" hidden>
+    <h2>설정</h2>
+    <label class="field">접속 서버
+      <select id="server">
+        <option value="http://10.147.148.101:3020">운영 — 10.147.148.101:3020</option>
+        <option value="http://localhost:3020">개발 — 이 PC(localhost:3020)</option>
+      </select>
+    </label>
+    <p class="hint">PMOTOOLS에 로그인된 브라우저 세션을 그대로 사용합니다. 아이디·비밀번호는 저장하지 않습니다.</p>
+    <div class="row-end"><button id="btn-settings-done" class="primary">완료</button></div>
+  </section>
+
+  <!-- 로그인 필요 -->
+  <section id="view-login" class="view" hidden>
+    <h2>로그인이 필요합니다</h2>
+    <p class="hint">PMOTOOLS 로그인 화면을 새 탭으로 엽니다. 로그인한 뒤 이 패널의 ↻(새로고침)을 누르세요.</p>
+    <div class="row-end"><button id="btn-login" class="primary">PMOTOOLS 로그인</button></div>
+  </section>
+
+  <!-- 내 Task 목록 -->
+  <section id="view-list" class="view" hidden>
+    <div class="filters">
+      <input id="q" type="search" placeholder="Task 코드·이름 검색" aria-label="검색">
+      <label class="check"><input id="only-empty" type="checkbox"> 상세내용 미작성만</label>
+    </div>
+    <p id="list-summary" class="hint"></p>
+    <ul id="list" class="list"></ul>
+  </section>
+
+  <!-- 상세내용 편집 -->
+  <section id="view-edit" class="view" hidden>
+    <div class="row-between">
+      <button id="btn-back" class="ghost">← 목록</button>
+      <a id="open-pmotools" class="link" target="_blank" rel="noreferrer">PMOTOOLS에서 열기 ↗</a>
+    </div>
+    <div class="task">
+      <div class="task-id" id="task-id"></div>
+      <div class="task-name" id="task-name"></div>
+      <div class="task-meta" id="task-meta"></div>
+    </div>
+    <div id="draft-banner" class="banner" hidden>
+      <span>임시 저장된 내용이 있습니다(<span id="draft-time"></span>).</span>
+      <button id="btn-draft-restore" class="small">복구</button>
+      <button id="btn-draft-discard" class="small ghost">버리기</button>
+    </div>
+    <div id="conflict" class="conflict" hidden>
+      <strong>다른 사용자가 먼저 수정했습니다.</strong>
+      <p class="hint">아래는 서버의 최신 내용입니다. 내가 쓴 내용은 임시 저장되어 있습니다.</p>
+      <textarea id="conflict-text" rows="6" readonly></textarea>
+      <div class="row-end">
+        <button id="btn-conflict-load" class="small">최신 내용 불러오기</button>
+        <button id="btn-conflict-overwrite" class="small danger">내 내용으로 덮어쓰기</button>
+      </div>
+    </div>
+    <label class="field">상세내용 <span id="counter" class="counter"></span>
+      <textarea id="desc" rows="18" maxlength="10000" spellcheck="false"></textarea>
+    </label>
+    <p id="readonly-note" class="hint" hidden>이 Task는 담당자 또는 PM/PMO만 수정할 수 있습니다(읽기 전용).</p>
+    <div class="row-between">
+      <span id="draft-state" class="hint"></span>
+      <div>
+        <button id="btn-template" class="ghost">템플릿 삽입</button>
+        <button id="btn-save" class="primary">저장</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="panel.js"></script>
+</body>
+</html>

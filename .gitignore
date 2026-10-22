@@ -35,7 +35,11 @@ sonar-project.properties
 scripts/create-token.ps1
 scripts/fetch-metrics.ps1
 scripts/test-remote-db.ts
+scripts/_e2e.mjs
 
 # 단위테스트 증적 로컬 저장소(개발용, 운영은 UT_EVIDENCE_ROOT)
 .ut-evidence/
 .ut-evidence-tmp/
+
+# 로컬 임시 DB 덤프 파일 (docs/local_full_backup.sql 로 버전 관리)
+local_db_backup_*.sql

@@ -1,0 +1,54 @@
+:root {
+  --bg: #ffffff; --fg: #1f2328; --muted: #6b7280; --border: #d0d7de; --soft: #f6f8fa;
+  --primary: #2563eb; --primary-fg: #ffffff; --danger: #c62828; --warn-bg: #fff7e6; --warn-border: #f0b429; --ok: #2e7d32;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1e1f22; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3d42; --soft: #2a2c30; --warn-bg: #3a3020; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.bar { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg); z-index: 1; }
+.who { display: flex; flex-direction: column; }
+.who span { color: var(--muted); font-size: 12px; }
+.bar-actions { display: flex; gap: 4px; }
+.view { padding: 12px; display: grid; gap: 10px; }
+h2 { margin: 0; font-size: 15px; }
+.hint { margin: 0; color: var(--muted); font-size: 12px; }
+.message { margin: 8px 12px 0; padding: 8px 10px; border-radius: 6px; background: var(--soft); border: 1px solid var(--border); }
+.message.error { border-color: var(--danger); color: var(--danger); }
+.message.ok { border-color: var(--ok); color: var(--ok); }
+.field { display: grid; gap: 4px; font-weight: 600; }
+input[type="search"], select, textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+textarea { resize: vertical; font-weight: 400; line-height: 1.6; }
+.filters { display: grid; gap: 6px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.check input { accent-color: var(--primary); width: 15px; height: 15px; margin: 0; }
+.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.list li { padding: 9px 10px; border-top: 1px solid var(--border); cursor: pointer; display: grid; gap: 2px; }
+.list li:first-child { border-top: 0; }
+.list li:hover, .list li:focus { background: var(--soft); outline: none; }
+.list .l1 { display: flex; justify-content: space-between; gap: 8px; }
+.list .code { color: var(--muted); font-family: Consolas, monospace; font-size: 12px; }
+.list .name { font-weight: 600; }
+.list .meta { color: var(--muted); font-size: 12px; }
+.badge { display: inline-block; padding: 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; background: var(--warn-bg); color: #9a6700; border: 1px solid var(--warn-border); white-space: nowrap; }
+.badge.done { background: transparent; color: var(--ok); border-color: var(--ok); }
+.task { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--soft); }
+.task-id { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+.task-name { font-weight: 700; font-size: 14px; }
+.task-meta { color: var(--muted); font-size: 12px; }
+.counter { float: right; font-weight: 400; color: var(--muted); font-size: 12px; }
+.banner, .conflict { padding: 8px 10px; border: 1px solid var(--warn-border); background: var(--warn-bg); border-radius: 6px; display: grid; gap: 6px; }
+.banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.row-end { display: flex; justify-content: flex-end; gap: 6px; }
+button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 700; }
+button.danger { border-color: var(--danger); color: var(--danger); }
+button.ghost { border-color: transparent; background: transparent; }
+button.ghost:hover { background: var(--soft); }
+button.small { padding: 3px 8px; font-size: 12px; }
+.link { color: var(--primary); text-decoration: none; font-size: 12px; }
+.link:hover { text-decoration: underline; }
