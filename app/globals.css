@@ -1735,7 +1735,14 @@ a.history-item:hover { background: var(--accent); }
 .ut-field { display: grid; gap: 6px; font-size: 14px; font-weight: 500; color: var(--foreground); }
 .ut-verdict-checks { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; min-height: 36px; }
 .ut-verdict-checks label, .form-panel .ut-verdict-checks label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500; }
-.ut-verdict-checks input[type="checkbox"] { flex: none; width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; }
+/* 단일 선택 체크박스(케이스유형·테스트결과) — 파란 강조색, 잠긴 화면(읽기 전용)에서도 선택값이 흐려지지 않게(2026-10-22 사용자 요청) */
+.ut-verdict-checks input[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: none; display: inline-grid; place-content: center; width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; border: 2px solid var(--muted-foreground); border-radius: 4px; background: var(--card); cursor: pointer; }
+.ut-verdict-checks input[type="checkbox"]:checked { border-color: var(--info); background: var(--info); }
+.ut-verdict-checks input[type="checkbox"]:checked::after { content: ""; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+.ut-verdict-checks input[type="checkbox"]:disabled { cursor: default; opacity: 1; }
+.ut-verdict-checks input[type="checkbox"]:disabled:not(:checked) { border-color: var(--border); }
+.ut-verdict-checks input[type="checkbox"]:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.ut-verdict-checks label:has(input:checked) { color: var(--info); font-weight: 700; }
 .ut-reference p { margin: 2px 0; font-size: 13px; }
 .ut-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
 .ut-tabs button { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); cursor: pointer; }
