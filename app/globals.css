@@ -1785,3 +1785,10 @@ a.history-item:hover { background: var(--accent); }
 .ut-case-modal .content { flex: 1 1 auto; min-height: 0; padding: 14px 18px 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; align-content: start; grid-auto-rows: max-content; }
 
 .ut-edit .form-panel { max-width: none; }
+/* 케이스 정보 화면 — 타이틀과 입력창을 한 줄로(왼쪽 타이틀 · 오른쪽 입력, 2026-10-22 사용자 요청) */
+.ut-edit .ut-fieldset label:not(.toggle), .ut-edit .ut-exec-form label, .ut-edit .ut-field { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); align-items: baseline; column-gap: 10px; }
+.ut-edit .ut-fieldset .ut-verdict-checks label, .ut-edit .ut-exec-form .ut-verdict-checks label { display: inline-flex; }
+.ut-edit .ut-field { align-items: center; }
+.ut-edit .ut-decide { align-items: center; }
+.ut-edit .ut-decide label { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
+.ut-edit .ut-decide label input, .ut-edit .ut-decide label select { width: auto; min-width: 180px; }

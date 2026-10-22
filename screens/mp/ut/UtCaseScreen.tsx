@@ -148,8 +148,8 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
       {editor.canExecute && c && <section className="panel">
         <div className="panel-head"><h2>테스트 수행 결과 등록</h2><span>{latest ? `${latest.roundNo + 1}차` : "1차"} · 증적 필수(Pass·Fail)</span></div>
         <form className="ut-exec-form" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget); void act(() => utApi(`cases/${c.id}/executions`, { method: "POST", body }), "수행 결과를 등록했습니다."); }}>
-          <div className="form-grid triple">
-            <div className="ut-field"><span>테스트 결과</span><VerdictChecks value={execVerdict} onChange={setExecVerdict} /><input type="hidden" name="verdict" value={execVerdict} /></div>
+          <div className="ut-field"><span>테스트 결과</span><VerdictChecks value={execVerdict} onChange={setExecVerdict} /><input type="hidden" name="verdict" value={execVerdict} /></div>
+          <div className="form-grid">
             <label>테스트 수행일<input type="date" name="executedOn" defaultValue={today()} /></label>
             <label>수행 환경<select name="envCodeId" defaultValue=""><option value="">미지정</option>{options.codes.envs.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
           </div>
