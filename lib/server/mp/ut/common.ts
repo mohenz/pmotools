@@ -18,6 +18,11 @@ export function isUtManager(actor: UtActor) {
   return hasPmPmoAccess(actor.jobTitle, actor.role) || isManagerRole(actor.role as never);
 }
 
+/** 관리자·슈퍼관리자 — 수행·QC·PL 확인을 지정자 대신 처리할 수 있다(2026-10-23 사용자 확정). 수행자 본인 확인 금지 등 직무 분리는 그대로. */
+export function isUtAdmin(actor: Pick<UtActor, "role">) {
+  return actor.role === "ADMIN" || actor.role === "SUPER_ADMIN";
+}
+
 export function assertUtManager(actor: UtActor) {
   if (!isUtManager(actor)) throw new DomainError("FORBIDDEN", "PM/PMO만 처리할 수 있습니다.");
 }

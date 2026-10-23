@@ -1,0 +1,2176 @@
+diff --git a/app/api/v1/mp/ut/[...path]/route.ts b/app/api/v1/mp/ut/[...path]/route.ts
+index 7ca52d8..5e25261 100644
+--- a/app/api/v1/mp/ut/[...path]/route.ts
++++ b/app/api/v1/mp/ut/[...path]/route.ts
+@@ -4,7 +4,7 @@ import { mutationErrorResponse } from "@/lib/server/http";
+ import { DomainError } from "@/lib/server/errors";
+ import type { UtActor } from "@/lib/server/mp/ut/common";
+ import {
+-  createUtCase, decideUtCaseReview, getPlReference, getUtFormOptions, listUtReviewInbox, listUtWbsLeaves, reassignUtCasePl, requestUtCaseReview, setUtCaseActive, updateUtCase,
++  createUtCase, getPlReference, getUtFormOptions, listUtWbsLeaves, reassignUtCasePl, setUtCaseActive, updateUtCase,
+ } from "@/lib/server/mp/ut/cases";
+ import { decideUtApproval, listMyUtExecutionTargets, listUtApprovalInbox, openUtEvidence, registerUtExecution } from "@/lib/server/mp/ut/executions";
+ import { fixUtDefect, listUtDefectActions, listUtRunRows, registerUtDefect, updateUtDefect, verifyUtDefect } from "@/lib/server/mp/ut/defects";
+@@ -40,8 +40,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
+     const [a, id, b] = path;
+     if (a === "options") return ok({ ...(await getUtFormOptions(actor.projectId)), wbsLeaves: await listUtWbsLeaves(actor.projectId), plReference: await getPlReference(actor.projectId, actor.userId) });
+     if (a === "inbox") {
+-      const [targets, reviews, qc, pl] = await Promise.all([listMyUtExecutionTargets(projectIds, actor.userId), listUtReviewInbox(projectIds, actor.userId), listUtApprovalInbox(projectIds, actor.userId, "QC"), listUtApprovalInbox(projectIds, actor.userId, "PL")]);
+-      return ok({ targets, reviews, qc, pl });
++      const [targets, qc, pl] = await Promise.all([listMyUtExecutionTargets(projectIds, actor.userId), listUtApprovalInbox(projectIds, actor.userId, "QC"), listUtApprovalInbox(projectIds, actor.userId, "PL")]);
++      return ok({ targets, qc, pl });
+     }
+     if (a === "evidences" && id) {
+       const file = await openUtEvidence(projectIds, actor.userId, id);
+@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
+       return ok({ editor, options, leaves: tree.filter((n) => n.isLeaf), projectCode: project?.code ?? "", userId: actor.userId });
+     }
+     if (a === "sheet") {
+-      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, review: sp.get("review") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
++      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
+       const buffer = await buildUtSheetWorkbook(rows);
+       return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_목록.xlsx")}` } });
+     }
+@@ -84,8 +84,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
+     const [a, id, b] = (await params).path;
+     const actor = await writeActor();
+     if (a === "cases" && !id) return ok(await createUtCase(actor, await body(request)), 201);
+-    if (a === "cases" && id && b === "review") return ok(await requestUtCaseReview(actor, id));
+-    if (a === "cases" && id && b === "decision") return ok(await decideUtCaseReview(actor, id, await body(request)));
+     if (a === "cases" && id && b === "executions") {
+       const form = await request.formData();
+       const files = form.getAll("evidence").filter((f): f is File => typeof f !== "string" && f.size > 0);
+diff --git a/app/globals.css b/app/globals.css
+index 8c6a7d3..dad10af 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -1717,9 +1717,6 @@ a.history-item:hover { background: var(--accent); }
+ .ut-hint { display: block; color: var(--muted-foreground); font-size: 12px; }
+ .ut-ok { border-color: color-mix(in oklch, var(--success), transparent 60%); background: var(--success-bg); }
+ .ut-detail .ut-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+-.ut-checklist { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+-.ut-checklist .ok { color: var(--success); }
+-.ut-checklist .ng { color: var(--destructive); }
+ .ut-case-form, .ut-exec-form { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }
+ .ut-expand td { background: var(--secondary); }
+ .ut-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0 0 10px; }
+@@ -1783,10 +1780,55 @@ a.history-item:hover { background: var(--accent); }
+ .ut-modal-wide { width: min(640px, 100%); }
+ @media (max-width: 1000px) { .ut-split { grid-template-columns: 1fr; } .ut-tree { position: static; max-height: 320px; } }
+ .ut-sheet td { vertical-align: top; }
++.ut-sheet td.title-cell { min-width: 380px; max-width: 380px; }
++/* 단위테스트 목록 틀고정 — 타이틀 행(thead)과 테스트케이스ID·테스트케이스명 열을 고정하고 나머지 열만 가로 스크롤(2026-10-23 사용자 요청). */
++.ut-table-wrap { max-height: 70vh; overflow-y: auto; }
++.ut-table-wrap thead th { position: sticky; top: 0; z-index: 2; background: var(--card); }
++.ut-table-wrap th:nth-child(-n+2), .ut-table-wrap td:nth-child(-n+2) { position: sticky; background: var(--card); }
++.ut-table-wrap th:nth-child(-n+2) { z-index: 3; }
++.ut-table-wrap td:nth-child(-n+2) { z-index: 1; }
++.ut-table-wrap tbody tr:hover td:nth-child(-n+2) { background: var(--accent); }
++.ut-table-wrap th:nth-child(1), .ut-table-wrap td:nth-child(1) { left: 0; width: 200px; min-width: 200px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
++.ut-table-wrap th:nth-child(2), .ut-table-wrap td:nth-child(2) { left: 200px; box-shadow: 2px 0 4px -2px rgb(0 0 0 / 30%); }
+ .ut-sheet .ut-pre { max-width: 240px; font-size: 12px; }
+ .ut-todo { display: block; color: var(--primary); font-size: 11px; font-weight: 700; }
++.ut-todo-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 2px 8px; border-radius: 999px; background: color-mix(in oklch, var(--primary), transparent 88%); color: var(--primary); font-size: 12px; font-weight: 700; white-space: nowrap; }
+ /* 테스트 케이스 정보 모달 */
+ .ut-case-backdrop { overflow: hidden; }
++/* 케이스 팝업 위에 겹쳐 뜨는 팝업(증적 선택·수행 결과·이미지) — 바닥 팝업과 구분되도록 더 어두운 배경·테두리·그림자 */
++.ut-evidence-backdrop, .ut-image-backdrop { background: rgb(0 0 0 / 72%); backdrop-filter: blur(2px); }
++.ut-evidence-modal, .ut-history-modal, .ut-image-modal { border: 1px solid color-mix(in oklch, var(--foreground), transparent 65%); background: color-mix(in oklch, var(--card), var(--foreground) 7%); box-shadow: 0 0 0 1px rgb(0 0 0 / 60%), 0 24px 80px rgb(0 0 0 / 70%); }
++.ut-evidence-backdrop { z-index: 110; }
++.ut-image-backdrop { z-index: 120; }
++.ut-stage { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
++.ut-stage-round { font-size: 13px; font-weight: 600; color: var(--muted-foreground, inherit); }
++.ut-stage-chip { padding: 5px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 15px; font-weight: 700; line-height: 1.2; }
++.ut-stage-chip.band-green { background: var(--success-bg); color: var(--success); border-color: color-mix(in oklch, var(--success), transparent 60%); }
++.ut-stage-chip.band-red { background: var(--destructive-bg); color: var(--destructive); border-color: color-mix(in oklch, var(--destructive), transparent 60%); }
++.ut-stage-chip.band-yellow { background: var(--warning-bg); color: var(--warning); border-color: color-mix(in oklch, var(--warning), transparent 60%); }
++.ut-image-modal { width: min(1100px, 100%); max-height: calc(100vh - 40px); padding: 14px; gap: 10px; overflow: hidden; }
++.ut-image-head { display: flex; align-items: center; gap: 12px; }
++.ut-image-head strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.ut-image-full { display: block; max-width: 100%; max-height: calc(100vh - 140px); margin: 0 auto; object-fit: contain; }
++.ut-evidence-modal { width: min(520px, 100%); }
++.ut-history-modal { width: min(1120px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
++.ut-history-table { width: 100%; border-collapse: collapse; }
++.ut-history-table th, .ut-history-table td { padding: 10px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
++/* 전역 "tbody tr:last-child td { border-bottom: 0 }"가 마지막 줄 테두리를 지우므로 다시 지정 */
++.ut-history-table tbody tr:last-child th, .ut-history-table tbody tr:last-child td { border-bottom: 1px solid var(--border); }
++.ut-history-table th { width: 140px; white-space: nowrap; font-size: 13px; font-weight: 600; background: color-mix(in oklch, var(--foreground), transparent 94%); }
++.ut-history-table td > a, .ut-history-table td > small { display: block; }
++.ut-history-table td > a + a, .ut-history-table td > .badge + small, .ut-history-table td > small + small { margin-top: 4px; }
++.ut-history-detail { display: grid; gap: 10px; margin: 0; }
++.ut-history-detail > div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: start; }
++.ut-history-detail dt { color: var(--muted-foreground, inherit); font-size: 13px; }
++.ut-history-detail dd { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
++.ut-evidence-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
++.ut-evidence-drop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px; border: 1px dashed var(--border); border-radius: var(--radius); }
++.ut-evidence-drop:focus { outline: 2px solid currentColor; outline-offset: 2px; }
++.ut-evidence-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
++.ut-evidence-list li { display: flex; align-items: center; gap: 8px; }
++.ut-evidence-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .ut-case-modal { display: flex; flex-direction: column; width: min(1200px, 100%); height: calc(100vh - 40px); max-height: calc(100vh - 40px); padding: 0; gap: 0; overflow: hidden; }
+ .ut-case-modal .topbar { flex: none; border-radius: var(--radius) var(--radius) 0 0; }
+ .ut-case-modal .content { flex: 1 1 auto; min-height: 0; padding: 14px 18px 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; align-content: start; grid-auto-rows: max-content; }
+@@ -1799,3 +1841,20 @@ a.history-item:hover { background: var(--accent); }
+ .ut-edit .ut-decide { align-items: center; }
+ .ut-edit .ut-decide label { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
+ .ut-edit .ut-decide label input, .ut-edit .ut-decide label select { width: auto; min-width: 180px; }
++.ut-edit .ut-decide label input.ut-comment-input { min-width: 360px; }
++/* 단위테스트 작성현황·수행결과 통계(초안, 2026-10-23) */
++.ut-stat-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
++.ut-stat-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
++.ut-stat-table td, .ut-stat-table th { white-space: nowrap; }
++.ut-bar-col { min-width: 220px; width: 30%; }
++.ut-bar { display: flex; height: 14px; overflow: hidden; border-radius: 999px; background: color-mix(in oklch, var(--foreground), transparent 90%); }
++.ut-bar-seg { display: inline-block; height: 100%; }
++.ut-bar-seg.pass { background: var(--success); }
++.ut-bar-seg.fail { background: var(--destructive); }
++.ut-bar-seg.blocked { background: var(--warning); }
++.ut-bar-seg.na { background: var(--muted-foreground); }
++.ut-bar-seg.none { background: color-mix(in oklch, var(--foreground), transparent 75%); }
++.ut-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
++.ut-legend li { display: inline-flex; align-items: center; gap: 6px; }
++.ut-legend i { width: 12px; height: 12px; border-radius: 3px; }
++@media (max-width: 1100px) { .ut-stat-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ut-stat-pair { grid-template-columns: 1fr; } }
+diff --git a/app/mp-ut/page.tsx b/app/mp-ut/page.tsx
+index df87d15..f89a708 100644
+--- a/app/mp-ut/page.tsx
++++ b/app/mp-ut/page.tsx
+@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
+ export default async function UtListPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+   const params = await searchParams;
+   const pick = (key: string) => (typeof params[key] === "string" ? (params[key] as string) : "");
+-  const filters = { wbs: pick("wbs"), q: pick("q"), review: pick("review"), verdict: pick("verdict"), todo: pick("todo") };
++  const filters = { wbs: pick("wbs"), q: pick("q"), verdict: pick("verdict"), todo: pick("todo") };
+   const scope = await getMpScope();
+   if (scope.isTopLevel) return <div className="content"><p className="action-message">단위테스트는 하위 프로젝트 단위로 관리합니다. 상단에서 하위 프로젝트를 선택해 주세요.</p></div>;
+   const c = scope.context;
+   const { page, pageSize } = parsePaging(params);
+-  const [tree, all] = await Promise.all([getUtWbsTree(c.projectId), listUtCaseSheet(c.projectId, { projectId: c.projectId, userId: c.userId, role: c.role, jobTitle: c.jobTitle }, { wbs: filters.wbs || undefined, q: filters.q || undefined, review: filters.review || undefined, verdict: filters.verdict || undefined, todo: filters.todo || undefined })]);
++  const [tree, all] = await Promise.all([getUtWbsTree(c.projectId), listUtCaseSheet(c.projectId, { projectId: c.projectId, userId: c.userId, role: c.role, jobTitle: c.jobTitle }, { wbs: filters.wbs || undefined, q: filters.q || undefined, verdict: filters.verdict || undefined, todo: filters.todo || undefined })]);
+   const result = paginate(all, page, pageSize);
+   return <UtListScreen tree={tree} rows={result.rows} filters={filters} paging={{ pageSize, page: result.page, total: result.total, totalPages: result.totalPages }} canCreate />;
+ }
+diff --git a/app/mp-ut/stats/page.tsx b/app/mp-ut/stats/page.tsx
+new file mode 100644
+index 0000000..b46acbc
+--- /dev/null
++++ b/app/mp-ut/stats/page.tsx
+@@ -0,0 +1,13 @@
++import { getMpScope } from "@/lib/server/mp/context";
++import { getUtStats } from "@/lib/server/mp/ut/stats";
++import { UtStatsScreen } from "@/screens/mp/ut/UtStatsScreen";
++
++export const dynamic = "force-dynamic";
++
++// 단위테스트 작성현황·수행결과 통계(초안, 2026-10-23) — 다중 프로젝트(MP) 계열, 하위 프로젝트 단위.
++export default async function UtStatsPage() {
++  const scope = await getMpScope();
++  if (scope.isTopLevel) return <div className="content"><p className="action-message">단위테스트 통계는 하위 프로젝트 단위로 봅니다. 상단에서 하위 프로젝트를 선택해 주세요.</p></div>;
++  const c = scope.context;
++  return <UtStatsScreen stats={await getUtStats(c.projectId)} />;
++}
+diff --git a/components/AppNavigation.tsx b/components/AppNavigation.tsx
+index 3e50273..a67d557 100644
+--- a/components/AppNavigation.tsx
++++ b/components/AppNavigation.tsx
+@@ -99,7 +99,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false
+     const moduleGroups: Record<string, {label:string;tabs:{href:string;label:string}[]}[]> = {
+       "/mp-ut": [
+         // 화면 2개 체계(2026-10-20 사용자 지시): 목록 + 정보확인/처리(신규 등록 포함). 이정표·설정은 메뉴에서 제외(경로는 유지).
+-        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut?new=1",label:"신규 등록"}] },
++        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut/stats",label:"통계보기"}] },
+       ],
+     };
+     const groups = moduleGroups[currentTool.href];
+diff --git "a/docs/defect_manage2_\354\235\264\354\213\235\352\262\200\355\206\240_20261023.md" "b/docs/defect_manage2_\354\235\264\354\213\235\352\262\200\355\206\240_20261023.md"
+new file mode 100644
+index 0000000..c6237ba
+--- /dev/null
++++ "b/docs/defect_manage2_\354\235\264\354\213\235\352\262\200\355\206\240_20261023.md"
+@@ -0,0 +1,201 @@
++# defect_manage2 분석 및 pmotools 이식 검토
++
++- 작성일: 2026-10-23
++- 대상: `D:\workspace\defect_manage2` (GitHub `mohenz/defect_manage2`, 최신 커밋 `71bcf46 Prepare Supabase and Vercel deployment`)
++- 목적: defect_manage2의 결함관리 기능을 pmotools로 이식하는 방법을 검토한다.
++- 상태: **검토 문서.** 코드와 DB는 변경하지 않았다. 아래 5장의 결정 사항이 정해지기 전에는 구현에 착수하지 않는다.
++- 분석 범위: README, `docs/functional_specification.md`, `docs/db_schema.md`, `local/schema.sql`, `backend/*.js`, `js/` 구조와 주요 모듈(목록·대시보드·조치자 현황), 외부 연동 위젯·확장 프로그램 문서, `project_control`의 상태 파일. 프런트 전체 코드를 줄 단위로 검증한 것은 아니며, 각 화면의 동작은 코드·문서에서 읽은 내용이다.
++
++---
++
++## 1. defect_manage2 개요
++
++### 1.1 구성
++
++| 영역 | 내용 |
++|---|---|
++| 프런트엔드 | HTML + 바닐라 JS 단일 화면 앱. `js/app.js` 2,029줄, `js/modules/`(form 567, dashboard 497, admin-settings 410, auth 240, list 196, assignee-status 181, admin 164), `js/services/`, Chart.js |
++| 백엔드 | Node.js + Express. `backend/app.js` 343줄, `auth.js` 137, `defect-writes.js` 111, `users.js` 66, `public-assets.js` 20, `server.js` 48 |
++| DB | PostgreSQL. 기본 로컬 `127.0.0.1:54323`, DB `defect_manage2`. Supabase PostgreSQL은 `DATABASE_URL`로 지원 |
++| 배포 | 로컬 Node 서버, Vercel(정적 + Express Function), 내부 서버 포팅 가이드 보유 |
++| 테스트 | 단위 22건(SQL test double), PostgreSQL 통합 3건, Playwright e2e |
++| 외부 연동 | html2canvas 캡처 위젯(`docs/defectflow_report_widget_latest.js` 794줄), 모바일 간편 위젯(192줄), `docs/bug-reporter.js`(418줄), Chrome 확장 `extension/defectflow-reporter`(MV3), 테스트 벤치 페이지(`test_view/`) |
++
++### 1.2 DB 테이블 (7개, `local/schema.sql` 기준)
++
++| 테이블 | 주요 컬럼 | 비고 |
++|---|---|---|
++| `users` | `user_id` BIGINT, `email` 유일, `password`(bcrypt), `name`, `department`, `role`, `status`(사용/사용중지), `needs_password_reset` | 로그인 ID는 이메일 |
++| `defects` | `defect_id` BIGINT, `title`, `test_type`, `severity`, `priority`, `status`, `steps_to_repro`, `menu_name`, `screen_name`, `screen_url`, `screenshot`(TEXT: URL 또는 base64 data URL), `defect_identification`, `env_info`, `creator`, `assignee`, `action_comment`, `action_due_date`, `action_start`, `action_end`, `is_deleted`('Y'/'N'), `created_at`, `updated_at` | 사람은 **이름 문자열**로 저장 |
++| `common_codes` | `group_code`, `code_value`, `code_name`, `color`, `sort_order`, `is_active` | 그룹: STATUS, SEVERITY, PRIORITY, TEST_TYPE, SCREEN_PATH 등 |
++| `app_settings` | `key`, `value`(JSONB) | `global_config`에 활성 테스트구분 목록 |
++| `defect_history` | `defect_id`, `action`, `status_before`, `status_after`, `changed_data`(JSONB), `changed_by` | 생성·수정·삭제 시 같은 트랜잭션으로 기록. 스크린샷 원문은 복사하지 않음 |
++| `defect_save_error_logs` | `client_log_id`, `operation`, `stage`, `error_type`, `message`, `runtime_context`, `payload_summary` 등 | 외부 연동 저장 실패 원인 추적용 |
++| `auth_sessions` | `token_hash`, `user_id`, `expires_at` | 세션 8시간, HttpOnly 쿠키 |
++
++### 1.3 API (`/api/*`)
++
++- 결함: `GET /defects`(페이징·필터, pageSize 최대 200), `GET /defects/:id`, `GET /defects/summary`(통계용 전체), `GET /defects/export`, `GET /defects/action-recheck`(관리자·조치자), `POST /defects`, `PUT /defects/:id`, `DELETE /defects/:id`(관리자, 논리 삭제)
++- 공통코드: `GET/POST/DELETE /common-codes`(쓰기는 관리자)
++- 설정: `GET/PUT /settings/global`
++- 오류 로그: `GET`(관리자)/`POST /error-logs`
++- 인증·사용자: `POST /auth/login`, `/signup`, `/logout`, `GET /auth/me`, `GET/POST/PUT/DELETE /users`, `POST /users/reset-password`
++- 변경 요청은 `Origin`·`Sec-Fetch-Site` 검사와 JSON 콘텐츠 타입을 요구한다.
++
++### 1.4 기능
++
++1. **인증·권한:** 역할 테스터·조치자·관리자. 가입 시 테스터·조치자만 선택. 최초 로그인 비밀번호 변경 강제.
++2. **결함 등록·수정:** 제목 5자 이상, 화면 URL은 http/https만, 이미지는 png/jpeg/webp/gif data URL 또는 URL. 등록 시 상태는 `Open`, 등록자는 로그인 사용자 이름.
++3. **권한 규칙(서버):** 테스터는 조치 정보(담당자, 상태, 결함식별, 조치내용·예정일·시작·종료)를 등록·변경할 수 없고, 심각도는 관리자나 등록자 본인만 변경할 수 있다. 삭제는 관리자만.
++4. **목록:** 결함 ID, 테스트구분, 심각도, 상태(`조치 미완료` 프리셋 포함), 결함식별, 등록자, 기간 등 복합 필터. 10페이지 단위 페이징. 결함 번호 복사. CSV(UTF-8 BOM) 다운로드. 조치예정일 열.
++5. **대시보드:** 등록자별·심각도별 표, 심각도별 조치 현황, 상태별 가로 스택 바, 조치 미완료 카드(클릭 시 목록 이동), 조치완료율. 요약 데이터는 1000건 단위로 끝까지 조회.
++6. **조치자 현황:** 조치자별 상태별 건수, 완료 건수, 완료율, 미배정 행.
++7. **조치 재확인:** 상태가 완료(`Closed`·`Resolved`·`Staging`)인데 결함식별·조치내용이 모두 빈 결함 목록.
++8. **관리:** 공통코드(코드 추가·삭제), 활성 테스트구분 설정, 사용자 관리(역할·부서·상태·비밀번호 초기화), 저장 오류 로그 조회, 사용자 매뉴얼(앱 안 렌더링).
++9. **외부 연동:** 테스트 대상 사이트에 위젯을 붙이면 버튼 하나로 화면을 캡처해 등록 팝업(전용 폼, 사이드바 없음)을 열고 URL·제목·UserAgent를 자동 전달한다. Chrome 확장은 현재 탭을 캡처해 `?mode=standalone#register` 탭을 연다. 두 방식 모두 등록 탭의 서버 인증 쿠키를 사용한다.
++
++### 1.5 이식에 영향을 주는 특징
++
++- 한 프로젝트만 전제한다(프로젝트 개념 없음).
++- 결함과 사람의 관계가 **이름 문자열**(`creator`, `assignee`)이고, 같은 이름·미등록 이름 처리 규칙이 없다. 문서(`db_schema.md`)에도 "사용자명 기반 관계는 별도 승인된 데이터 매핑 전까지 유지"로 적혀 있다.
++- ID가 `Date.now()`/난수 BIGINT다.
++- 캡처 이미지가 base64로 `TEXT` 컬럼과 요청 본문(JSON 30MB 제한)에 들어간다.
++- 상태는 영문 문자열이며 전이 규칙은 없고 권한 검사만 있다.
++- 사용자·세션·로그인이 자체 구현이다.
++
++---
++
++## 2. pmotools와의 대응
++
++| defect_manage2 | pmotools에서 재사용할 자산 | 비고 |
++|---|---|---|
++| 사용자·역할 | `User`, `UserRole`(SUPER_ADMIN/ADMIN/OPERATOR/MEMBER), 프로젝트 구성원, 직무 권한 | 둘 다 `bcryptjs` 사용 → 비밀번호 해시 이관 가능(재설정 강제 여부는 정책 결정) |
++| 공통코드 | `CommonCodeGroup`/`CommonCode`(프로젝트별 가능) | 그룹 5개를 시드로 생성 |
++| 결함 이력 | `writeAuditLog`, 단위테스트의 INSERT 전용 이력 패턴 | |
++| 캡처 이미지 | `lib/server/ut-evidence-storage.ts`(파일 저장, 20MB 제한, png/jpg/gif/webp 등 허용) | 디스크 저장 전제 |
++| 목록·페이징·엑셀 | `UtPagination`, `exceljs`(`buildUtSheetWorkbook`) | CSV 대신 xlsx |
++| 통계 화면 | `mp-ut/stats`(방금 만든 표·막대 구성) | 대시보드·조치자 현황의 패턴 |
++| 프로젝트 범위 | `getMpScope`, `MpLayout`, 메뉴 노출 설정(`menu-preferences`) | |
++| Chrome 확장 | `extension/`(WBS용) | 결함 캡처용은 별개로 필요 |
++
++겹치는 기존 기능: `ut_defects`(단위테스트 결함: 등록 → 조치완료 → 검증완료/재조치)와 `Issue`(이슈·리스크 관리). defect_manage2는 **통합·선오픈·3자 테스트 단계의 결함**이라 범위가 다르다.
++
++---
++
++## 3. 이식 방안
++
++### 방안 A — pmotools에 새 모듈로 재구현 (권장)
++
++- 새 모델(`Defect`, `DefectHistory`)과 `/mp-defects` 계열 화면·API를 만든다. 사용자·프로젝트·공통코드·증적 저장소·통계 화면 패턴을 재사용한다.
++- 장점: 로그인·프로젝트 범위·디자인·권한이 하나로 통합되고, 결함–사람 관계가 사용자 id로 바뀐다. 이후 단위테스트 결함·WBS·요구사항과 연결하기 쉽다.
++- 단점: 공수가 가장 크다. 프런트 전체를 다시 작성한다.
++
++### 방안 B — 별도 서버로 두고 연결
++
++- defect_manage2를 그대로 운영하고 메뉴에서 링크 또는 프록시로 연결한다.
++- 장점: 가장 빠르다.
++- 단점: 로그인·사용자 DB·디자인이 이중이 되고 프로젝트·사용자와 연결할 수 없다. SSO를 따로 구현해야 한다. 장기적으로는 비용이 더 든다.
++
++### 방안 C — 단계적 병행 (A의 이행 방식)
++
++- A로 구현하는 동안 외부 위젯·확장 프로그램은 기존 서버로 계속 받고, 데이터 이관과 검증이 끝난 시점에 위젯·확장의 호출 주소를 pmotools로 바꾼다.
++- 병행 기간 동안 신규 결함이 두 곳에 생기지 않도록 기존 서버를 읽기 전용으로 바꾸는 시점을 정해야 한다.
++
++권고: **A를 C 방식으로 진행.** B는 임시 연결이 필요할 때만 고려한다.
++
++---
++
++## 4. 방안 A의 상세 설계안 (제안, 확정 아님)
++
++### 4.1 데이터 모델 매핑
++
++| defect_manage2 | pmotools 제안 | 설명 |
++|---|---|---|
++| `defect_id` BIGINT | `id`(uuid) + `displayId` | `ut_defects`의 `DF-yymmdd-NNNN`과 겹치지 않는 접두사를 쓴다. 번호 구간은 프로젝트 `numberingBase` 체계 적용 여부를 검토한다. |
++| 프로젝트 없음 | `projectId` | 이관 시 대상 프로젝트를 정해야 한다. |
++| `title`, `steps_to_repro`, `menu_name`, `screen_name`, `screen_url`, `env_info` | 같은 이름의 문자열 컬럼 | 길이 제한은 255/TEXT를 유지한다. |
++| `test_type`, `severity`, `priority`, `status`, `defect_identification` | 공통코드 참조(`...CodeId`) 또는 enum | 상태는 전이 규칙을 둘지 정해야 한다. |
++| `creator`, `assignee`(이름) | `createdBy`, `assigneeUserId` + 이름 스냅샷 | 이관 시 이름 → 사용자 매핑이 필요하다. |
++| `action_comment`, `action_due_date`, `action_start`, `action_end` | 같은 의미의 컬럼 | 조치자·관리자만 수정. |
++| `screenshot` | 증적 파일 테이블(`DefectEvidence`) | base64를 파일로 변환. 단위테스트 증적 저장소 재사용. |
++| `is_deleted` | `isActive` | 논리 삭제. |
++| `defect_history` | `DefectHistory`(INSERT 전용) | 변경 필드 diff와 상태 전후를 저장. |
++| `app_settings`(활성 테스트구분) | 프로젝트별 설정 또는 공통코드의 `isActive` | |
++| `defect_save_error_logs` | 별도 테이블 또는 `AuditLog` 활용 여부 결정 | 외부 위젯 연동을 유지할 때만 필요. |
++| `auth_sessions`, `users`, 로그인 | **이식하지 않음** | pmotools 인증(NextAuth)을 사용. |
++
++### 4.2 역할 매핑 (안)
++
++- 테스터 → 프로젝트 구성원(`MEMBER`)
++- 조치자 → 프로젝트 구성원 중 조치 권한이 부여된 직무(직무 권한 모델에 `defect 조치` 권한을 추가할지 결정)
++- 관리자 → `ADMIN`·`SUPER_ADMIN`(기존 단위테스트의 관리자 권한 확대 방침과 일치)
++
++### 4.3 화면·API (안)
++
++- `/mp-defects`: 목록(필터·페이징·결함번호 복사·엑셀), `/mp-defects/new`, 결함 상세·수정, 통계(대시보드), 조치자 현황, 조치 재확인.
++- 메뉴: `AppNavigation`에 그룹 추가, 메뉴 노출 설정에 등록.
++- API: `/api/v1/mp/defects/*`(기존 `/api/v1/mp/ut/*`의 라우팅·권한 패턴 사용).
++- 통계: 이미 만든 `mp-ut/stats`의 표·막대 구성 패턴을 재사용.
++
++### 4.4 캡처·외부 연동
++
++- 이미지는 base64 JSON 대신 `multipart/form-data` 업로드로 받아 증적 저장소에 파일로 저장한다.
++- Chrome 확장은 `manifest.json`의 호스트·열기 주소를 pmotools 주소와 등록 경로로 바꾼다. 현재 확장은 `http://127.0.0.1:3000/?mode=standalone#register`를 연다.
++- 위젯은 외부 사이트에서 `window.open` + `postMessage`(`DEFECTFLOW_READY`/`DATA`/`CLOSE`)로 데이터를 넘기는 구조다. 새 구조에서는 **허용 출처 목록 검사**, 메시지 스키마 검증, 로그인 세션 확인(요청 위조 방지)을 새로 설계해야 한다.
++- 배포 환경 제약: 증적 저장소는 서버 디스크 전제(`UT_EVIDENCE_ROOT`)라 Vercel 같은 서버리스에서는 쓸 수 없다. 운영 환경을 확인해야 한다.
++
++### 4.5 단계와 대략 공수 (1인 기준, 참고용)
++
++| 단계 | 내용 | 공수 |
++|---|---|---|
++| 1 | 설계 확정(5장 결정, 스키마·권한 설계서) | 1~2일 |
++| 2 | 스키마·마이그레이션·공통코드 시드·표시 ID·권한 | 3~4일 |
++| 3 | 결함 등록·수정·목록·이력·엑셀 | 6~8일 |
++| 4 | 통계(대시보드)·조치자 현황·조치 재확인 | 3~4일 |
++| 5 | 캡처 파일 저장·위젯/확장 연동·출처 검사 | 4~6일 |
++| 6 | 데이터 이관 스크립트(결함 328건, 사용자 43명, 공통코드 163건) | 2~3일 |
++| 7 | 테스트(단위·통합·e2e)·문서·전환 | 3~4일 |
++| 합계 | | **약 22~31일** |
++
++이관 범위가 설정·테스트 벤치·매뉴얼까지 넓어지면 늘어난다. 정밀한 산정은 설계 확정 후에 해야 한다.
++
++### 4.6 데이터 이관
++
++- 대상(상태 파일 기준): 결함 328건(`defect_history`는 0건), 사용자 43명, 공통코드 163건, `app_settings` 1건, 오류 로그 21건.
++- 결함의 `creator`/`assignee` 이름을 사용자 id로 매핑한다. 동명이인, 이름이 바뀐 사용자, 사용자 목록에 없는 이름은 **사람이 확인할 목록**으로 따로 뽑는다.
++- `screenshot`이 base64인 건은 파일로 변환해 증적으로 저장하고, URL 형식 값은 그대로 보존한다.
++- 사용자는 이메일 기준으로 기존 pmotools 사용자와 먼저 대조한다.
++- 이관은 쓰기 전에 대상 건수·충돌 목록을 보고하고 **승인 후** 실행한다. 이관 전 원본·대상 DB를 백업한다.
++- 운영 DB(Vercel/Supabase)는 별도 승인 후에만 적용한다.
++
++---
++
++## 5. 정해야 할 사항
++
++1. **프로젝트 귀속:** defect_manage2의 결함·사용자를 pmotools의 어느 프로젝트(하위 프로젝트)에 넣을지.
++2. **역할 매핑:** 테스터·조치자·관리자를 pmotools 역할·직무와 어떻게 맞출지. 조치자 권한을 직무 권한 모델에 추가할지.
++3. **`ut_defects`와의 관계:** 별개 모듈로 두고 장기 통합은 나중에 검토할지(권고), 처음부터 통합할지.
++4. **외부 위젯·확장 프로그램:** 계속 사용할지, 사용한다면 전환 방식(주소 교체 시점)과 보안 요구사항.
++5. **배포 환경:** 증적 파일 저장이 가능한 환경(내부 서버)인지, 서버리스인지.
++6. **병행·전환 일정:** 기존 서버의 읽기 전용 전환 시점, 데이터 이관 시점.
++7. **상태 전이 규칙:** 현재는 권한만 검사한다. 새 모듈에서 전이 규칙(예: Open → In Progress → Resolved → Staging → Closed, Reopened)을 둘지.
++8. **이관 범위:** 설정, 오류 로그, 사용자 매뉴얼, 테스트 벤치 페이지를 옮길지.
++
++## 6. 위험
++
++| 위험 | 영향 | 대응 |
++|---|---|---|
++| 이름 문자열 → 사용자 id 매핑 불일치 | 결함의 등록자·담당자가 틀리게 연결됨 | 이관 전 불일치 목록을 만들어 사람이 확정 |
++| base64 이미지 변환 | 대용량·손상 이미지, 저장소 용량 | 변환 전 건수·크기 점검, 실패 목록 보존 |
++| 외부 위젯 보안 | 출처 위장, 요청 위조 | 출처 허용 목록, 메시지 스키마 검증, 인증 세션 확인 |
++| 병행 운영 중 데이터 불일치 | 두 시스템에 결함이 갈라짐 | 전환 시점에 기존 서버를 읽기 전용으로 전환 |
++| 프런트 전체 재작성 | 기능 누락 | 이 문서 1.4의 기능 목록을 인수 체크리스트로 사용 |
++| 서버리스 배포 | 파일 저장 불가 | 배포 환경 확정(5장 5번) 후 저장소 방식 결정 |
++
++---
++
++## 7. 다음 단계
++
++1. 5장 결정 사항을 하나씩 확정한다.
++2. 확정 내용으로 스키마·화면·권한 설계서를 만든다(`docs/단위테스트 수행관리 프로그램 설계서.md`와 같은 형식 권장).
++3. 설계 승인 후 구현에 착수한다. DB 스키마 변경·데이터 이관은 각각 리스크를 보고하고 승인을 받은 뒤 진행한다(`CLAUDE.md`).
+diff --git "a/docs/\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270 \354\210\230\355\226\211\352\264\200\353\246\254 \355\224\204\353\241\234\352\267\270\353\236\250 \354\204\244\352\263\204\354\204\234.md" "b/docs/\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270 \354\210\230\355\226\211\352\264\200\353\246\254 \355\224\204\353\241\234\352\267\270\353\236\250 \354\204\244\352\263\204\354\204\234.md"
+index 3a20218..2d57e1a 100644
+--- "a/docs/\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270 \354\210\230\355\226\211\352\264\200\353\246\254 \355\224\204\353\241\234\352\267\270\353\236\250 \354\204\244\352\263\204\354\204\234.md"	
++++ "b/docs/\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270 \354\210\230\355\226\211\352\264\200\353\246\254 \355\224\204\353\241\234\352\267\270\353\236\250 \354\204\244\352\263\204\354\204\234.md"	
+@@ -307,6 +307,8 @@ M1(WBS 연계)·M7(공통 관리)은 대부분 기존 자산으로 대체되며,
+ 
+ ## 6. 수행 프로세스와 상태 전이
+ 
++> **2026-10-23 변경(사용자 확정)**: 케이스 검토요청·PL 승인/반려 단계를 폐지한다. 케이스는 등록 즉시 수행 대기(`IN_EXECUTION`)가 되며, 첫 수행 결과를 등록하기 전까지만 작성자 또는 PM/PMO가 수정한다. 아래 2~3단계(검토요청·PL 승인)는 이력 설명이며, 수행(4단계) 이후 QC → PL 확인은 그대로다. DB enum의 `DRAFT`·`REVIEW_REQUESTED`·`REJECTED`는 호환용으로 남겨 둔다.
++
+ 케이스는 설계 완료 시점에 승인되어야 하며, 수행 결과는 QC 확인 → PL 확인을 모두 통과해야 UT완료 근거로 인정된다. Fail 또는 반려는 신규 차수 재수행으로만 다시 승인 단계에 들어간다.
+ 
+ &#91;embedded content: 단위테스트 케이스 상태 전이 · 7개 상태, 반려·재수행 루프\]
+diff --git "a/docs/\354\236\221\354\227\205\352\270\260\353\241\235_20261023_\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270\352\260\234\354\204\240.md" "b/docs/\354\236\221\354\227\205\352\270\260\353\241\235_20261023_\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270\352\260\234\354\204\240.md"
+new file mode 100644
+index 0000000..92d9428
+--- /dev/null
++++ "b/docs/\354\236\221\354\227\205\352\270\260\353\241\235_20261023_\353\213\250\354\234\204\355\205\214\354\212\244\355\212\270\352\260\234\354\204\240.md"
+@@ -0,0 +1,187 @@
++# 작업기록 2026-10-23 — 단위테스트 프로그램 개선
++
++다른 PC의 다른 에이전트가 **어제(2026-10-22) 버전 소스**에서 같은 작업을 그대로 재현할 수 있도록 정리한 인수인계 문서입니다.
++
++- 대상 화면: `/mp-ut` (단위테스트 목록), 테스트 케이스 정보 팝업(`?case=`·`?new=1`), 이정표·설정
++- 기준 커밋: `b23560d` (2026-10-22 17:42, `chore(backup): 최신 로컬 DB 오프라인 덤프 갱신 및 WBS 크롬 확장프로그램 추가`)
++- 사용자 지시 원칙: 사용자의 명시적 지시가 있을 때만 변경한다. DB 스키마 변경·데이터 변환은 리스크(롤백, 다운타임)를 먼저 알리고 승인을 받은 뒤 진행한다(`CLAUDE.md`).
++- 이 작업은 브라우저에서 직접 확인하지 못했다. 아래 "검증"의 자동 검증(`tsc`, 단위테스트, 빌드)만 수행했다.
++- 이 문서는 하루 동안 이어진 작업의 최종 상태다(후반에 추가한 통계 화면, 화면 URL, 운영 배포 호환 처리 포함).
++
++---
++
++## 1. 가장 빠른 재현 방법 (패치 적용)
++
++패치 파일: [docs/patches/20261023_unit_test_improvements.patch](patches/20261023_unit_test_improvements.patch)
++
++- 기준 커밋 `b23560d`의 깨끗한 체크아웃에 `git apply --check`로 **오류 없이 적용됨을 확인**했다.
++- 최종 커밋 기준으로 다시 만든 패치다. 수정 파일과 새 파일(증적 선택 컴포넌트, 통계 화면·집계, 마이그레이션 2개, 작업기록·이식검토 문서)이 모두 들어 있다.
++- 제외: `package-lock.json`(작업 시작 전부터 로컬에서 수정돼 있던 변경, 이 작업과 무관), `db_backups/`, `dev.out`, `.mcp.json`.
++
++```powershell
++git checkout b23560d            # 또는 어제 버전이 이 커밋인지 먼저 확인
++git apply --whitespace=nowarn docs/patches/20261023_unit_test_improvements.patch
++npx prisma migrate deploy       # ut_case_worker, ut_case_screen_url 마이그레이션 적용 (아래 4장 승인 사항 참고)
++npx prisma generate
++npx tsc --noEmit -p .
++npx vitest run lib/domain/ut.test.ts   # 19건 통과가 기대값
++```
++
++패치를 쓰지 않고 손으로 재현하려면 2~3장의 항목별 설명과 변경 파일을 따라 한다. 줄바꿈은 파일마다 CRLF/LF가 섞여 있으므로, 수정할 때 기존 줄바꿈을 보존한다(예: `lib/server/mp/ut/cases.ts`, `grid.ts`는 CRLF).
++
++**적용 후 반드시 개발 서버를 재시작한다.** `lib/server/db-pg.ts`가 Prisma 클라이언트를 `globalThis`에 한 번만 만들어 재사용하므로, `prisma generate` 뒤에도 떠 있던 서버는 옛 클라이언트를 쓴다(작업자 컬럼이 안 보이는 증상으로 확인됨).
++
++---
++
++## 2. 변경 요약 (요청 순서대로)
++
++용어: "관리자" = 역할 `ADMIN`, `SUPER_ADMIN` (`OPERATOR`와 PM/PMO 직무는 포함하지 않음).
++
++### 2.1 케이스 검토·승인 폐지 (사용자 결정: 1번 — 스키마 변경 없이 `IN_EXECUTION`)
++- 새 케이스는 등록 즉시 `IN_EXECUTION`(수행 대기)으로 저장한다. enum 값(`DRAFT`·`REVIEW_REQUESTED`·`REJECTED`)은 호환용으로 남긴다.
++- 수정 가능 조건: `canEditCase(status, executionCount)` = `IN_EXECUTION`이고 수행 결과 0건. 작성자 또는 PM/PMO만.
++- 삭제: `requestUtCaseReview`, `decideUtCaseReview`, `listUtReviewInbox`, API `/cases/:id/review`·`/decision`, 목록의 "검토상태" 열·필터, "검토 대기"·"작성중" 처리 대기 항목, `nextCaseReviewStatus`, `utReviewStatus`, `UT_REVIEW_STATUS_LABEL`.
++- `canExecuteCase`는 `APPROVED`(폐지 전 승인 건)와 `IN_EXECUTION`을 수행 가능으로 본다.
++- 개발완료 선언 조건: "PL 승인된 케이스 1건 이상" → "등록된 케이스 1건 이상". 이정표 화면의 "승인" 표기는 "등록".
++- 위치: `lib/domain/ut.ts`, `lib/server/mp/ut/{cases,grid,milestones}.ts`, `app/api/v1/mp/ut/[...path]/route.ts`, `app/mp-ut/page.tsx`, `screens/mp/ut/{UtCaseScreen,UtListScreen,UtMilestonesScreen}.tsx`, `features/mp/ut/format.ts`.
++- 설계서 `docs/단위테스트 수행관리 프로그램 설계서.md` 6장 머리에 변경 메모 추가.
++
++### 2.2 작성자 본인을 PL 확인자로 지정 허용
++- `cases.ts`의 등록·수정·PL 변경 3곳에서 "작성자 본인 지정 불가" 검사를 삭제. 화면의 PL 선택 목록이 작성자를 숨기던 필터도 제거.
++- 수행자·QC·PL은 서로 달라야 한다는 `assertSeparation`은 그대로 유지.
++
++### 2.3 관리자 권한 확대 ("모든 기능·모든 상태에서 보이고 작업 가능")
++- `lib/server/mp/ut/common.ts`에 `isUtAdmin(actor)` 추가.
++- 케이스 정보 수정: 상태·수행 이력과 무관하게 가능(`loadEditableCase`, `getUtCaseEditor`의 `editable`).
++- 수행 결과 등록: 수행 담당자가 아니어도, 어떤 상태든 가능(`registerUtExecution`, `canExecute`).
++- QC/PL 확인: 관리자는 지정자·수행자 여부와 현재 대기 상태와 무관하게 처리. 패널 노출은 `qcOpen`/`plOpen`(미처리 단계 QC → PL, N/A는 PL만). 서버는 `applyApproval(..., force)`, `assertApprover(..., anyDesignee)`로 상태·직무 분리 검사를 생략한다.
++- 결함: 등록은 FAIL이 아니어도 가능, 조치·검증은 상태·조치자 제한 없이 가능(`applyDefectFix(status, force)`, `applyDefectVerify({..., force})`, `defects.ts`, `grid.ts`의 `canFix/canVerify/canRegisterDefect`).
++- 목록 필터("수행 대상", "QC 확인 대기", "PL 확인 대기")는 관리자에게 모든 해당 건이 잡힌다.
++- **관리자에게도 남는 제한**: 증적을 모두 열람해야 승인 가능(N/A 제외), 이미 QC/PL 확인이 기록된 차수에서 같은 단계 재처리 불가(수행 결과·승인·증적·결함 조치 이력은 DB 트리거로 INSERT 전용 → 새 차수로 재수행), 프로젝트 마감 잠금, 수행 이력이 있는 케이스의 비활성화.
++- 일반 사용자 규칙은 변경 없음: QC/PL 패널은 지정된 확인자에게만, 수행 결과 등록 영역은 수행 담당자이면서 수행 가능 상태일 때만.
++
++### 2.4 작성 점검 체크리스트 패널 삭제
++- 케이스 정보 화면의 "작성 점검 체크리스트"·"필수 항목 누락" 삭제. `reviewChecklist`, `missingCaseFields`, 관련 타입·상수, `.ut-checklist` 스타일, 해당 단위테스트 3건 삭제.
++- 필수 항목 누락은 이제 안내·차단 모두 없다(입력란 자체의 `required`만 남음).
++
++### 2.5 증적 업로드
++- 새 컴포넌트 `features/mp/ut/UtEvidencePicker.tsx`: "파일 선택" 팝업(파일 선택 + 클립보드 이미지 붙여넣기), 최대 3개(`UT_EVIDENCE_MAX_FILES`), 개별 삭제, 붙여넣은 이미지는 `캡처_yyyyMMdd_HHmmss_n.png`로 이름 부여. 팝업을 열지 않고 증적 영역에서 Ctrl+V도 가능. `UtCaseScreen`은 제출 시 `evidence`로 FormData에 첨부.
++- 서버 검증: `validateExecution`에서 3개 초과 거부.
++- 허용 형식 추가: `xls`, `doc`, `ppt`, `pptx` (`lib/server/ut-evidence-storage.ts`의 `ALLOWED`·`MIME`, 선택창 `accept`). 매크로 문서(`xlsm` 등)는 의도적으로 제외.
++
++### 2.6 수행 이력·증적 팝업
++- 수행 이력 표에서 증적 열을 빼고 "결과 보기" 버튼 → `UtHistoryDialog` 팝업(판정, 수행일, 담당자, 실제결과/N/A 사유, 증적, QC 확인, PL 확인)을 **표 형태**(`.ut-history-table`)로 표시. 너비 1120px.
++- 겹쳐 뜬 팝업이 바닥 팝업과 구분되도록 더 어두운 배경·테두리·그림자(`.ut-evidence-backdrop`, `.ut-image-backdrop` 등). 전역 `tbody tr:last-child td { border-bottom: 0 }` 때문에 마지막 줄 테두리가 사라져 `.ut-history-table`에서 다시 지정.
++- 이미지 증적(png·jpg·jpeg·gif·webp)은 새 탭 대신 `UtImagePreview` 팝업으로 연다. 열람 처리(`✔`)는 클릭 시 반영, 서버의 열람 기록은 이미지 로드 시 남는다. 다른 형식은 기존처럼 새 탭.
++- Esc: 수행 결과 팝업과 이미지 팝업은 캡처 단계에서 `stopPropagation`해 가장 위 팝업만 닫는다. **증적 선택 팝업(`UtEvidencePicker`)은 그렇게 처리하지 않아, Esc를 누르면 케이스 정보 팝업까지 같이 닫힐 수 있다**(코드만 읽고 파악, 화면 미확인 — 필요하면 같은 방식으로 수정).
++
++### 2.7 QC/PL 결과·수행 상태 표시
++- 수행 이력 표와 단위테스트 목록에 "QC 확인"·"PL 확인" 열. 값: `승인 · 확인자` / `반려 · 확인자` / `대기` / `해당 없음`(N/A의 QC) / `–`. 반려 사유코드·의견·확인일(Asia/Seoul)은 케이스 화면에 표시.
++- 케이스 정보 화면 맨 위에 **상태 영역**(`.ut-stage`): `[차수] [수행 상태 칩] [QC 칩] [PL 칩]`. 수행 상태: `미수행` / `수행 Pass·Fail·Blocked·N/A`. 수행 결과가 없으면 차수 칸은 숨김. 상단 제목 옆의 상태 배지는 **제거**(상태 영역에서만 표시). 글자 크기는 칩 15px, 차수 13px.
++- QC/PL 확인 처리 후 상단 작은 메시지는 띄우지 않고 상태 영역이 갱신된다. 다른 처리 완료 메시지는 단어형으로 축소("저장", "수행 등록", "조치 등록", "검증 등록", "결함 등록", 이정표 "개발완료 선언/확인/반려", "UT완료 기록", "기록 취소", 설정 "설정 저장", "잠금 해제", "마감 잠금").
++- 확인 패널의 의견 입력란 최소 너비 180px → 360px(`.ut-comment-input`).
++
++### 2.8 단위테스트 목록 개편
++- 최종 열(13개, 순서 고정): 테스트케이스ID · 테스트케이스명 · 케이스유형 · 업무명 · 작업자 · 작성자 · 수행자 · 수행일자 · 처리대기 · 수행결과 · QC확인 · PL확인 · 완료여부.
++- "처리대기"는 칩(`.ut-todo-chip`)으로 표시. 데이터는 `UtSheetRow`에 `qcResult`, `plResult`, `caseTypeLabel`, `creatorName` 추가(`grid.ts`의 `stepResult`).
++- 틀고정: 전용 래퍼 `.ut-table-wrap`(기존 `wbs-table-wrap`은 WBS 목록용 7열 고정 규칙이 섞여 있어 교체). 타이틀 행과 왼쪽 2열(케이스ID 200px, 케이스명)을 고정. 테스트케이스명 열 너비 380px.
++- **케이스가 등록된 행만** 표시(케이스 없는 대상 Task의 "미등록" 행 제거, `done`에서 `미등록` 값 삭제). 빈 목록 문구 수정.
++- **엑셀 출력은 변경하지 않았다.** 사용자 양식 24개 열(`UT_SHEET_COLUMNS`) 그대로이며 목록 화면과 열이 다르다.
++- 왼쪽 메뉴의 단위테스트 그룹에서 "신규 등록" 탭 제거(`components/AppNavigation.tsx`). 목록 위쪽 필터 줄의 "+ 신규 등록" 버튼은 유지.
++
++### 2.9 케이스 정보 화면 항목 순서
++1. 프로젝트 코드 / 업무단위 / 요구사항 ID
++2. WBS ID / 작업자(읽기 전용)
++3. 테스트케이스ID / 테스트케이스명
++4. 테스트유형 / 화면ID / 화면명
++5. 이후는 기존 순서(사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자·테스트예정일 → QC확인자·PL확인자)
++- "케이스유형"을 화면에서는 "테스트유형"으로 표기(목록 열은 "케이스유형" — 이름 통일 여부 미결).
++- 순서를 바꾸면서 "테스트 케이스" 소제목(`h2.ut-section`)이 사라졌다. 복원 여부 미결.
++
++### 2.10 작업자 컬럼 (DB 스키마 변경)
++- 사용자 정의: **작업자 = 케이스 저장 시점의 WBS Task 담당자 스냅샷**. 작성자가 WBS ID를 선택해 저장할 때 서버가 읽어 같이 저장하며(클라이언트 값 사용 안 함), 이후 WBS 담당자가 바뀌어도 케이스 값은 그대로다. WBS 없이 등록한 케이스는 비어 있다.
++- 스키마(`prisma/schema.prisma`): `UtCase.workerUserId String?`(User 관계 `UtCaseWorker`, `onDelete: SetNull`, 인덱스), `UtCase.workerName String @default("")`, `User.utWorkerCases` 역관계.
++- 마이그레이션: `prisma/migrations/20261023100000_ut_case_worker/migration.sql` — 컬럼 2개 추가, FK, 인덱스. 비어도 되는 컬럼 추가뿐이라 다운타임·기존 행 영향 없음. 롤백은 두 컬럼 DROP.
++- 코드: `createUtCase`가 `listUtWbsLeaves`로 찾은 WBS의 `ownerUserId`/`ownerName`을 저장. `getUtCaseEditor`는 `wbsOwnerName: c.workerName`, 목록은 `ownerName: c.workerName || null`. 신규 등록 화면은 선택한 WBS의 담당자를 미리 보여 준다(`UtTreeNode.ownerName`).
++- 기존 케이스 값은 비어 있으므로 아래 4장의 백필이 필요하다(임시 대체 처리는 만들었다가 백필 후 삭제했다 — 지금 코드에는 없다).
++
++### 2.11 작성현황·수행결과 통계 화면 (신규)
++- 메뉴: 왼쪽 메뉴 단위테스트 그룹의 "통계보기"(`/mp-ut/stats`). 하위 프로젝트 단위. WBS 트리 없음(전체 집계).
++- 집계(`lib/server/mp/ut/stats.ts` `getUtStats`): 활성 케이스의 **최근 차수** 기준. 범위는 단위테스트 대상 Task의 케이스와 WBS 없는 케이스.
++- 화면(`screens/mp/ut/UtStatsScreen.tsx`): KPI 카드 8개(대상 Task, 작성률, 케이스, 수행률, Pass율, PL 확인 완료, 미조치 결함, 확인 반려) → 수행결과 구성 막대(CSS 누적 막대) → "QC·PL 확인 진행" 표(단계·상태·건수·비율·합계) → "결함 현황" 표(상태 × 심각도 교차표·합계) → 구분별 표 3개(업무단위·케이스유형·수행자: 케이스·수행·미수행·Pass·Fail·Blocked·N/A·수행률·Pass율·구성 막대). 숫자 열은 우측 정렬(`data-numeric`).
++- 사용자 요청으로 뺀 것: "작성자별" 표, "일자별 추이"(워킹데이 세로막대 그래프까지 만들었다가 제거). 일자별 추이를 다시 만들 경우 공휴일은 `holidays` 테이블(`loadHolidaySet`)에서 읽는데, 로컬 DB에는 2026-11~2027-02 공휴일이 0건이었다.
++- 초안 상태다. 필터(기간·업무단위 등), 엑셀 출력은 없다.
++
++### 2.12 화면 URL 항목
++- DB: `ut_cases.screenUrl TEXT NOT NULL DEFAULT ''`(마이그레이션 `20261023150000_ut_case_screen_url`), 입력은 최대 500자(`cases.ts` zod), 형식 검사 없음.
++- 화면: 케이스 정보에서 화면ID·화면명 줄 바로 아래에 "화면 URL" 입력란(한 줄 전체 폭). 목록·통계·엑셀에는 넣지 않았다.
++
++### 2.13 운영 배포 호환 처리 (검토 폐지 전 상태)
++- 운영 DB에는 검토 폐지 이전 상태(`DRAFT`, `REVIEW_REQUESTED`, `REJECTED`)의 케이스가 남아 있을 수 있고, 운영 데이터 변환은 승인받지 않아 수행하지 않았다.
++- 그래서 코드가 그 상태를 `IN_EXECUTION`(수행 대기)과 똑같이 다룬다: `UT_LEGACY_PRE_EXECUTION_STATUSES`, `canEditCase`(수행 결과 0건이면 수정 가능), `canExecuteCase`(수행 가능), 내 수행 목록, 목록 "수행 대상" 필터(`lib/domain/ut.ts`, `grid.ts`, `executions.ts`). 단위테스트로 고정했다.
++- 운영 DB의 작업자(`workerName`)는 비어 있다. 케이스 정보·목록에서 `–`로 보인다. 4장 3번 백필을 운영에서 승인 후 실행하면 채워진다.
++
++---
++
++## 3. 변경 파일 목록
++
++수정(20): `app/api/v1/mp/ut/[...path]/route.ts`, `app/globals.css`, `app/mp-ut/page.tsx`, `components/AppNavigation.tsx`, `docs/단위테스트 수행관리 프로그램 설계서.md`, `features/mp/ut/format.ts`, `lib/domain/ut.test.ts`, `lib/domain/ut.ts`, `lib/server/mp/ut/{cases,common,defects,executions,grid,milestones}.ts`, `lib/server/ut-evidence-storage.ts`, `prisma/schema.prisma`, `screens/mp/ut/{UtCaseScreen,UtListScreen,UtMilestonesScreen,UtSettingsScreen}.tsx`
++
++신규: `features/mp/ut/UtEvidencePicker.tsx`, `lib/server/mp/ut/stats.ts`, `app/mp-ut/stats/page.tsx`, `screens/mp/ut/UtStatsScreen.tsx`, `prisma/migrations/20261023100000_ut_case_worker/migration.sql`, `prisma/migrations/20261023150000_ut_case_screen_url/migration.sql`, `docs/작업기록_20261023_단위테스트개선.md`(이 문서), `docs/defect_manage2_이식검토_20261023.md`, `docs/patches/20261023_unit_test_improvements.patch`
++
++신규 단위테스트: `canEditCase`, 증적 3개 제한, 관리자 확인(`anyDesignee`), 강제 처리(`force`) 계열. 삭제: 검토 전이·체크리스트·필수 항목·`utReviewStatus` 테스트. 결과 19건 통과.
++
++---
++
++## 4. DB 작업 — 승인 후에만 실행 (로컬 DB 기준 이력)
++
++다른 PC의 DB 상태는 다를 수 있다. **실행 전에 건수를 확인하고 백업한 뒤, 사용자 승인을 받는다.**
++
++로컬 DB: `postgresql://…@localhost:55432/mydb` (`.env`의 `DATABASE_URL`). 접속 정보는 문서에 적지 않았다. `.env.local`의 `SUPABASE_DATABASE_URL`은 운영 연결이므로 **건드리지 않는다.**
++
++1. 마이그레이션: `npx prisma migrate deploy` (위 2.10, 2.12 — `ut_case_worker`, `ut_case_screen_url`). 이 PC에서는 적용 시 "DB에 있는데 로컬에 없는 마이그레이션 `20261022100000_wbs_app_tokens`" 경고가 있었으나 적용에는 문제가 없었다. 다른 브랜치/PC에서 만든 변경으로 보이며, 운영 배포 전 목록 정합성 확인이 필요하다.
++2. 상태 변환 (검토 폐지 때문에 필요): 이 PC에서는 작성중 30건, 검토요청 3건, 반려 1건 = 34건.
++   ```sql
++   -- 먼저 대상 id·이전 상태를 JSON 등으로 백업
++   UPDATE ut_cases SET status = 'IN_EXECUTION'
++   WHERE status IN ('DRAFT','REVIEW_REQUESTED','REJECTED');
++   ```
++3. 작업자 백필 (이 PC에서는 WBS가 있는 44건 모두 이름 확보, 사용자 id는 전부 비어 있었음):
++   ```sql
++   UPDATE ut_cases c
++   SET "workerUserId" = w."ownerUserId",
++       "workerName"   = coalesce(u.name, nullif(w."ownerNameRaw", ''), '')
++   FROM wbs_items w LEFT JOIN users u ON u.id = w."ownerUserId"
++   WHERE w.id = c."wbsItemId" AND c."workerName" = '';
++   ```
++4. 이 PC의 백업 파일(`db_backups/`, 추적되지 않음): `ut_cases_status_before_20261023.json`, `ut_cases_worker_before_20261023.json`. 되돌리려면 파일의 이전 값으로 UPDATE.
++5. **운영 DB(Vercel/Supabase)의 데이터 변환(2·3번)은 실행하지 않았다.** 운영 배포(`vercel-build`가 `prisma migrate deploy` 실행) 때 마이그레이션 2개는 자동 적용된다. 상태 변환(2번)은 2.13의 호환 처리 때문에 배포 직후에도 서비스가 막히지 않지만, 운영 데이터 정리를 위해 건수 확인 후 승인받아 실행한다. 작업자 백필(3번)도 같다.
++
++---
++
++## 5. 검증
++
++- `npx tsc --noEmit -p .` — 통과.
++- `npx vitest run lib/domain/ut.test.ts` — 19건 통과.
++- `npx prisma validate` — 통과. `ESLint`는 이 프로젝트에 `eslint.config.*`가 없어 실행하지 못했다(기존부터).
++- **브라우저 동작은 확인하지 못했다.** 특히 증적 붙여넣기(클립보드 권한), 팝업 겹침(z-index 100/110/120), 틀고정 sticky, 라이트 테마 색상을 사람이 눈으로 확인해야 한다.
++- 개발 서버: `npm run dev`(포트 3020, `package.json`). `start.cmd`는 이미 서버가 떠 있으면 포트 충돌로 새 창이 바로 닫힌다. 동시에 두 개를 띄우지 않는다.
++
++---
++
++## 6. 미결 사항·주의
++
++- 관리자에게 증적 열람 조건도 생략할지, 마감 잠금·비활성화 제한을 풀지 — 사용자 미결정.
++- "테스트유형" vs "케이스유형" 이름 통일, 케이스 정보 화면 "테스트 케이스" 소제목 복원 여부 — 미결.
++- 엑셀 출력에 QC확인·PL확인(및 작업자 등) 열을 추가할지 — 양식 변경이라 승인 필요. 목록 화면의 "+ 신규 등록" 버튼 유지 여부도 확인 필요.
++- PM/PMO(직무)에게 QC/PL 확인 권한을 줄지(`isUtAdmin` → `isUtManager`로 바꾸면 됨) — 질문만 했고 결정 없음.
++- 작업 중 실수: 상태 변수 선언 순서 오류(`historyExec`가 `historyId`보다 먼저 선언돼 런타임 `ReferenceError`)를 `tsc`가 잡지 못했다 — 훅/상태를 추가할 때 선언 순서를 확인한다. 이미 수정돼 있다.
++- 커밋 메시지 규약(`CLAUDE.md`): 마지막 줄에 `Agent: Claude Code (Eduardo Gaff)`.
++
++---
++
++## 7. 운영 배포 기록 (2026-10-23)
++
++- 배포 방식: GitHub `main` 푸시 → Vercel 자동 배포(`vercel-build` = `prisma migrate deploy && next build`). 대상 `https://pmotools.vercel.app`.
++- 배포 전 점검·결과·롤백 절차는 `project_control/states/pmotools_current.md`의 "배포 기록"에 남긴다. 이 문서에는 코드·데이터 관점의 위험만 적는다.
++- 롤백: 코드는 이 커밋을 `git revert`한 새 커밋을 푸시한다. DB는 `ut_cases`의 `workerUserId`·`workerName`·`screenUrl` 컬럼을 DROP하면 이전 코드와 호환된다(데이터 손실은 해당 컬럼 값뿐). 마이그레이션 이력 테이블(`_prisma_migrations`)에서도 두 행을 지워야 같은 마이그레이션을 다시 적용할 수 있다.
+diff --git a/features/mp/ut/UtEvidencePicker.tsx b/features/mp/ut/UtEvidencePicker.tsx
+new file mode 100644
+index 0000000..d27ae54
+--- /dev/null
++++ b/features/mp/ut/UtEvidencePicker.tsx
+@@ -0,0 +1,82 @@
++"use client";
++
++import { useEffect, useRef, useState } from "react";
++import { createPortal } from "react-dom";
++import { UT_EVIDENCE_MAX_FILES } from "@/lib/domain/ut";
++
++// 증적 파일 선택 — 파일 선택 또는 클립보드(캡처 이미지 붙여넣기)로 최대 3개까지 담는다(2026-10-23 사용자 요청).
++// 파일은 상위 폼이 전송할 때 FormData에 넣는다(입력 요소는 폼 밖에서 상태로 관리).
++const ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.json,.xml,.html,.csv,.xls,.xlsx,.doc,.docx,.ppt,.pptx,.zip";
++
++const stamp = () => { const d = new Date(); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
++const sizeLabel = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
++
++export function UtEvidencePicker({ files, onChange, disabled }: { files: File[]; onChange: (files: File[]) => void; disabled?: boolean }) {
++  const [open, setOpen] = useState(false);
++  const [notice, setNotice] = useState("");
++  const [mounted, setMounted] = useState(false);
++  const input = useRef<HTMLInputElement>(null);
++  const filesRef = useRef(files);
++  filesRef.current = files;
++  useEffect(() => setMounted(true), []);
++
++  const add = (incoming: File[]) => {
++    if (!incoming.length) return;
++    const room = UT_EVIDENCE_MAX_FILES - filesRef.current.length;
++    if (room <= 0) { setNotice(`증적은 최대 ${UT_EVIDENCE_MAX_FILES}개까지 등록할 수 있습니다.`); return; }
++    const next = incoming.slice(0, room);
++    setNotice(incoming.length > room ? `증적은 최대 ${UT_EVIDENCE_MAX_FILES}개까지 등록할 수 있어 ${next.length}개만 추가했습니다.` : "");
++    filesRef.current = [...filesRef.current, ...next];
++    onChange(filesRef.current);
++  };
++
++  // 클립보드 이미지 — 팝업이 열려 있거나 증적 영역 위에서 붙여넣기(Ctrl+V)해도 담긴다.
++  const fromClipboard = (event: ClipboardEvent | React.ClipboardEvent) => {
++    const images = [...(event.clipboardData?.items ?? [])].filter((i) => i.kind === "file" && i.type.startsWith("image/")).map((i) => i.getAsFile()).filter((f): f is File => !!f);
++    if (!images.length) return;
++    event.preventDefault();
++    const base = stamp();
++    const offset = filesRef.current.length;
++    add(images.map((f, i) => new File([f], `캡처_${base}_${offset + i + 1}.${f.type.split("/")[1]?.replace("jpeg", "jpg") || "png"}`, { type: f.type })));
++  };
++
++  useEffect(() => {
++    if (!open) return;
++    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
++    const onPaste = (e: ClipboardEvent) => fromClipboard(e);
++    window.addEventListener("keydown", onKey);
++    window.addEventListener("paste", onPaste);
++    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("paste", onPaste); };
++  });
++
++  const remove = (index: number) => { setNotice(""); filesRef.current = files.filter((_, i) => i !== index); onChange(filesRef.current); };
++  const full = files.length >= UT_EVIDENCE_MAX_FILES;
++
++  const list = files.length
++    ? <ul className="ut-evidence-list">{files.map((f, i) => <li key={`${f.name}-${i}`}><span className="ut-evidence-name" title={f.name}>{f.name}</span><small>{sizeLabel(f.size)}</small><button type="button" className="button secondary" onClick={() => remove(i)} disabled={disabled}>삭제</button></li>)}</ul>
++    : <p className="ut-hint">선택한 증적이 없습니다.</p>;
++
++  return <div className="ut-field ut-evidence" onPaste={(e) => { if (!open && !disabled) fromClipboard(e); }}>
++    <span>증적 파일 ({files.length}/{UT_EVIDENCE_MAX_FILES})</span>
++    <div className="ut-evidence-bar">
++      <button type="button" className="button secondary" onClick={() => { setNotice(""); setOpen(true); }} disabled={disabled}>파일 선택</button>
++      <small className="ut-hint">캡처 이미지는 수행 결과 입력란에서 Ctrl+V로 붙여넣을 수 있습니다.</small>
++    </div>
++    {!open && notice && <p className="ut-hint" role="status">{notice}</p>}
++    {list}
++    {open && mounted && createPortal(<div className="modal-backdrop ut-evidence-backdrop" role="dialog" aria-modal="true" aria-label="증적 파일 선택" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
++      <div className="modal-card ut-evidence-modal">
++        <h2>증적 파일 선택</h2>
++        <p className="ut-hint">파일을 선택하거나 캡처한 이미지를 Ctrl+V로 붙여넣으세요. 최대 {UT_EVIDENCE_MAX_FILES}개까지 등록할 수 있습니다.</p>
++        <div className="ut-evidence-drop" tabIndex={0} onPaste={(e) => fromClipboard(e)}>
++          <button type="button" className="button primary" onClick={() => input.current?.click()} disabled={full}>파일 선택</button>
++          <span>또는 이 영역을 클릭한 뒤 Ctrl+V</span>
++          <input ref={input} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { add([...(e.target.files ?? [])]); e.target.value = ""; }} />
++        </div>
++        {notice && <p className="action-message" role="status">{notice}</p>}
++        {list}
++        <div className="modal-actions"><button type="button" className="button primary" onClick={() => setOpen(false)}>확인</button></div>
++      </div>
++    </div>, document.body)}
++  </div>;
++}
+diff --git a/features/mp/ut/format.ts b/features/mp/ut/format.ts
+index 9ac0172..b401059 100644
+--- a/features/mp/ut/format.ts
++++ b/features/mp/ut/format.ts
+@@ -3,7 +3,7 @@ export const dot = (value: string | null | undefined) => (value ? value.replaceA
+ export const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+ 
+ export const STATUS_BAND: Record<string, string> = {
+-  DRAFT: "", REVIEW_REQUESTED: "band-yellow", APPROVED: "band-green", REJECTED: "band-red",
++  DRAFT: "", REVIEW_REQUESTED: "band-yellow", APPROVED: "band-green", REJECTED: "band-red", // 검토 폐지(2026-10-23) 이전 데이터용
+   IN_EXECUTION: "band-yellow", QC_PENDING: "band-yellow", PL_PENDING: "band-yellow", PL_CONFIRMED: "band-green",
+   REGISTERED: "band-red", FIXED: "band-yellow", VERIFIED: "band-green", REFIX: "band-red",
+   PASS: "band-green", FAIL: "band-red", BLOCKED: "band-yellow", NA: "",
+diff --git a/lib/domain/ut.test.ts b/lib/domain/ut.test.ts
+index bf7d6a5..e0874d3 100644
+--- a/lib/domain/ut.test.ts
++++ b/lib/domain/ut.test.ts
+@@ -1,12 +1,9 @@
+ import { describe, expect, it } from "vitest";
+ import {
+   afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase,
+-  caseDisplayIdError, defectDisplayId, utReviewStatus, isUtTargetStage, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, nextRoundNo, reviewChecklist, utCompletionConditions, validateExecution,
+-  type UtCaseDraft,
++  caseDisplayIdError, canEditCase, defectDisplayId, isUtTargetStage, isUtTargetTask, nextRoundNo, utCompletionConditions, validateExecution,
+ } from "@/lib/domain/ut";
+ 
+-const draft = (over: Partial<UtCaseDraft> = {}): UtCaseDraft => ({ name: "수량 검증", precondition: "재고 10개", steps: "1. 수량 입력", inputData: "수량 = 3", expectedResult: "장바구니에 3개 저장", executorId: "dev", plannedDate: "2026-11-01", qcUserId: "qc", ...over });
+-
+ describe("채번 (4.7)", () => {
+   it("케이스 ID(수기 입력 검증)·결함 ID", () => {
+     expect(caseDisplayIdError("UTC-2026-000123-003")).toBeNull();
+@@ -17,25 +14,6 @@ describe("채번 (4.7)", () => {
+   });
+ });
+ 
+-describe("케이스 작성", () => {
+-  it("필수 필드 누락 목록", () => {
+-    expect(missingCaseFields(draft())).toEqual([]);
+-    expect(missingCaseFields(draft({ steps: " ", qcUserId: null }))).toEqual(["테스트스텝", "QC 확인자"]);
+-  });
+-
+-  it("체크리스트 — 차단 없이 결과만(유형·우선순위 항목 없음)", () => {
+-    const ok = reviewChecklist([draft(), draft({ inputData: "10" }), draft({ inputData: "0" })]);
+-    expect(ok.every((i) => i.ok)).toBe(true);
+-    expect(ok.map((i) => i.key)).toEqual(["ambiguous", "length", "duplicate"]);
+-  });
+-
+-  it("모호어만 있는 예상결과·중복", () => {
+-    const items = reviewChecklist([draft({ expectedResult: "정상 처리 확인" }), draft(), draft()]);
+-    expect(items.find((i) => i.key === "ambiguous")!.ok).toBe(false);
+-    expect(items.find((i) => i.key === "duplicate")!.ok).toBe(false);
+-  });
+-});
+-
+ describe("직무 분리", () => {
+   it("수행자·QC·PL은 서로 달라야 한다", () => {
+     expect(() => assertSeparation({ executorId: "a", qcUserId: "a" })).toThrow();
+@@ -45,18 +23,22 @@ describe("직무 분리", () => {
+   });
+ });
+ 
+-describe("케이스 검토", () => {
+-  it("작성중·반려 → 검토요청 → 승인/반려", () => {
+-    expect(nextCaseReviewStatus("DRAFT", "REQUEST")).toBe("REVIEW_REQUESTED");
+-    expect(nextCaseReviewStatus("REJECTED", "REQUEST")).toBe("REVIEW_REQUESTED");
+-    expect(nextCaseReviewStatus("REVIEW_REQUESTED", "APPROVE")).toBe("APPROVED");
+-    expect(nextCaseReviewStatus("REVIEW_REQUESTED", "REJECT")).toBe("REJECTED");
+-    expect(() => nextCaseReviewStatus("APPROVED", "EDIT")).toThrow();
++describe("케이스 수정", () => {
++  it("검토·승인 없이 수행 대기 케이스는 첫 수행 등록 전까지만 수정", () => {
++    expect(canEditCase("IN_EXECUTION", 0)).toBe(true);
++    expect(canEditCase("IN_EXECUTION", 1)).toBe(false);
++    expect(canEditCase("QC_PENDING", 0)).toBe(false);
++    // 검토 폐지 전 상태도 운영 데이터 변환 전까지 같은 규칙으로 다룬다
++    expect(canEditCase("DRAFT", 0)).toBe(true);
++    expect(canEditCase("REVIEW_REQUESTED", 0)).toBe(true);
++    expect(canEditCase("REJECTED", 1)).toBe(false);
++    expect(canExecuteCase("DRAFT")).toBe(true);
+   });
+ });
+ 
+ describe("수행", () => {
+-  it("승인·수행중 케이스만 수행, 차수는 최대 + 1", () => {
++  it("수행중(검토 폐지 전 승인 포함) 케이스만 수행, 차수는 최대 + 1", () => {
++    expect(canExecuteCase("IN_EXECUTION")).toBe(true);
+     expect(canExecuteCase("APPROVED")).toBe(true);
+     expect(canExecuteCase("QC_PENDING")).toBe(false);
+     expect(nextRoundNo([])).toBe(1);
+@@ -68,6 +50,8 @@ describe("수행", () => {
+     expect(() => validateExecution({ verdict: "FAIL", actualResult: "", naReason: "", evidenceCount: 1 })).toThrow(/실제결과/);
+     expect(() => validateExecution({ verdict: "NA", actualResult: "", naReason: "", evidenceCount: 0 })).toThrow(/사유/);
+     expect(() => validateExecution({ verdict: "BLOCKED", actualResult: "", naReason: "", evidenceCount: 0 })).not.toThrow();
++    expect(() => validateExecution({ verdict: "PASS", actualResult: "", naReason: "", evidenceCount: 3 })).not.toThrow();
++    expect(() => validateExecution({ verdict: "PASS", actualResult: "", naReason: "", evidenceCount: 4 })).toThrow(/최대 3개/);
+   });
+ 
+   it("판정 직후 상태", () => {
+@@ -96,6 +80,14 @@ describe("결과 확인 QC → PL", () => {
+     expect(() => assertApprover({ ...base, actorId: "qc", hasViewedEvidence: false })).toThrow(/열람/);
+     expect(() => assertApprover({ ...base, actorId: "qc" })).not.toThrow();
+   });
++
++  it("관리자(anyDesignee)는 지정자·수행자 여부와 관계없이 확인하되 증적 미열람은 막는다", () => {
++    const base = { executorId: "dev", qcUserId: "qc", plUserId: "pl", hasViewedEvidence: true, verdict: "PASS" as const, anyDesignee: true };
++    expect(() => assertApprover({ ...base, step: "QC", actorId: "admin" })).not.toThrow();
++    expect(() => assertApprover({ ...base, step: "PL", actorId: "admin" })).not.toThrow();
++    expect(() => assertApprover({ ...base, step: "QC", actorId: "dev" })).not.toThrow();
++    expect(() => assertApprover({ ...base, step: "QC", actorId: "admin", hasViewedEvidence: false })).toThrow(/열람/);
++  });
+ });
+ 
+ describe("결함 조치·검증 (C9)", () => {
+@@ -155,13 +147,18 @@ describe("단위테스트 대상 Task", () => {
+   });
+ });
+ 
+-describe("PL 검토 상태", () => {
+-  it("승인 이후 수행·확인 단계는 승인으로 본다", () => {
+-    expect(utReviewStatus("DRAFT")).toBe("DRAFT");
+-    expect(utReviewStatus("REVIEW_REQUESTED")).toBe("REVIEW_REQUESTED");
+-    expect(utReviewStatus("REJECTED")).toBe("REJECTED");
+-    expect(utReviewStatus("APPROVED")).toBe("APPROVED");
+-    expect(utReviewStatus("QC_PENDING")).toBe("APPROVED");
+-    expect(utReviewStatus("PL_CONFIRMED")).toBe("APPROVED");
++describe("관리자 강제 처리(force)", () => {
++  it("확인 대기 상태가 아니어도 확인 결과를 계산한다", () => {
++    expect(() => applyApproval({ approvalStatus: null, verdict: "PASS", step: "QC", decision: "APPROVED" })).toThrow();
++    expect(applyApproval({ approvalStatus: null, verdict: "PASS", step: "QC", decision: "APPROVED", force: true })).toEqual({ approvalStatus: "PL_PENDING", caseStatus: "PL_PENDING" });
++    expect(applyApproval({ approvalStatus: "APPROVED", verdict: "PASS", step: "PL", decision: "APPROVED", force: true }).caseStatus).toBe("PL_CONFIRMED");
++  });
++
++  it("결함 조치·검증은 상태·조치자 제한 없이 처리", () => {
++    expect(() => applyDefectFix("VERIFIED")).toThrow();
++    expect(applyDefectFix("VERIFIED", true)).toBe("FIXED");
++    expect(() => applyDefectVerify({ status: "REGISTERED", result: "PASS", fixedBy: "a", verifierId: "a" })).toThrow();
++    expect(applyDefectVerify({ status: "REGISTERED", result: "PASS", fixedBy: "a", verifierId: "a", force: true })).toBe("VERIFIED");
++    expect(applyDefectVerify({ status: "FIXED", result: "FAIL", fixedBy: "a", verifierId: "a", force: true })).toBe("REFIX");
+   });
+ });
+diff --git a/lib/domain/ut.ts b/lib/domain/ut.ts
+index cdd11e4..4dc8d85 100644
+--- a/lib/domain/ut.ts
++++ b/lib/domain/ut.ts
+@@ -32,13 +32,6 @@ export function isUtTargetTask(item: { stage: string | null | undefined; isUnitT
+   return item.isLeaf && item.isUnitTestTarget && isUtTargetStage(item.stage);
+ }
+ 
+-/** PL 검토 상태(목록 "검토상태" 열, 2026-10-22 사용자 확정) — 케이스 상태에서 읽는다. 승인 이후 수행·확인 단계는 모두 "승인". */
+-export type UtReviewStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "REJECTED";
+-export const UT_REVIEW_STATUS_LABEL: Record<UtReviewStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", REJECTED: "반려" };
+-export function utReviewStatus(status: UtCaseStatus): UtReviewStatus {
+-  return status === "DRAFT" || status === "REVIEW_REQUESTED" || status === "REJECTED" ? status : "APPROVED";
+-}
+-
+ export class UtRuleError extends Error {
+   constructor(public code: string, message: string) { super(message); }
+ }
+@@ -62,65 +55,6 @@ export function defectDisplayId(date: string, seq: number) {
+   return `DF-${date.slice(2, 4)}${date.slice(5, 7)}${date.slice(8, 10)}-${String(seq).padStart(4, "0")}`;
+ }
+ 
+-// ---------------------------------------------------------------------------
+-// 케이스 작성 — 필수 필드(입력 검증, 유지)와 PL 검토 체크리스트(같은 WBS Task의 케이스 묶음 기준, 수기 확인·차단하지 않음 — AU-06 보류)
+-// ---------------------------------------------------------------------------
+-
+-export type UtCaseDraft = {
+-  displayId?: string;
+-  name: string;
+-  precondition: string;
+-  steps: string;
+-  inputData: string;
+-  expectedResult: string;
+-  executorId: string | null;
+-  plannedDate: string | null;
+-  qcUserId: string | null;
+-};
+-
+-export const EXPECTED_RESULT_MAX = 200;
+-const AMBIGUOUS_WORDS = ["정상 처리", "정상처리", "정상적으로", "확인"];
+-
+-/** 검토요청 전 필수 필드 누락 — 비어 있으면 검토요청 불가(5장 필수 12개 중 케이스 단위 항목). */
+-export function missingCaseFields(c: UtCaseDraft): string[] {
+-  const missing: string[] = [];
+-  if (!c.name.trim()) missing.push("케이스명");
+-  if (!c.precondition.trim()) missing.push("사전조건");
+-  if (!c.steps.trim()) missing.push("테스트스텝");
+-  if (!c.inputData.trim()) missing.push("입력데이터");
+-  if (!c.expectedResult.trim()) missing.push("예상결과");
+-  if (!c.executorId) missing.push("수행 담당자");
+-  if (!c.plannedDate) missing.push("예정일");
+-  if (!c.qcUserId) missing.push("QC 확인자");
+-  return missing;
+-}
+-
+-export type UtChecklistItem = { key: string; ok: boolean; message: string };
+-
+-/** PL 검토 체크리스트(5장) — 결과만 보여 주고 차단하지 않는다.
+- *  정상·예외·경계 유형과 우선순위(H등급)는 화면에서 삭제되어(2026-10-21) 해당 항목은 두지 않는다. */
+-export function reviewChecklist(cases: UtCaseDraft[]): UtChecklistItem[] {
+-  const ambiguous = cases.filter((c) => {
+-    const text = c.expectedResult.replace(/\s+/g, " ").trim();
+-    if (!text) return false;
+-    const stripped = AMBIGUOUS_WORDS.reduce((acc, w) => acc.split(w).join(""), text).replace(/[\s.,!·]/g, "");
+-    return stripped.length === 0;
+-  });
+-  const tooLong = cases.filter((c) => c.expectedResult.length > EXPECTED_RESULT_MAX);
+-  const seen = new Map<string, number>();
+-  for (const c of cases) {
+-    const key = `${c.inputData.trim()}|${c.expectedResult.trim()}`;
+-    if (c.inputData.trim() || c.expectedResult.trim()) seen.set(key, (seen.get(key) ?? 0) + 1);
+-  }
+-  const duplicates = [...seen.values()].filter((n) => n > 1).length;
+-  const items: UtChecklistItem[] = [
+-    { key: "ambiguous", ok: ambiguous.length === 0, message: ambiguous.length ? `예상결과가 모호어만으로 된 케이스 ${ambiguous.length}건` : "예상결과 모호어 없음" },
+-    { key: "length", ok: tooLong.length === 0, message: tooLong.length ? `예상결과 ${EXPECTED_RESULT_MAX}자 초과 ${tooLong.length}건` : `예상결과 ${EXPECTED_RESULT_MAX}자 이내` },
+-    { key: "duplicate", ok: duplicates === 0, message: duplicates ? `입력데이터·예상결과가 같은 중복 ${duplicates}묶음` : "중복 케이스 없음" },
+-  ];
+-  return items;
+-}
+-
+ // ---------------------------------------------------------------------------
+ // 직무 분리(4.3 규칙 5) — 입력 검증
+ // ---------------------------------------------------------------------------
+@@ -133,41 +67,38 @@ export function assertSeparation(input: { executorId?: string | null; qcUserId?:
+ }
+ 
+ // ---------------------------------------------------------------------------
+-// 케이스 검토(6장 2~3단계) — 시나리오 제거로 케이스 단위(2026-10-21)
++// 케이스 수정 — 검토·승인 없음(2026-10-23 사용자 확정). 등록 즉시 수행 대기(IN_EXECUTION)이며 첫 수행 등록 전까지만 수정한다.
+ // ---------------------------------------------------------------------------
+ 
+-export function nextCaseReviewStatus(current: UtCaseStatus, action: "REQUEST" | "APPROVE" | "REJECT" | "EDIT"): UtCaseStatus {
+-  switch (action) {
+-    case "REQUEST":
+-      if (current === "DRAFT" || current === "REJECTED") return "REVIEW_REQUESTED";
+-      break;
+-    case "APPROVE":
+-    case "REJECT":
+-      if (current === "REVIEW_REQUESTED") return action === "APPROVE" ? "APPROVED" : "REJECTED";
+-      break;
+-    case "EDIT":
+-      if (current === "DRAFT" || current === "REJECTED") return current;
+-      break;
+-  }
+-  throw new UtRuleError("INVALID_TRANSITION", `현재 상태(${UT_CASE_STATUS_LABEL[current]})에서는 처리할 수 없습니다.`);
++/** 검토·승인 폐지(2026-10-23) 이전 상태 — 운영 데이터 변환 전에도 수행 대기 케이스와 똑같이 다룬다. */
++export const UT_LEGACY_PRE_EXECUTION_STATUSES: UtCaseStatus[] = ["DRAFT", "REVIEW_REQUESTED", "REJECTED"];
++const isPreExecution = (status: UtCaseStatus) => status === "IN_EXECUTION" || UT_LEGACY_PRE_EXECUTION_STATUSES.includes(status);
++
++export function canEditCase(status: UtCaseStatus, executionCount: number) {
++  return isPreExecution(status) && executionCount === 0;
+ }
+ 
+ // ---------------------------------------------------------------------------
+ // 수행(6장 4단계) — 차수, 판정 입력 검증, 승인 상태 초기값
+ // ---------------------------------------------------------------------------
+ 
++/** APPROVED는 검토 폐지(2026-10-23) 이전에 승인된 케이스 — 계속 수행 가능. */
+ export function canExecuteCase(status: UtCaseStatus) {
+-  return status === "APPROVED" || status === "IN_EXECUTION";
++  return status === "APPROVED" || isPreExecution(status);
+ }
+ 
+ export function nextRoundNo(existingRounds: number[]) {
+   return existingRounds.length ? Math.max(...existingRounds) + 1 : 1;
+ }
+ 
++/** 수행 1회에 올릴 수 있는 증적 파일 수(2026-10-23 사용자 확정). */
++export const UT_EVIDENCE_MAX_FILES = 3;
++
+ export function validateExecution(input: { verdict: UtVerdict; actualResult: string; naReason: string; evidenceCount: number }) {
+   const { verdict, actualResult, naReason, evidenceCount } = input;
+   if (verdict === "FAIL" && !actualResult.trim()) throw new UtRuleError("REQUIRED", "Fail 판정은 실제결과를 입력해야 합니다.");
+   if (verdict === "NA" && !naReason.trim()) throw new UtRuleError("REQUIRED", "N/A 판정은 사유를 입력해야 합니다.");
++  if (evidenceCount > UT_EVIDENCE_MAX_FILES) throw new UtRuleError("EVIDENCE_LIMIT", `증적은 최대 ${UT_EVIDENCE_MAX_FILES}개까지 첨부할 수 있습니다.`);
+   if ((verdict === "PASS" || verdict === "FAIL") && evidenceCount < 1) throw new UtRuleError("EVIDENCE_REQUIRED", "Pass·Fail 판정은 증적을 1건 이상 첨부해야 합니다.");
+ }
+ 
+@@ -182,22 +113,22 @@ export function afterExecution(verdict: UtVerdict): { approvalStatus: UtApproval
+ // 결과 확인(6장 5~6단계) — QC → PL. 반려 시 차수 종료, 재수행은 roundNo + 1.
+ // ---------------------------------------------------------------------------
+ 
+-export function applyApproval(input: { approvalStatus: UtApprovalStatus | null; verdict: UtVerdict; step: UtApprovalStep; decision: UtDecision; rejectReasonCodeId?: string | null; comment?: string }) {
++export function applyApproval(input: { approvalStatus: UtApprovalStatus | null; verdict: UtVerdict; step: UtApprovalStep; decision: UtDecision; rejectReasonCodeId?: string | null; comment?: string; force?: boolean }) {
+   const { approvalStatus, verdict, step, decision } = input;
+   const expected: UtApprovalStatus = step === "QC" ? "QC_PENDING" : "PL_PENDING";
+-  if (approvalStatus !== expected) throw new UtRuleError("INVALID_TRANSITION", step === "QC" ? "QC 확인 대기 상태가 아닙니다." : "PL 확인 대기 상태가 아닙니다.");
+-  if (step === "QC" && verdict === "NA") throw new UtRuleError("INVALID_TRANSITION", "N/A 판정은 QC 확인 없이 PL이 사유를 승인합니다.");
++  if (approvalStatus !== expected && !input.force) throw new UtRuleError("INVALID_TRANSITION", step === "QC" ? "QC 확인 대기 상태가 아닙니다." : "PL 확인 대기 상태가 아닙니다.");
++  if (step === "QC" && verdict === "NA" && !input.force) throw new UtRuleError("INVALID_TRANSITION", "N/A 판정은 QC 확인 없이 PL이 사유를 승인합니다.");
+   if (decision === "REJECTED" && (!input.rejectReasonCodeId || !input.comment?.trim())) throw new UtRuleError("REQUIRED", "반려 시 사유코드와 의견을 입력해야 합니다.");
+   if (decision === "REJECTED") return { approvalStatus: "REJECTED" as const, caseStatus: "IN_EXECUTION" as const };
+   return step === "QC" ? { approvalStatus: "PL_PENDING" as const, caseStatus: "PL_PENDING" as const } : { approvalStatus: "APPROVED" as const, caseStatus: "PL_CONFIRMED" as const };
+ }
+ 
+-/** 확인자 자격 — 수행자는 확인할 수 없고, 지정된 확인자 본인만 처리(PM/PMO 대리 지정은 서버에서). */
+-export function assertApprover(input: { step: UtApprovalStep; actorId: string; executorId: string; qcUserId: string | null; plUserId: string | null; hasViewedEvidence: boolean; verdict: UtVerdict }) {
++/** 확인자 자격 — 수행자는 확인할 수 없고, 지정된 확인자 본인만 처리(관리자·슈퍼관리자는 anyDesignee로 지정·직무 분리 검사를 모두 생략). */
++export function assertApprover(input: { step: UtApprovalStep; actorId: string; executorId: string; qcUserId: string | null; plUserId: string | null; hasViewedEvidence: boolean; verdict: UtVerdict; anyDesignee?: boolean }) {
+   const { step, actorId, executorId, qcUserId, plUserId } = input;
+-  if (actorId === executorId) throw new UtRuleError("SEPARATION", "수행자는 자신의 결과를 확인할 수 없습니다.");
+-  if (step === "QC" && actorId !== qcUserId) throw new UtRuleError("FORBIDDEN", "지정된 QC 확인자만 처리할 수 있습니다.");
+-  if (step === "PL" && actorId !== plUserId) throw new UtRuleError("FORBIDDEN", "지정된 PL 확인자만 처리할 수 있습니다.");
++  if (actorId === executorId && !input.anyDesignee) throw new UtRuleError("SEPARATION", "수행자는 자신의 결과를 확인할 수 없습니다.");
++  if (step === "QC" && !input.anyDesignee && actorId !== qcUserId) throw new UtRuleError("FORBIDDEN", "지정된 QC 확인자만 처리할 수 있습니다.");
++  if (step === "PL" && !input.anyDesignee && actorId !== plUserId) throw new UtRuleError("FORBIDDEN", "지정된 PL 확인자만 처리할 수 있습니다.");
+   if (input.verdict !== "NA" && !input.hasViewedEvidence) throw new UtRuleError("EVIDENCE_NOT_VIEWED", "증적을 열람한 뒤 확인할 수 있습니다.");
+ }
+ 
+@@ -205,12 +136,13 @@ export function assertApprover(input: { step: UtApprovalStep; actorId: string; e
+ // 결함 조치·검증(5.1, C9)
+ // ---------------------------------------------------------------------------
+ 
+-export function applyDefectFix(status: UtDefectStatus): UtDefectStatus {
+-  if (status === "REGISTERED" || status === "REFIX") return "FIXED";
++export function applyDefectFix(status: UtDefectStatus, force = false): UtDefectStatus {
++  if (status === "REGISTERED" || status === "REFIX" || force) return "FIXED";
+   throw new UtRuleError("INVALID_TRANSITION", `현재 상태(${UT_DEFECT_STATUS_LABEL[status]})에서는 조치를 등록할 수 없습니다.`);
+ }
+ 
+-export function applyDefectVerify(input: { status: UtDefectStatus; result: UtVerificationResult; fixedBy: string | null; verifierId: string }): UtDefectStatus {
++export function applyDefectVerify(input: { status: UtDefectStatus; result: UtVerificationResult; fixedBy: string | null; verifierId: string; force?: boolean }): UtDefectStatus {
++  if (input.force) return input.result === "PASS" ? "VERIFIED" : "REFIX";
+   if (input.status !== "FIXED") throw new UtRuleError("INVALID_TRANSITION", "조치완료 상태에서만 검증할 수 있습니다.");
+   if (input.fixedBy && input.fixedBy === input.verifierId) throw new UtRuleError("SEPARATION", "조치자는 같은 결함을 검증할 수 없습니다.");
+   return input.result === "PASS" ? "VERIFIED" : "REFIX";
+diff --git a/lib/server/mp/ut/cases.ts b/lib/server/mp/ut/cases.ts
+index 559c9af..a4c4deb 100644
+--- a/lib/server/mp/ut/cases.ts
++++ b/lib/server/mp/ut/cases.ts
+@@ -4,11 +4,11 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+ import { DomainError } from "@/lib/server/errors";
+ import { listWbsItems } from "@/lib/server/mp/wbs";
+ import { listProjectMembers } from "@/lib/server/users";
+-import { assertSeparation, caseDisplayIdError, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, type UtCaseStatus } from "@/lib/domain/ut";
+-import { assertActiveMember, assertNotLocked, dateOnly, isUtManager, listUtCodes, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
++import { assertSeparation, canEditCase, caseDisplayIdError, isUtTargetTask } from "@/lib/domain/ut";
++import { assertActiveMember, assertNotLocked, isUtAdmin, isUtManager, listUtCodes, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
+ 
+ // ---------------------------------------------------------------------------
+-// 테스트 케이스 — 작성(개발자) → 검토요청 → PL 승인/반려(설계서 6장 2~3단계, 4.4 PL 수기 지정).
++// 테스트 케이스 — 작성(개발자) 후 검토·승인 없이 바로 수행 대기(2026-10-23 사용자 확정, 4.4 PL 수기 지정).
+ // 시나리오 없이 케이스가 WBS Task(또는 WBS 없음)에 바로 속한다(2026-10-21 사용자 확정).
+ // ---------------------------------------------------------------------------
+ 
+@@ -21,6 +21,7 @@ const caseFields = {
+   groupId: z.string().uuid(),
+   screenId: z.string().trim().max(100).default(""), // 화면ID — 수기 입력(2026-10-21 사용자 확정)
+   screenName: z.string().trim().max(200).default(""), // 화면명 — 수기 입력
++  screenUrl: z.string().trim().max(500).default(""), // 화면 URL — 수기 입력(2026-10-23)
+   requirementId: optionalId,
+   plUserId: optionalId,
+   caseTypeCodeId: z.string({ error: "케이스유형을 선택해 주세요." }).uuid("케이스유형을 선택해 주세요."), // 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21)
+@@ -104,23 +105,22 @@ export async function createUtCase(actor: UtActor, input: unknown) {
+   const wbs = data.wbsItemId ? (await listUtWbsLeaves(actor.projectId)).find((w) => w.id === data.wbsItemId) ?? null : null;
+   if (data.wbsItemId && !wbs) throw new DomainError("INVALID_CODE", "WBS에서 단위테스트 대상으로 체크된 개발 단계 최하위(Leaf) Task만 선택할 수 있습니다.");
+   await assertCaseRefs(actor.projectId, data);
+-  if (data.plUserId === actor.userId) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
+   await assertUniqueDisplayId(actor.projectId, data.displayId);
+   const created = await getPrisma().$transaction(async (tx) => {
+     // seq는 같은 WBS 안의 등록 순서(정렬 보조)로만 쓴다.
+     const seq = await nextSequence(tx, data.wbsItemId ? `case:${data.wbsItemId}` : `case:nowbs:${actor.projectId}`);
+-    return tx.utCase.create({ data: { ...data, plannedDate: toDate(data.plannedDate), projectId: actor.projectId, seq, createdBy: actor.userId } });
++    return tx.utCase.create({ data: { ...data, workerUserId: wbs?.ownerUserId ?? null, workerName: wbs?.ownerName ?? "", status: "IN_EXECUTION", plannedDate: toDate(data.plannedDate), projectId: actor.projectId, seq, createdBy: actor.userId } });
+   }).catch((error) => duplicateIdError(error, data.displayId));
+   await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_INSERT", "ut_cases", created.id, null, { displayId: created.displayId, wbsItemId: data.wbsItemId });
+   return { id: created.id, displayId: created.displayId };
+ }
+ 
+-/** 작성중·반려 상태에서 작성자 또는 PM/PMO만 수정한다. */
++/** 등록 후 첫 수행 등록 전까지 작성자 또는 PM/PMO만 수정한다(검토·승인 없음, 2026-10-23). */
+ async function loadEditableCase(actor: UtActor, caseId: string) {
+   const c = await getPrisma().utCase.findUnique({ where: { id: caseId } });
+   if (!c || c.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
+   if (c.createdBy !== actor.userId && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "작성자 또는 PM/PMO만 수정할 수 있습니다.");
+-  await rule(() => nextCaseReviewStatus(c.status, "EDIT"));
++  if (!isUtAdmin(actor) && !canEditCase(c.status, await getPrisma().utExecution.count({ where: { caseId } }))) throw new DomainError("INVALID_STATE", "수행 결과가 등록된 케이스는 수정할 수 없습니다.");
+   await assertNotLocked(actor.projectId);
+   return c;
+ }
+@@ -129,7 +129,6 @@ export async function updateUtCase(actor: UtActor, caseId: string, input: unknow
+   const data = caseUpdateSchema.parse(input);
+   const before = await loadEditableCase(actor, caseId);
+   await assertCaseRefs(actor.projectId, data);
+-  if (data.plUserId && data.plUserId === before.createdBy) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
+   await assertUniqueDisplayId(actor.projectId, data.displayId, caseId);
+   const { version, plannedDate, ...rest } = data;
+   const result = await getPrisma().utCase.updateMany({ where: { id: caseId, version }, data: { ...rest, plannedDate: toDate(plannedDate), updatedBy: actor.userId, version: { increment: 1 } } }).catch((error) => duplicateIdError(error, data.displayId));
+@@ -145,7 +144,6 @@ export async function reassignUtCasePl(actor: UtActor, caseId: string, input: un
+   const c = await getPrisma().utCase.findUnique({ where: { id: caseId } });
+   if (!c || c.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
+   await assertActiveMember(actor.projectId, plUserId, "PL 확인자");
+-  if (plUserId === c.createdBy) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
+   await rule(() => assertSeparation({ executorId: c.executorId, qcUserId: c.qcUserId, plUserId }));
+   await getPrisma().utCase.update({ where: { id: caseId }, data: { plUserId, updatedBy: actor.userId, version: { increment: 1 } } });
+   await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_PL_REASSIGN", "ut_cases", caseId, { plUserId: c.plUserId }, { plUserId });
+@@ -160,40 +158,3 @@ export async function setUtCaseActive(actor: UtActor, caseId: string, isActive:
+   await writeAuditLog(actor.projectId, actor.userId, isActive ? "UT_CASE_ACTIVATE" : "UT_CASE_DEACTIVATE", "ut_cases", caseId, { isActive: c.isActive }, { isActive });
+   return { ok: true };
+ }
+-
+-// ---------------------------------------------------------------------------
+-// 검토요청 → PL 승인/반려(케이스 단위)
+-// ---------------------------------------------------------------------------
+-
+-export async function requestUtCaseReview(actor: UtActor, caseId: string) {
+-  const c = await loadEditableCase(actor, caseId);
+-  if (!c.isActive) throw new DomainError("INVALID_STATE", "비활성 케이스는 검토요청할 수 없습니다.");
+-  if (!c.plUserId) throw new DomainError("INVALID_STATE", "PL 확인자를 지정한 뒤 검토요청할 수 있습니다.");
+-  const missing = missingCaseFields({ ...c, plannedDate: dateOnly(c.plannedDate) });
+-  if (missing.length) throw new DomainError("INVALID_STATE", `필수 항목이 비어 있습니다: ${missing.join(", ")}`);
+-  const next = await rule(() => nextCaseReviewStatus(c.status, "REQUEST"));
+-  await getPrisma().utCase.update({ where: { id: caseId }, data: { status: next, reviewRequestedAt: new Date(), rejectReason: "", updatedBy: actor.userId, version: { increment: 1 } } });
+-  await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_REVIEW_REQUEST", "ut_cases", caseId, { status: c.status }, { status: next });
+-  return { ok: true };
+-}
+-
+-export async function decideUtCaseReview(actor: UtActor, caseId: string, input: unknown) {
+-  const data = z.object({ decision: z.enum(["APPROVED", "REJECTED"]), reason: z.string().trim().max(1000).default("") }).parse(input);
+-  const c = await getPrisma().utCase.findUnique({ where: { id: caseId } });
+-  if (!c || c.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
+-  if (c.plUserId !== actor.userId) throw new DomainError("FORBIDDEN", "지정된 PL만 검토할 수 있습니다.");
+-  if (c.createdBy === actor.userId) throw new DomainError("FORBIDDEN", "작성자는 자기 케이스를 승인할 수 없습니다.");
+-  if (data.decision === "REJECTED" && !data.reason) throw new DomainError("INVALID_STATE", "반려 사유를 입력해 주세요.");
+-  await assertNotLocked(actor.projectId);
+-  const next = await rule(() => nextCaseReviewStatus(c.status, data.decision === "APPROVED" ? "APPROVE" : "REJECT"));
+-  const approved = next === "APPROVED";
+-  await getPrisma().utCase.update({ where: { id: caseId }, data: approved ? { status: next, approvedAt: new Date(), approvedBy: actor.userId, version: { increment: 1 } } : { status: next, rejectReason: data.reason, version: { increment: 1 } } });
+-  await writeAuditLog(actor.projectId, actor.userId, approved ? "UT_CASE_APPROVE" : "UT_CASE_REJECT", "ut_cases", caseId, { status: c.status }, { status: next, reason: data.reason || undefined });
+-  return { ok: true };
+-}
+-
+-/** 검토함 — 내가 PL이고 검토요청 상태인 케이스. */
+-export async function listUtReviewInbox(projectIds: string[], userId: string) {
+-  const rows = await getPrisma().utCase.findMany({ where: { projectId: { in: projectIds }, isActive: true, status: "REVIEW_REQUESTED" satisfies UtCaseStatus, plUserId: userId }, include: { wbsItem: { select: { displayId: true, name: true } }, creator: { select: { name: true } } }, orderBy: { reviewRequestedAt: "asc" } });
+-  return rows.map((c) => ({ id: c.id, displayId: c.displayId, name: c.name, wbsItemId: c.wbsItemId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", writerName: c.creator.name, requestedAt: c.reviewRequestedAt?.toISOString() ?? null }));
+-}
+diff --git a/lib/server/mp/ut/common.ts b/lib/server/mp/ut/common.ts
+index a9a3657..d72f91a 100644
+--- a/lib/server/mp/ut/common.ts
++++ b/lib/server/mp/ut/common.ts
+@@ -18,6 +18,11 @@ export function isUtManager(actor: UtActor) {
+   return hasPmPmoAccess(actor.jobTitle, actor.role) || isManagerRole(actor.role as never);
+ }
+ 
++/** 관리자·슈퍼관리자 — 수행·QC·PL 확인을 지정자 대신 처리할 수 있다(2026-10-23 사용자 확정). 수행자 본인 확인 금지 등 직무 분리는 그대로. */
++export function isUtAdmin(actor: Pick<UtActor, "role">) {
++  return actor.role === "ADMIN" || actor.role === "SUPER_ADMIN";
++}
++
+ export function assertUtManager(actor: UtActor) {
+   if (!isUtManager(actor)) throw new DomainError("FORBIDDEN", "PM/PMO만 처리할 수 있습니다.");
+ }
+diff --git a/lib/server/mp/ut/defects.ts b/lib/server/mp/ut/defects.ts
+index 743ab3c..cfead9e 100644
+--- a/lib/server/mp/ut/defects.ts
++++ b/lib/server/mp/ut/defects.ts
+@@ -3,7 +3,7 @@ import { z } from "zod";
+ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+ import { DomainError } from "@/lib/server/errors";
+ import { applyDefectFix, applyDefectVerify, defectDisplayId } from "@/lib/domain/ut";
+-import { assertActiveMember, assertNotLocked, assertUtCode, dateOnly, isUtManager, koreaToday, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
++import { assertActiveMember, assertNotLocked, assertUtCode, dateOnly, isUtAdmin, isUtManager, koreaToday, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
+ 
+ // ---------------------------------------------------------------------------
+ // 결함 등록·조치·검증(설계서 5.1, C9) — 수기 등록. 조치·검증은 ut_defect_actions에 이력을 추가로 남긴다.
+@@ -43,7 +43,7 @@ export async function registerUtDefect(actor: UtActor, executionId: string, inpu
+   const prisma = getPrisma();
+   const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: true } });
+   if (!e || e.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "수행 결과를 찾을 수 없습니다.");
+-  if (e.verdict !== "FAIL") throw new DomainError("INVALID_STATE", "Fail 판정 결과에만 결함을 등록할 수 있습니다.");
++  if (e.verdict !== "FAIL" && !isUtAdmin(actor)) throw new DomainError("INVALID_STATE", "Fail 판정 결과에만 결함을 등록할 수 있습니다.");
+   const allowed = [e.executorId, e.case.qcUserId, e.case.plUserId].includes(actor.userId) || isUtManager(actor);
+   if (!allowed) throw new DomainError("FORBIDDEN", "수행자·QC·PL 또는 PM/PMO만 결함을 등록할 수 있습니다.");
+   await assertDefectRefs(actor.projectId, data);
+@@ -81,7 +81,7 @@ export async function fixUtDefect(actor: UtActor, defectId: string, input: unkno
+   if (!d || d.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "결함을 찾을 수 없습니다.");
+   const owner = d.assigneeId ?? d.case.executorId;
+   if (owner !== actor.userId && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "조치 담당자만 조치를 등록할 수 있습니다.");
+-  const next = await rule(() => applyDefectFix(d.status));
++  const next = await rule(() => applyDefectFix(d.status, isUtAdmin(actor)));
+   await prisma.$transaction(async (tx) => {
+     const result = await tx.utDefect.updateMany({ where: { id: defectId, version: data.version }, data: { status: next, fixedAt: toDate(data.fixedAt), fixedBy: actor.userId, verificationResult: null, verifiedAt: null, verifiedBy: null, updatedBy: actor.userId, version: { increment: 1 } } });
+     if (!result.count) versionConflict();
+@@ -101,7 +101,7 @@ export async function verifyUtDefect(actor: UtActor, defectId: string, input: un
+   const allowed = [d.case.executorId, d.case.qcUserId].includes(actor.userId) || isUtManager(actor);
+   if (!allowed) throw new DomainError("FORBIDDEN", "테스트 수행자·QC 또는 PM/PMO만 검증할 수 있습니다.");
+   if (data.result === "FAIL" && !data.note.trim()) throw new DomainError("INVALID_STATE", "부적합 검증은 사유를 입력해 주세요.");
+-  const next = await rule(() => applyDefectVerify({ status: d.status, result: data.result, fixedBy: d.fixedBy, verifierId: actor.userId }));
++  const next = await rule(() => applyDefectVerify({ status: d.status, result: data.result, fixedBy: d.fixedBy, verifierId: actor.userId, force: isUtAdmin(actor) }));
+   await prisma.$transaction(async (tx) => {
+     const result = await tx.utDefect.updateMany({ where: { id: defectId, version: data.version }, data: { status: next, verificationResult: data.result, verifiedAt: toDate(data.verifiedAt), verifiedBy: actor.userId, updatedBy: actor.userId, version: { increment: 1 } } });
+     if (!result.count) versionConflict();
+@@ -156,8 +156,8 @@ export async function listUtRunRows(projectIds: string[], viewer: UtActor, filte
+       const owner = d.assigneeId ?? e.case.executorId;
+       rows.push({
+         ...base, defectId: d.id, defectDisplayId: d.displayId, defectStatus: d.status, severity: d.severity, version: d.version,
+-        canFix: (d.status === "REGISTERED" || d.status === "REFIX") && (owner === viewer.userId || manager),
+-        canVerify: d.status === "FIXED" && d.fixedBy !== viewer.userId && ([e.case.executorId, e.case.qcUserId].includes(viewer.userId) || manager),
++        canFix: isUtAdmin(viewer) || ((d.status === "REGISTERED" || d.status === "REFIX") && (owner === viewer.userId || manager)),
++        canVerify: isUtAdmin(viewer) || (d.status === "FIXED" && d.fixedBy !== viewer.userId && ([e.case.executorId, e.case.qcUserId].includes(viewer.userId) || manager)),
+         description: d.description, fixedAt: dateOnly(d.fixedAt), fixerName: d.fixer?.name ?? null,
+         verificationResult: d.verificationResult, verifiedAt: dateOnly(d.verifiedAt), verifierName: d.verifier?.name ?? null,
+       });
+diff --git a/lib/server/mp/ut/executions.ts b/lib/server/mp/ut/executions.ts
+index 3011495..3b686a9 100644
+--- a/lib/server/mp/ut/executions.ts
++++ b/lib/server/mp/ut/executions.ts
+@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
+ import { z } from "zod";
+ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
+ import { DomainError } from "@/lib/server/errors";
+-import { afterExecution, applyApproval, assertApprover, canExecuteCase, nextRoundNo, validateExecution } from "@/lib/domain/ut";
++import { UT_LEGACY_PRE_EXECUTION_STATUSES, afterExecution, applyApproval, assertApprover, canExecuteCase, nextRoundNo, validateExecution } from "@/lib/domain/ut";
+ import { readEvidenceFile, saveEvidenceFile, assertEvidenceFile } from "@/lib/server/ut-evidence-storage";
+-import { assertNotLocked, assertUtCode, dateOnly, koreaToday, rule, toDate, type UtActor } from "@/lib/server/mp/ut/common";
++import { assertNotLocked, assertUtCode, dateOnly, isUtAdmin, koreaToday, rule, toDate, type UtActor } from "@/lib/server/mp/ut/common";
+ 
+ // ---------------------------------------------------------------------------
+ // 수행(6장 4단계) · 결과 확인 QC → PL(5~6단계) · 증적 열람. 수행·승인·증적은 INSERT 전용(DB 트리거).
+@@ -22,7 +22,7 @@ const executionSchema = z.object({
+ /** 내 수행 목록 — 내가 수행 담당자이고 수행 가능(승인·수행중)한 케이스. 반려 건 우선. */
+ export async function listMyUtExecutionTargets(projectIds: string[], userId: string) {
+   const rows = await getPrisma().utCase.findMany({
+-    where: { projectId: { in: projectIds }, executorId: userId, isActive: true, status: { in: ["APPROVED", "IN_EXECUTION"] } },
++    where: { projectId: { in: projectIds }, executorId: userId, isActive: true, status: { in: ["APPROVED", "IN_EXECUTION", ...UT_LEGACY_PRE_EXECUTION_STATUSES] } },
+     include: { wbsItem: { select: { displayId: true, name: true } }, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { roundNo: true, verdict: true, approvalStatus: true } } },
+     orderBy: [{ plannedDate: "asc" }, { displayId: "asc" }],
+   });
+@@ -40,8 +40,8 @@ export async function registerUtExecution(actor: UtActor, caseId: string, input:
+   const prisma = getPrisma();
+   const c = await prisma.utCase.findUnique({ where: { id: caseId }, include: { executions: { select: { roundNo: true } } } });
+   if (!c || c.projectId !== actor.projectId || !c.isActive) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
+-  if (c.executorId !== actor.userId) throw new DomainError("FORBIDDEN", "배정된 수행 담당자만 결과를 등록할 수 있습니다.");
+-  if (!canExecuteCase(c.status)) throw new DomainError("INVALID_STATE", "승인되었거나 재수행 대기인 케이스만 수행 결과를 등록할 수 있습니다.");
++  if (c.executorId !== actor.userId && !isUtAdmin(actor)) throw new DomainError("FORBIDDEN", "배정된 수행 담당자 또는 관리자만 결과를 등록할 수 있습니다.");
++  if (!canExecuteCase(c.status) && !isUtAdmin(actor)) throw new DomainError("INVALID_STATE", "승인되었거나 재수행 대기인 케이스만 수행 결과를 등록할 수 있습니다.");
+   for (const file of files) assertEvidenceFile(file);
+   await rule(() => validateExecution({ verdict: data.verdict, actualResult: data.actualResult, naReason: data.naReason, evidenceCount: files.length }));
+   await assertUtCode(actor.projectId, data.envCodeId, "ut_env", "수행 환경");
+@@ -114,10 +114,11 @@ export async function decideUtApproval(actor: UtActor, executionId: string, inpu
+   const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: true, evidences: { select: { id: true, views: { where: { viewerId: actor.userId }, select: { id: true }, take: 1 } } } } });
+   if (!e || e.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "수행 결과를 찾을 수 없습니다.");
+   const hasViewedEvidence = e.evidences.length > 0 && e.evidences.every((v) => v.views.length > 0);
+-  await rule(() => assertApprover({ step: data.step, actorId: actor.userId, executorId: e.executorId, qcUserId: e.case.qcUserId, plUserId: e.case.plUserId, hasViewedEvidence, verdict: e.verdict }));
+-  if (data.step === "PL" && e.case.qcUserId === actor.userId) throw new DomainError("FORBIDDEN", "QC 확인자는 PL 확인을 할 수 없습니다.");
++  await rule(() => assertApprover({ step: data.step, actorId: actor.userId, executorId: e.executorId, qcUserId: e.case.qcUserId, plUserId: e.case.plUserId, hasViewedEvidence, verdict: e.verdict, anyDesignee: isUtAdmin(actor) }));
++  if (data.step === "PL" && !isUtAdmin(actor) && (e.case.qcUserId === actor.userId || (await prisma.utApproval.count({ where: { executionId, step: "QC", approverId: actor.userId } })))) throw new DomainError("FORBIDDEN", "QC 확인자는 PL 확인을 할 수 없습니다.");
++  if (await prisma.utApproval.count({ where: { executionId, step: data.step } })) throw new DomainError("INVALID_STATE", `이미 ${data.step} 확인이 기록된 차수입니다. 확인 이력은 수정할 수 없어 새 차수로 재수행해 주세요.`);
+   await assertUtCode(actor.projectId, data.rejectReasonCodeId, "ut_reject_reason", "반려 사유");
+-  const next = await rule(() => applyApproval({ approvalStatus: e.approvalStatus, verdict: e.verdict, step: data.step, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment }));
++  const next = await rule(() => applyApproval({ approvalStatus: e.approvalStatus, verdict: e.verdict, step: data.step, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment, force: isUtAdmin(actor) }));
+   await prisma.$transaction([
+     prisma.utApproval.create({ data: { projectId: e.projectId, executionId, wbsItemId: e.wbsItemId, step: data.step, approverId: actor.userId, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment } }),
+     prisma.utExecution.update({ where: { id: executionId }, data: { approvalStatus: next.approvalStatus, approvalUpdatedAt: new Date() } }),
+diff --git a/lib/server/mp/ut/grid.ts b/lib/server/mp/ut/grid.ts
+index af464db..6f1d18a 100644
+--- a/lib/server/mp/ut/grid.ts
++++ b/lib/server/mp/ut/grid.ts
+@@ -2,14 +2,14 @@ import "server-only";
+ import { getPrisma } from "@/lib/server/db-pg";
+ import { DomainError } from "@/lib/server/errors";
+ import { listWbsItems } from "@/lib/server/mp/wbs";
+-import { UT_NO_WBS, utReviewStatus, isUtTargetTask, missingCaseFields, reviewChecklist } from "@/lib/domain/ut";
+-import { dateOnly, isUtManager, type UtActor } from "@/lib/server/mp/ut/common";
++import { UT_NO_WBS, canEditCase, canExecuteCase, isUtTargetTask } from "@/lib/domain/ut";
++import { dateOnly, isUtAdmin, isUtManager, type UtActor } from "@/lib/server/mp/ut/common";
+ 
+ // ---------------------------------------------------------------------------
+ // 단위테스트 목록(WBS 트리 + 24개 열)과 케이스 정보확인/처리 조회 — 설계서 8장. 시나리오 없음(2026-10-21).
+ // ---------------------------------------------------------------------------
+ 
+-export type UtTreeNode = { id: string; parentId: string | null; displayId: string; code: string; name: string; level: number; isLeaf: boolean; caseCount: number };
++export type UtTreeNode = { id: string; parentId: string | null; displayId: string; code: string; name: string; level: number; isLeaf: boolean; caseCount: number; ownerName: string };
+ 
+ /** 좌측 WBS 트리 — WBS 기준 단위테스트 대상 Task(개발 단계 Leaf + 대상 체크)와 그 상위만, 보관 제외(경로 순서) + Leaf별 활성 케이스 수(상위는 하위 합). */
+ export async function getUtWbsTree(projectId: string): Promise<UtTreeNode[]> {
+@@ -27,7 +27,7 @@ export async function getUtWbsTree(projectId: string): Promise<UtTreeNode[]> {
+     for (let n = 1; n <= segs.length; n += 1) { const id = byPath.get(segs.slice(0, n).join(".")); if (id) keep.add(id); }
+   }
+   const own = new Map(counts.map((r) => [r.wbsItemId!, r._count._all]));
+-  const nodes = allItems.filter((i) => keep.has(i.id)).map((i) => ({ id: i.id, parentId: i.parentId, displayId: i.displayId, code: i.code, name: i.name, level: i.level, isLeaf: !parentIds.has(i.id), caseCount: own.get(i.id) ?? 0 }));
++  const nodes = allItems.filter((i) => keep.has(i.id)).map((i) => ({ id: i.id, parentId: i.parentId, displayId: i.displayId, code: i.code, name: i.name, level: i.level, isLeaf: !parentIds.has(i.id), caseCount: own.get(i.id) ?? 0, ownerName: i.ownerName ?? "" }));
+   const byId = new Map(nodes.map((n) => [n.id, n]));
+   // 하위 합계를 상위로 올린다(깊은 것부터).
+   for (const n of [...nodes].sort((a, b) => b.level - a.level)) {
+@@ -37,45 +37,45 @@ export async function getUtWbsTree(projectId: string): Promise<UtTreeNode[]> {
+   return nodes;
+ }
+ 
+-/** UT-021 케이스 정보확인/처리 — 기존 케이스 또는 신규(WBS 지정). PL 검토 체크리스트는 같은 WBS Task의 활성 케이스 묶음 기준. */
++/** UT-021 케이스 정보확인/처리 — 기존 케이스 또는 신규(WBS 지정). */
+ export async function getUtCaseEditor(projectId: string, viewer: UtActor, params: { caseId?: string; wbs?: string }) {
+   const prisma = getPrisma();
+   const c = params.caseId ? await prisma.utCase.findUnique({ where: { id: params.caseId }, include: {
+     wbsItem: { select: { displayId: true, name: true } }, pl: { select: { name: true } }, creator: { select: { name: true } },
+-    executions: { orderBy: { roundNo: "desc" }, include: { executor: { select: { name: true } }, evidences: { select: { id: true, fileName: true, views: { where: { viewerId: viewer.userId }, select: { id: true }, take: 1 } } }, approvals: { include: { approver: { select: { name: true } } }, orderBy: { actedAt: "asc" } } } },
++    executions: { orderBy: { roundNo: "desc" }, include: { executor: { select: { name: true } }, evidences: { select: { id: true, fileName: true, views: { where: { viewerId: viewer.userId }, select: { id: true }, take: 1 } } }, approvals: { include: { approver: { select: { name: true } }, rejectReason: { select: { label: true } } }, orderBy: { actedAt: "asc" } } } },
+     defects: { orderBy: { createdAt: "asc" }, include: { fixer: { select: { name: true } }, verifier: { select: { name: true } }, assignee: { select: { name: true } }, actions: { orderBy: { createdAt: "asc" }, include: { actor: { select: { name: true } } } } } },
+   } }) : null;
+   if (params.caseId && (!c || c.projectId !== projectId)) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
+   // WBS 없이 등록한 케이스·신규는 UT_NO_WBS로 표시한다.
+   const wbsId = c ? c.wbsItemId ?? UT_NO_WBS : params.wbs ?? null;
+-  const siblings = wbsId ? await prisma.utCase.findMany({ where: { projectId, isActive: true, wbsItemId: wbsId === UT_NO_WBS ? null : wbsId } }) : [];
+-  const editable = !c || ((c.status === "DRAFT" || c.status === "REJECTED") && (c.createdBy === viewer.userId || isUtManager(viewer)));
+-  const latest = c?.executions[0];
++    const latest = c?.executions[0];
++  const admin = isUtAdmin(viewer);
++  // 관리자는 상태와 관계없이 최근 차수의 미처리 확인 단계(QC → PL, N/A는 PL만)를 처리할 수 있다. 이미 기록된 확인 이력은 수정 불가(INSERT 전용).
++  const decided = (step: "QC" | "PL") => !!latest?.approvals.some((a) => a.step === step);
++  const qcOpen = !!latest && latest.verdict !== "NA" && !decided("QC") && !decided("PL");
++  const plOpen = !!latest && !decided("PL") && (latest.verdict === "NA" || decided("QC"));
++  const editable = !c || admin || (canEditCase(c.status, c.executions.length) && (c.createdBy === viewer.userId || isUtManager(viewer)));
+   return {
+     wbsItemId: wbsId,
+-    checklist: siblings.length ? reviewChecklist(siblings.map((x) => ({ ...x, plannedDate: dateOnly(x.plannedDate) }))) : [],
+     case: c ? {
+-      id: c.id, displayId: c.displayId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "",
+-      groupId: c.groupId, screenId: c.screenId, screenName: c.screenName, requirementId: c.requirementId, plUserId: c.plUserId, rejectReason: c.rejectReason, isActive: c.isActive,
++      id: c.id, displayId: c.displayId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", wbsOwnerName: c.workerName,
++      groupId: c.groupId, screenId: c.screenId, screenName: c.screenName, screenUrl: c.screenUrl, requirementId: c.requirementId, plUserId: c.plUserId, isActive: c.isActive,
+       caseTypeCodeId: c.caseTypeCodeId, name: c.name, precondition: c.precondition, steps: c.steps, inputData: c.inputData, expectedResult: c.expectedResult,
+       executorId: c.executorId, qcUserId: c.qcUserId, plannedDate: dateOnly(c.plannedDate), status: c.status, version: c.version,
+-      missing: missingCaseFields({ ...c, plannedDate: dateOnly(c.plannedDate) }),
+-      executions: c.executions.map((e) => ({ id: e.id, roundNo: e.roundNo, verdict: e.verdict, executedOn: dateOnly(e.executedOn), executorName: e.executor.name, actualResult: e.actualResult, naReason: e.naReason, approvalStatus: e.approvalStatus, evidences: e.evidences.map((v) => ({ id: v.id, fileName: v.fileName, viewed: v.views.length > 0 })), approvals: e.approvals.map((a) => ({ step: a.step, decision: a.decision, approverName: a.approver.name, comment: a.comment })) })),
++      executions: c.executions.map((e) => ({ id: e.id, roundNo: e.roundNo, verdict: e.verdict, executedOn: dateOnly(e.executedOn), executorName: e.executor.name, actualResult: e.actualResult, naReason: e.naReason, approvalStatus: e.approvalStatus, evidences: e.evidences.map((v) => ({ id: v.id, fileName: v.fileName, viewed: v.views.length > 0 })), approvals: e.approvals.map((a) => ({ step: a.step, decision: a.decision, approverName: a.approver.name, comment: a.comment, rejectReason: a.rejectReason?.label ?? "", actedOn: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(a.actedAt) })) })),
+       defects: c.defects.map((d) => ({
+         id: d.id, displayId: d.displayId, version: d.version, status: d.status, severity: d.severity, description: d.description, assigneeName: d.assignee?.name ?? null,
+         fixedAt: dateOnly(d.fixedAt), fixerName: d.fixer?.name ?? null, verificationResult: d.verificationResult, verifiedAt: dateOnly(d.verifiedAt), verifierName: d.verifier?.name ?? null,
+-        canFix: (d.status === "REGISTERED" || d.status === "REFIX") && ((d.assigneeId ?? c.executorId) === viewer.userId || isUtManager(viewer)),
+-        canVerify: d.status === "FIXED" && d.fixedBy !== viewer.userId && ([c.executorId, c.qcUserId].includes(viewer.userId) || isUtManager(viewer)),
++        canFix: isUtAdmin(viewer) || ((d.status === "REGISTERED" || d.status === "REFIX") && ((d.assigneeId ?? c.executorId) === viewer.userId || isUtManager(viewer))),
++        canVerify: isUtAdmin(viewer) || (d.status === "FIXED" && d.fixedBy !== viewer.userId && ([c.executorId, c.qcUserId].includes(viewer.userId) || isUtManager(viewer))),
+         actions: d.actions.map((a) => ({ actionType: a.actionType, actorName: a.actor.name, actedOn: dateOnly(a.actedOn), verificationResult: a.verificationResult, note: a.note })),
+       })),
+     } : null,
+     editable,
+-    canRequestReview: !!c && editable && c.isActive,
+-    canDecideReview: !!c && c.status === "REVIEW_REQUESTED" && c.plUserId === viewer.userId && c.createdBy !== viewer.userId,
+-    canExecute: !!c && c.isActive && c.executorId === viewer.userId && (c.status === "APPROVED" || c.status === "IN_EXECUTION"),
+-    canQc: !!c && latest?.approvalStatus === "QC_PENDING" && c.qcUserId === viewer.userId,
+-    canPl: !!c && latest?.approvalStatus === "PL_PENDING" && c.plUserId === viewer.userId,
+-    canRegisterDefect: !!c && latest?.verdict === "FAIL" && ([c.executorId, c.qcUserId, c.plUserId].includes(viewer.userId) || isUtManager(viewer)),
++    canExecute: !!c && c.isActive && (admin || (c.executorId === viewer.userId && canExecuteCase(c.status))),
++    canQc: !!c && !!latest && (admin ? qcOpen : latest.approvalStatus === "QC_PENDING" && c.qcUserId === viewer.userId && latest.executorId !== viewer.userId),
++    canPl: !!c && !!latest && (admin ? plOpen : latest.approvalStatus === "PL_PENDING" && c.plUserId === viewer.userId && latest.executorId !== viewer.userId && !latest.approvals.some((a) => a.step === "QC" && a.approverId === viewer.userId)),
++    canRegisterDefect: !!c && !!latest && (admin || (latest.verdict === "FAIL" && ([c.executorId, c.qcUserId, c.plUserId].includes(viewer.userId) || isUtManager(viewer)))),
+     plName: c?.pl?.name ?? null, writerName: c?.creator.name ?? null,
+   };
+ }
+@@ -94,17 +94,27 @@ export async function wbsSubtreeDisplayIds(projectId: string, wbs: string | unde
+ // ---------------------------------------------------------------------------
+ 
+ export type UtSheetRow = {
+-  caseId: string | null; wbsItemId: string | null; caseStatus: string | null; reviewStatus: string | null; todo: string[];
++  caseId: string | null; wbsItemId: string | null; caseStatus: string | null; todo: string[];
+   unit: string; wbsDisplayId: string; wbsName: string; caseDisplayId: string; caseName: string; precondition: string; inputData: string; steps: string; expectedResult: string;
+   actualResult: string; verdict: string | null; errorContent: string; ownerName: string | null; executedOn: string | null; executorName: string | null;
+   screenId: string; screenName: string; requirementId: string; defectId: string | null; fixedAt: string | null; fixerName: string | null;
+-  verificationResult: string | null; verifiedAt: string | null; verifierName: string | null; done: "완료" | "진행중" | "미수행" | "미등록";
++  qcResult: string; plResult: string; caseTypeLabel: string; creatorName: string;
++  verificationResult: string | null; verifiedAt: string | null; verifierName: string | null; done: "완료" | "진행중" | "미수행";
+ };
+ 
+-export type UtSheetFilters = { wbs?: string; q?: string; verdict?: string; todo?: string; review?: string };
++export type UtSheetFilters = { wbs?: string; q?: string; verdict?: string; todo?: string };
++
++/** 최근 차수의 QC/PL 확인 결과 문구 — 목록 "QC 확인"·"PL 확인" 열(2026-10-23). */
++function stepResult(e: { verdict: string; approvalStatus: string | null; approvals: { step: string; decision: string; approver: { name: string } }[] } | null, step: "QC" | "PL") {
++  if (!e) return "";
++  const a = e.approvals.find((x) => x.step === step);
++  if (a) return `${a.decision === "APPROVED" ? "승인" : "반려"} · ${a.approver.name}`;
++  if (step === "QC" && e.verdict === "NA") return "해당 없음";
++  return e.approvalStatus === `${step}_PENDING` ? "대기" : "–";
++}
+ 
+ /** 단위테스트 목록 — WBS 기준(2026-10-21 사용자 확정): 단위테스트 대상 Task(개발 단계 Leaf + 대상 체크)마다 케이스 행을,
+- *  케이스가 없는 대상 Task는 "미등록" 1행을 WBS 경로 순서로 보여 준다. 대상이 아닌 Task의 케이스는 목록에서 제외한다.
++ *  케이스가 등록된 행만 WBS 경로 순서로 보여 준다(케이스 없는 대상 Task는 제외, 2026-10-23). 대상이 아닌 Task의 케이스도 목록에서 제외한다.
+  *  WBS 없이 등록한 테스트(2026-10-21)는 맨 뒤에 붙이며, wbs=none이면 그것만 보여 준다. */
+ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filters: UtSheetFilters = {}) {
+   const prisma = getPrisma();
+@@ -118,9 +128,9 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
+   const cases = await prisma.utCase.findMany({
+     where: { projectId, isActive: true, OR: [{ wbsItemId: { in: targets.map((t) => t.id) } }, ...(withNoWbs ? [{ wbsItemId: null }] : [])] },
+     include: {
+-      group: { select: { label: true } }, requirement: { select: { displayId: true } },
+-      wbsItem: { select: { displayId: true, name: true, owner: { select: { name: true } } } },
+-      executions: { orderBy: { roundNo: "desc" }, take: 1, include: { executor: { select: { name: true } } } },
++      group: { select: { label: true } }, caseTypeCode: { select: { label: true } }, creator: { select: { name: true } }, requirement: { select: { displayId: true } },
++      wbsItem: { select: { displayId: true, name: true } },
++      executions: { orderBy: { roundNo: "desc" }, take: 1, include: { executor: { select: { name: true } }, approvals: { include: { approver: { select: { name: true } } } } } },
+       defects: { orderBy: { createdAt: "desc" }, include: { fixer: { select: { name: true } }, verifier: { select: { name: true } } } },
+     },
+     orderBy: [{ displayId: "asc" }],
+@@ -128,23 +138,23 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
+   });
+   const me = viewer.userId;
+   const manager = isUtManager(viewer);
++  const admin = isUtAdmin(viewer);
+   const caseRows: UtSheetRow[] = cases.map((c) => {
+     const e = c.executions[0] ?? null;
+     const d = c.defects[0] ?? null;
+     const openDefects = c.defects.filter((x) => x.status !== "VERIFIED");
+     const todo: string[] = [];
+-    if (c.status === "REVIEW_REQUESTED" && c.plUserId === me) todo.push("review");
+-    if (c.executorId === me && (c.status === "APPROVED" || c.status === "IN_EXECUTION")) todo.push("execute");
+-    if (e?.approvalStatus === "QC_PENDING" && c.qcUserId === me) todo.push("qc");
+-    if (e?.approvalStatus === "PL_PENDING" && c.plUserId === me) todo.push("pl");
++    if ((c.executorId === me || admin) && canExecuteCase(c.status)) todo.push("execute");
++    if (e?.approvalStatus === "QC_PENDING" && (c.qcUserId === me || admin)) todo.push("qc");
++    if (e?.approvalStatus === "PL_PENDING" && (c.plUserId === me || admin)) todo.push("pl");
+     if (openDefects.some((x) => ((x.status === "REGISTERED" || x.status === "REFIX") && ((x.assigneeId ?? c.executorId) === me || manager)) || (x.status === "FIXED" && x.fixedBy !== me && ([c.executorId, c.qcUserId].includes(me) || manager)))) todo.push("defect");
+-    if ((c.status === "DRAFT" || c.status === "REJECTED") && c.createdBy === me) todo.push("draft");
+     return {
+-      caseId: c.id, wbsItemId: c.wbsItemId, caseStatus: c.status, reviewStatus: utReviewStatus(c.status), todo,
++      caseId: c.id, wbsItemId: c.wbsItemId, caseStatus: c.status, todo,
+       unit: c.group.label, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", caseDisplayId: c.displayId, caseName: c.name, precondition: c.precondition, inputData: c.inputData, steps: c.steps, expectedResult: c.expectedResult,
+       actualResult: e?.actualResult || e?.naReason || "", verdict: e?.verdict ?? null, errorContent: d?.description ?? (e?.verdict === "FAIL" ? e.actualResult : ""),
+-      ownerName: c.wbsItem?.owner?.name ?? null, executedOn: dateOnly(e?.executedOn), executorName: e?.executor.name ?? null,
++      ownerName: c.workerName || null, executedOn: dateOnly(e?.executedOn), executorName: e?.executor.name ?? null,
+       screenId: c.screenId, screenName: c.screenName, requirementId: c.requirement?.displayId ?? "",
++      qcResult: stepResult(e, "QC"), plResult: stepResult(e, "PL"), caseTypeLabel: c.caseTypeCode?.label ?? "", creatorName: c.creator.name,
+       defectId: d?.displayId ?? null, fixedAt: dateOnly(d?.fixedAt), fixerName: d?.fixer?.name ?? null,
+       verificationResult: d?.verificationResult ?? null, verifiedAt: dateOnly(d?.verifiedAt), verifierName: d?.verifier?.name ?? null,
+       done: !e ? "미수행" : c.status === "PL_CONFIRMED" && openDefects.length === 0 ? "완료" : "진행중",
+@@ -152,16 +162,10 @@ export async function listUtCaseSheet(projectId: string, viewer: UtActor, filter
+   });
+   const byWbs = new Map<string, UtSheetRow[]>();
+   for (const r of caseRows) if (r.wbsItemId) byWbs.set(r.wbsItemId, [...(byWbs.get(r.wbsItemId) ?? []), r]);
+-  const rows: UtSheetRow[] = targets.flatMap((t): UtSheetRow[] => byWbs.get(t.id) ?? [{
+-    caseId: null, wbsItemId: t.id, caseStatus: null, reviewStatus: null, todo: [],
+-    unit: "", wbsDisplayId: t.displayId, wbsName: t.name, caseDisplayId: "", caseName: "", precondition: "", inputData: "", steps: "", expectedResult: "",
+-    actualResult: "", verdict: null, errorContent: "", ownerName: t.ownerName, executedOn: null, executorName: null,
+-    screenId: "", screenName: "", requirementId: "", defectId: null, fixedAt: null, fixerName: null,
+-    verificationResult: null, verifiedAt: null, verifierName: null, done: "미등록",
+-  }]).concat(caseRows.filter((r) => !r.wbsItemId));
++  // 케이스가 등록된 행만 보여 준다(2026-10-23 사용자 요청) — 케이스가 없는 대상 Task의 "미등록" 행은 두지 않는다.
++  const rows: UtSheetRow[] = targets.flatMap((t): UtSheetRow[] => byWbs.get(t.id) ?? []).concat(caseRows.filter((r) => !r.wbsItemId));
+   const q = filters.q?.trim().toLowerCase();
+   return rows.filter((r) =>
+-    (!filters.review || r.reviewStatus === filters.review) &&
+     (!filters.verdict || (filters.verdict === "NONE" ? r.verdict === null : r.verdict === filters.verdict)) &&
+     (!filters.todo || (filters.todo === "any" ? r.todo.length > 0 : r.todo.includes(filters.todo))) &&
+     (!q || [r.caseDisplayId, r.caseName, r.unit, r.wbsDisplayId, r.wbsName, r.requirementId, r.screenId].some((v) => v.toLowerCase().includes(q))));
+diff --git a/lib/server/mp/ut/milestones.ts b/lib/server/mp/ut/milestones.ts
+index 7f61a09..875144b 100644
+--- a/lib/server/mp/ut/milestones.ts
++++ b/lib/server/mp/ut/milestones.ts
+@@ -70,13 +70,13 @@ async function loadWbsContext(actor: UtActor, wbsItemId: string) {
+   return { cases, wbs, ms };
+ }
+ 
+-/** 개발완료 선언(개발자) — 전제: PL 승인된 케이스 1건 이상(케이스 사후 작성 방지). */
++/** 개발완료 선언(개발자) — 전제: 등록된 케이스 1건 이상(케이스 사후 작성 방지). */
+ export async function declareUtDevComplete(actor: UtActor, wbsItemId: string, input: unknown) {
+   const { devCompletedOn } = z.object({ devCompletedOn: ymd }).parse(input);
+   const { cases, wbs, ms } = await loadWbsContext(actor, wbsItemId);
+   const isOwner = wbs.ownerUserId === actor.userId || cases.some((c) => c.executorId === actor.userId);
+   if (!isOwner && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "WBS 담당자 또는 케이스 수행 담당자만 개발완료를 선언할 수 있습니다.");
+-  if (!cases.some((c) => !["DRAFT", "REVIEW_REQUESTED", "REJECTED"].includes(c.status))) throw new DomainError("INVALID_STATE", "PL 승인된 케이스가 1건 이상 있어야 개발완료를 선언할 수 있습니다.");
++  if (!cases.length) throw new DomainError("INVALID_STATE", "등록된 케이스가 1건 이상 있어야 개발완료를 선언할 수 있습니다.");
+   if (ms?.devCompletedOn) throw new DomainError("INVALID_STATE", "이미 개발완료가 선언되었습니다.");
+   await getPrisma().utWbsMilestone.upsert({
+     where: { wbsItemId },
+diff --git a/lib/server/mp/ut/stats.ts b/lib/server/mp/ut/stats.ts
+new file mode 100644
+index 0000000..b244423
+--- /dev/null
++++ b/lib/server/mp/ut/stats.ts
+@@ -0,0 +1,101 @@
++import "server-only";
++import { getPrisma } from "@/lib/server/db-pg";
++import { listWbsItems } from "@/lib/server/mp/wbs";
++import { UT_NO_WBS, isUtTargetTask } from "@/lib/domain/ut";
++
++// ---------------------------------------------------------------------------
++// 단위테스트 작성현황·수행결과 통계(초안, 2026-10-23) — 활성 케이스의 최근 차수 기준으로 집계한다.
++// 시나리오는 두지 않으므로(2026-10-21) "작성현황"은 테스트 케이스 기준이다.
++// ---------------------------------------------------------------------------
++
++export type UtStatFilters = { wbs?: string };
++
++/** 수행 상태 — 최근 차수 판정. 수행 결과가 없으면 NONE(미수행). */
++export type UtRunBucket = { total: number; none: number; pass: number; fail: number; blocked: number; na: number };
++
++const emptyBucket = (): UtRunBucket => ({ total: 0, none: 0, pass: 0, fail: 0, blocked: 0, na: 0 });
++function addRun(b: UtRunBucket, verdict: string | null) {
++  b.total += 1;
++  if (!verdict) b.none += 1;
++  else if (verdict === "PASS") b.pass += 1;
++  else if (verdict === "FAIL") b.fail += 1;
++  else if (verdict === "BLOCKED") b.blocked += 1;
++  else b.na += 1;
++}
++
++export type UtStatRow = { key: string; label: string } & UtRunBucket;
++
++function bump(map: Map<string, UtStatRow>, key: string, label: string, verdict: string | null) {
++  const row = map.get(key) ?? { key, label, ...emptyBucket() };
++  addRun(row, verdict);
++  map.set(key, row);
++}
++const sortedRows = (map: Map<string, UtStatRow>) => [...map.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "ko"));
++
++export async function getUtStats(projectId: string, filters: UtStatFilters = {}) {
++  const prisma = getPrisma();
++  const allItems = await listWbsItems(projectId);
++  const parentIds = new Set(allItems.filter((i) => i.parentId).map((i) => i.parentId!));
++  const noWbsOnly = filters.wbs === UT_NO_WBS;
++  const node = filters.wbs && !noWbsOnly ? allItems.find((i) => i.id === filters.wbs) : null;
++  const targets = noWbsOnly ? [] : allItems.filter((i) => isUtTargetTask({ ...i, isLeaf: !parentIds.has(i.id) })
++    && (!filters.wbs || (!!node && (i.path === node.path || i.path.startsWith(`${node.path}.`)))));
++  const withNoWbs = !filters.wbs || noWbsOnly;
++
++  const cases = await prisma.utCase.findMany({
++    where: { projectId, isActive: true, OR: [{ wbsItemId: { in: targets.map((t) => t.id) } }, ...(withNoWbs ? [{ wbsItemId: null }] : [])] },
++    include: {
++      group: { select: { id: true, label: true } }, caseTypeCode: { select: { id: true, label: true } },
++      executor: { select: { id: true, name: true } },
++      executions: { orderBy: { roundNo: "desc" }, take: 1, select: { roundNo: true, verdict: true, executedOn: true, approvalStatus: true } },
++      defects: { select: { status: true, severity: true } },
++    },
++    take: 20000,
++  });
++
++  const byGroup = new Map<string, UtStatRow>();
++  const byType = new Map<string, UtStatRow>();
++  const byExecutor = new Map<string, UtStatRow>();
++  const total = emptyBucket();
++  const confirm = { qcPending: 0, plPending: 0, confirmed: 0, rejected: 0, notRequested: 0 };
++  const DEFECT_STATUSES = ["REGISTERED", "FIXED", "VERIFIED", "REFIX"] as const;
++  const DEFECT_SEVERITIES = ["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"] as const;
++  // 결함 상태 × 심각도 건수표
++  const defectMatrix = Object.fromEntries(DEFECT_STATUSES.map((st) => [st, Object.fromEntries(DEFECT_SEVERITIES.map((sv) => [sv, 0]))])) as Record<(typeof DEFECT_STATUSES)[number], Record<(typeof DEFECT_SEVERITIES)[number], number>>;
++  const casesPerTask = new Set<string>();
++
++  for (const c of cases) {
++    const e = c.executions[0] ?? null;
++    const verdict = e?.verdict ?? null;
++    addRun(total, verdict);
++    bump(byGroup, c.group.id, c.group.label, verdict);
++    bump(byType, c.caseTypeCode?.id ?? "none", c.caseTypeCode?.label ?? "미지정", verdict);
++    bump(byExecutor, c.executor?.id ?? "none", c.executor?.name ?? "미지정", verdict);
++    if (c.wbsItemId) casesPerTask.add(c.wbsItemId);
++    // QC·PL 확인 진행 — 최근 차수 기준
++    if (!e) confirm.notRequested += 1;
++    else if (e.approvalStatus === "QC_PENDING") confirm.qcPending += 1;
++    else if (e.approvalStatus === "PL_PENDING") confirm.plPending += 1;
++    else if (e.approvalStatus === "APPROVED") confirm.confirmed += 1;
++    else if (e.approvalStatus === "REJECTED") confirm.rejected += 1;
++    else confirm.notRequested += 1; // FAIL·BLOCKED는 확인 대상이 아님
++    for (const d of c.defects) defectMatrix[d.status][d.severity] += 1;
++  }
++  const executed = total.total - total.none;
++  return {
++    summary: {
++      targetTasks: targets.length,
++      tasksWithCases: targets.filter((t) => casesPerTask.has(t.id)).length,
++      caseTotal: total.total, executed, notExecuted: total.none,
++      pass: total.pass, fail: total.fail, blocked: total.blocked, na: total.na,
++      confirmed: confirm.confirmed,
++      openDefects: DEFECT_SEVERITIES.reduce((n, sv) => n + defectMatrix.REGISTERED[sv] + defectMatrix.FIXED[sv] + defectMatrix.REFIX[sv], 0),
++    },
++    run: total,
++    confirm,
++    defects: defectMatrix,
++    byGroup: sortedRows(byGroup), byType: sortedRows(byType), byExecutor: sortedRows(byExecutor),
++  };
++}
++
++export type UtStats = Awaited<ReturnType<typeof getUtStats>>;
+diff --git a/lib/server/ut-evidence-storage.ts b/lib/server/ut-evidence-storage.ts
+index d6a7958..6383687 100644
+--- a/lib/server/ut-evidence-storage.ts
++++ b/lib/server/ut-evidence-storage.ts
+@@ -12,8 +12,8 @@ import { DomainError } from "@/lib/server/errors";
+ // 로컬 개발: 환경변수가 없으면 프로젝트 폴더의 .ut-evidence / .ut-evidence-tmp (gitignore).
+ // ---------------------------------------------------------------------------
+ 
+-const ALLOWED = new Set(["png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "log", "json", "xml", "html", "csv", "xlsx", "docx", "zip"]);
+-const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf", txt: "text/plain", log: "text/plain", json: "application/json", xml: "application/xml", html: "text/html", csv: "text/csv", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", zip: "application/zip" };
++const ALLOWED = new Set(["png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "log", "json", "xml", "html", "csv", "xls", "xlsx", "doc", "docx", "ppt", "pptx", "zip"]);
++const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf", txt: "text/plain", log: "text/plain", json: "application/json", xml: "application/xml", html: "text/html", csv: "text/csv", xls: "application/vnd.ms-excel", doc: "application/msword", ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", zip: "application/zip" };
+ 
+ function root() { return process.env.UT_EVIDENCE_ROOT || path.join(process.cwd(), ".ut-evidence"); }
+ function tmpRoot() { return process.env.UT_EVIDENCE_TMP || path.join(process.cwd(), ".ut-evidence-tmp"); }
+diff --git a/prisma/migrations/20261023100000_ut_case_worker/migration.sql b/prisma/migrations/20261023100000_ut_case_worker/migration.sql
+new file mode 100644
+index 0000000..9e61a80
+--- /dev/null
++++ b/prisma/migrations/20261023100000_ut_case_worker/migration.sql
+@@ -0,0 +1,5 @@
++-- 케이스 작업자(2026-10-23 사용자 확정) — 작성자가 WBS ID를 선택해 저장할 때 그 시점의 WBS Task 담당자를 함께 저장한다(스냅샷).
++-- NULL 허용·기본값 컬럼 추가만 하므로 기존 행은 변경되지 않는다. 롤백: 두 컬럼 DROP.
++ALTER TABLE "ut_cases" ADD COLUMN "workerUserId" TEXT, ADD COLUMN "workerName" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "ut_cases" ADD CONSTRAINT "ut_cases_workerUserId_fkey" FOREIGN KEY ("workerUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
++CREATE INDEX "ut_cases_workerUserId_idx" ON "ut_cases"("workerUserId");
+diff --git a/prisma/migrations/20261023150000_ut_case_screen_url/migration.sql b/prisma/migrations/20261023150000_ut_case_screen_url/migration.sql
+new file mode 100644
+index 0000000..0596e7e
+--- /dev/null
++++ b/prisma/migrations/20261023150000_ut_case_screen_url/migration.sql
+@@ -0,0 +1,3 @@
++-- 케이스 화면 URL(2026-10-23 사용자 확정) — 테스트 대상 화면의 주소를 수기 입력한다.
++-- 기본값이 있는 컬럼 추가만 하므로 기존 행은 빈 값으로 채워진다. 롤백: 컬럼 DROP.
++ALTER TABLE "ut_cases" ADD COLUMN "screenUrl" TEXT NOT NULL DEFAULT '';
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index df1be88..66c7185 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -107,6 +107,7 @@ model User {
+   utExecutorCases               UtCase[]                      @relation("UtCaseExecutor")
+   utQcCases                     UtCase[]                      @relation("UtCaseQc")
+   utCreatedCases                UtCase[]                      @relation("UtCaseCreator")
++  utWorkerCases                 UtCase[]                      @relation("UtCaseWorker")
+   utExecutions                  UtExecution[]                 @relation("UtExecutionExecutor")
+   utApprovals                   UtApproval[]                  @relation("UtApprovalApprover")
+   utUploadedEvidences           UtEvidence[]                  @relation("UtEvidenceUploader")
+@@ -1963,8 +1964,11 @@ model UtCase {
+   groupId           String // 업무단위 = Groups(WORK_MODULE), 수기 선택(4.4)
+   screenId          String       @default("") // 화면ID — 수기 입력(2026-10-21 사용자 확정, 프로그램 선택 대체)
+   screenName        String       @default("") // 화면명 — 수기 입력
++  screenUrl         String       @default("") // 화면 URL — 수기 입력(2026-10-23)
+   requirementId     String?
+   plUserId          String? // PL 확인자 수기 지정(4.4)
++  workerUserId      String? // 작업자 = 저장 시점의 WBS Task 담당자 스냅샷(2026-10-23). 담당자가 사용자 목록에 없으면 null
++  workerName        String       @default("") // 작업자 이름 스냅샷(사용자 없이 이름만 있는 담당자 포함)
+   reviewRequestedAt DateTime?
+   approvedAt        DateTime?
+   approvedBy        String?
+@@ -1997,6 +2001,7 @@ model UtCase {
+   executor   User?         @relation("UtCaseExecutor", fields: [executorId], references: [id])
+   qc         User?         @relation("UtCaseQc", fields: [qcUserId], references: [id])
+   creator    User          @relation("UtCaseCreator", fields: [createdBy], references: [id])
++  worker     User?         @relation("UtCaseWorker", fields: [workerUserId], references: [id], onDelete: SetNull)
+   executions UtExecution[]
+   defects    UtDefect[]
+ 
+@@ -2006,6 +2011,7 @@ model UtCase {
+   @@index([plUserId, status])
+   @@index([executorId, status])
+   @@index([qcUserId, status])
++  @@index([workerUserId])
+   @@map("ut_cases")
+ }
+ 
+diff --git a/screens/mp/ut/UtCaseScreen.tsx b/screens/mp/ut/UtCaseScreen.tsx
+index 6ca31a5..6d135d4 100644
+--- a/screens/mp/ut/UtCaseScreen.tsx
++++ b/screens/mp/ut/UtCaseScreen.tsx
+@@ -1,18 +1,20 @@
+ "use client";
+ 
+-import { FormEvent, useState } from "react";
++import { FormEvent, MouseEvent, useEffect, useState } from "react";
++import { createPortal } from "react-dom";
+ import Link from "next/link";
+ import { useRouter } from "next/navigation";
+-import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_CASE_STATUS_LABEL, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
++import { CASE_DISPLAY_ID_MAX, UT_NO_WBS, UT_DEFECT_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
+ import type { getUtCaseEditor, UtTreeNode } from "@/lib/server/mp/ut/grid";
+ import type { getUtFormOptions } from "@/lib/server/mp/ut/cases";
++import { UtEvidencePicker } from "@/features/mp/ut/UtEvidencePicker";
+ import { json, utApi } from "@/features/mp/ut/client";
+ import { STATUS_BAND, dot, today } from "@/features/mp/ut/format";
+ 
+ type Editor = Awaited<ReturnType<typeof getUtCaseEditor>>;
+ type Options = Awaited<ReturnType<typeof getUtFormOptions>>;
+ 
+-// 단위테스트 정보확인/처리 — 케이스 정보 입력·수정, 검토요청·PL 승인, 판정·증적 등록, QC·PL 확인, 결함 등록·조치·검증, 이력(2026-10-20 화면 2개 체계).
++// 단위테스트 정보확인/처리 — 케이스 정보 입력·수정, 판정·증적 등록, QC·PL 확인, 결함 등록·조치·검증, 이력(2026-10-20 화면 2개 체계).
+ // 시나리오 없이 케이스가 WBS Task에 바로 속한다(2026-10-21 사용자 확정).
+ export type UtCaseNavParams = { caseId?: string; wbs?: string };
+ export type UtCaseModalControl = { close: () => void; reload: () => void; open: (params: UtCaseNavParams) => void };
+@@ -37,11 +39,17 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+   const [openDefect, setOpenDefect] = useState<{ id: string; kind: "fix" | "verify" } | null>(null);
+   const latest = c?.executions[0] ?? null;
+   const [execVerdict, setExecVerdict] = useState<UtVerdict>("PASS");
++  const [historyId, setHistoryId] = useState<string | null>(null);
++  const historyExec = c?.executions.find((x) => x.id === historyId) ?? null;
++  const [preview, setPreview] = useState<{ id: string; fileName: string } | null>(null);
++  // 이미지 증적은 새 탭 대신 팝업으로 보여 준다(2026-10-23 사용자 요청). 이미지가 아니면 기존처럼 새 탭에서 연다.
++  const openEvidence = (ev: MouseEvent<HTMLAnchorElement>, x: { id: string; fileName: string }) => { if (isImageFile(x.fileName)) { ev.preventDefault(); setPreview({ id: x.id, fileName: x.fileName }); } };
++  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+   const [caseTypeId, setCaseTypeId] = useState(c?.caseTypeCodeId ?? "");
+ 
+   async function act(fn: () => Promise<unknown>, done: string) {
+     setPending(true); setMessage(null);
+-    try { await fn(); setMessage({ tone: "ok", text: done }); setOpenDefect(null); refresh(); }
++    try { await fn(); if (done) setMessage({ tone: "ok", text: done }); setOpenDefect(null); refresh(); }
+     catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
+     finally { setPending(false); }
+   }
+@@ -56,12 +64,12 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+     const f = new FormData(event.currentTarget);
+     const v = (n: string) => ((f.get(n) as string) ?? "").trim();
+     const data = {
+-      displayId: v("displayId"), caseTypeCodeId: v("caseTypeCodeId"), groupId: v("groupId"), screenId: v("screenId"), screenName: v("screenName"), requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
++      displayId: v("displayId"), caseTypeCodeId: v("caseTypeCodeId"), groupId: v("groupId"), screenId: v("screenId"), screenName: v("screenName"), screenUrl: v("screenUrl"), requirementId: v("requirementId") || null, plUserId: v("plUserId") || null,
+       name: v("caseName"), precondition: v("precondition"), steps: v("steps"), inputData: v("inputData"), expectedResult: v("expectedResult"),
+       executorId: v("executorId") || null, qcUserId: v("qcUserId") || null, plannedDate: v("plannedDate") || null,
+     };
+     try {
+-      if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...data, version: c.version })); setMessage({ tone: "ok", text: "저장했습니다." }); refresh(); }
++      if (c) { await utApi(`cases/${c.id}`, json("PATCH", { ...data, version: c.version })); setMessage({ tone: "ok", text: "저장" }); refresh(); }
+       else { const created = await utApi<{ id: string }>("cases", json("POST", { wbsItemId: wbsItemId === UT_NO_WBS ? null : wbsItemId, ...data })); router.refresh(); goTo({ caseId: created.id }); }
+     } catch (e) { setMessage({ tone: "error", text: (e as Error).message }); }
+     finally { setPending(false); }
+@@ -69,19 +77,29 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+ 
+   return <>
+     <header className="topbar">
+-      <div><h1>테스트 케이스 정보</h1><p>{c ? <><span className="mono">{c.displayId}</span> <span className={`badge ${STATUS_BAND[c.status]}`}>{UT_CASE_STATUS_LABEL[c.status]}</span></> : "신규 케이스"}</p></div>
++      <div><h1>테스트 케이스 정보</h1><p>{c ? <><span className="mono">{c.displayId}</span></> : "신규 케이스"}</p></div>
+       <div className="topbar-actions">
+         {c && editor.wbsItemId && <button type="button" className="button secondary" onClick={() => goTo({ wbs: editor.wbsItemId! })}>+ 같은 WBS에 케이스 추가</button>}
+         {modal ? <button type="button" className="button secondary" onClick={modal.close}>닫기</button> : <Link className="button secondary" href={`/mp-ut${editor.wbsItemId ? `?wbs=${editor.wbsItemId}` : ""}`}>목록</Link>}
+       </div>
+     </header>
+     <div className="content ut-edit">
++      {c && <section className="ut-stage" role="status" aria-live="polite" aria-label="수행·승인 단계">
++        {latest && <span className="ut-stage-round">{latest.roundNo}차</span>}
++        {(() => { const t = runOf(latest); return <span className={`ut-stage-chip ${t.tone}`}>{t.text}</span>; })()}
++        {latest && (["QC", "PL"] as const).map((step) => { const t = stageOf(latest, step); return <span key={step} className={`ut-stage-chip ${t.tone}`}>{t.text}</span>; })}
++      </section>}
+       {message && <p className={`action-message ${message.tone === "ok" ? "ut-ok" : ""}`} role="status">{message.text}</p>}
+-      {c?.status === "REJECTED" && c.rejectReason && <p className="action-message">반려 사유: {c.rejectReason}</p>}
+-      {readOnly && <p className="ut-hint">작성중·반려 상태의 케이스만 작성자 또는 PM/PMO가 수정할 수 있습니다.</p>}
++      {readOnly && <p className="ut-hint">수행 결과를 등록하기 전의 케이스만 작성자 또는 PM/PMO가 수정할 수 있습니다.</p>}
+       <form className="panel form-panel" onSubmit={save}>
+         <fieldset disabled={readOnly || pending} className="ut-fieldset">
+-          {/* WBS ID와 테스트케이스ID를 한 줄에(2026-10-21 사용자 요청). 목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 선택 없이 표시만 한다. */}
++          {/* 화면 노출 순서(2026-10-23 사용자 확정): 프로젝트코드·업무단위·요구사항ID → WBS ID·작업자 → 테스트케이스ID·테스트케이스명 → 테스트유형·화면ID·화면명 → 이후 사전조건부터 기존 순서.
++              목록의 대상 Task 행에서 열면 Task가 정해져 있으므로 WBS는 선택 없이 표시만 한다. */}
++          <div className="form-grid">
++            <label>프로젝트 코드<input value={projectCode} readOnly /></label>
++            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
++            <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
++          </div>
+           <div className="form-grid">
+             {c ? <label>WBS ID<input value={c.wbsDisplayId ? `${c.wbsDisplayId} ${c.wbsName}` : "WBS 없음"} readOnly /></label>
+             : noWbs ? <label>WBS ID<input value="WBS 없음" readOnly /></label>
+@@ -92,23 +110,22 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+               <option value={UT_NO_WBS}>WBS 없음 (WBS ID 없이 등록)</option>
+               {leaves.map((l) => <option key={l.id} value={l.id}>{l.displayId} · {l.code} {l.name}</option>)}
+             </select></label>}
++            {/* 작업자 — WBS Task 담당자(읽기 전용, WBS에서 지정) */}
++            <label>작업자<input value={(c ? c.wbsOwnerName : leaves.find((l) => l.id === (fixedLeaf?.id ?? wbsItemId))?.ownerName) || "–"} readOnly /></label>
++          </div>
++          <div className="form-grid">
+             <label>테스트케이스ID<input name="displayId" required maxLength={CASE_DISPLAY_ID_MAX} pattern="\S+" title="공백 없이 입력" defaultValue={c?.displayId ?? ""} placeholder="예: UTC-2026-003042-001 (직접 입력, 프로젝트 내 중복 불가)" /></label>
++            <label>테스트케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
+           </div>
+-          {/* 프로젝트 코드·업무단위·프로그램·요구사항은 WBS ID·테스트케이스ID 바로 아래(2026-10-21 사용자 요청). */}
+           <div className="form-grid">
+-            <label>프로젝트 코드<input value={projectCode} readOnly /></label>
+-            <label>업무단위<select name="groupId" required defaultValue={c?.groupId ?? ""}><option value="" disabled>선택</option>{options.groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
++            {/* 테스트유형(케이스유형) — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21 사용자 확정) */}
++            <div className="ut-field"><span>테스트유형</span><SingleChecks label="테스트유형" items={options.codes.caseTypes.map((x) => ({ value: x.id, label: x.label }))} value={caseTypeId || null} onChange={setCaseTypeId} /><input type="hidden" name="caseTypeCodeId" value={caseTypeId} /></div>
+             {/* 화면ID·화면명 — 수기 입력(2026-10-21 사용자 확정, 프로그램 목록 선택 대체) */}
+             <label>화면ID<input name="screenId" maxLength={100} defaultValue={c?.screenId ?? ""} placeholder="예: SCR-ORD-001" /></label>
+             <label>화면명<input name="screenName" maxLength={200} defaultValue={c?.screenName ?? ""} placeholder="예: 주문서 작성" /></label>
+-            <label>요구사항 ID(선택)<select name="requirementId" defaultValue={c?.requirementId ?? ""}><option value="">미지정</option>{options.requirements.map((r) => <option key={r.id} value={r.id}>{r.displayId} {r.title}</option>)}</select></label>
+           </div>
++          <label>화면 URL<input name="screenUrl" maxLength={500} defaultValue={c?.screenUrl ?? ""} placeholder="예: https://example.com/orders/new" /></label>
+ 
+-          {/* 화면 노출 순서(2026-10-21 사용자 확정): 테스트케이스명 → 케이스유형 → 사전조건 → 입력데이터 → 테스트스텝 → 예상결과 → 실제결과 → 테스트결과 → 수행담당자 → 테스트예정일 → QC확인자 → PL확인자 */}
+-          <h2 className="ut-section">테스트 케이스</h2>
+-          <label>테스트케이스명<input name="caseName" required maxLength={200} defaultValue={c?.name ?? ""} placeholder="검증 규칙 1개를 한 줄로" /></label>
+-          {/* 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21 사용자 확정) */}
+-          <div className="ut-field"><span>케이스유형</span><SingleChecks label="케이스유형" items={options.codes.caseTypes.map((x) => ({ value: x.id, label: x.label }))} value={caseTypeId || null} onChange={setCaseTypeId} /><input type="hidden" name="caseTypeCodeId" value={caseTypeId} /></div>
+           <label>사전조건<textarea name="precondition" rows={4} maxLength={2000} defaultValue={c?.precondition ?? ""} /></label>
+           <label>입력데이터<textarea name="inputData" rows={4} maxLength={2000} defaultValue={c?.inputData ?? ""} /></label>
+           <label>테스트스텝<textarea name="steps" rows={4} maxLength={4000} defaultValue={c?.steps ?? ""} placeholder={"1. …\n2. …"} /></label>
+@@ -125,32 +142,16 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+           </div>
+           <div className="form-grid">
+             <label>QC확인자<select name="qcUserId" defaultValue={c?.qcUserId ?? ""}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+-            <label>PL확인자<select name="plUserId" defaultValue={c?.plUserId ?? ""}><option value="">미지정</option>{members.filter((m) => m.id !== userId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
++            <label>PL확인자<select name="plUserId" defaultValue={c?.plUserId ?? ""}><option value="">미지정</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+           </div>
+ 
+           <div className="form-actions"><button className="button primary" disabled={pending || (!c && !wbsItemId)}>{pending ? "저장 중…" : "저장"}</button></div>
+         </fieldset>
+       </form>
+ 
+-      {c && <section className="panel">
+-        <div className="panel-head"><h2>작성 검토 체크리스트</h2><span>같은 WBS 케이스 기준 · PL 검토 시 수기 확인</span></div>
+-        <ul className="ut-checklist">{editor.checklist.map((i) => <li key={i.key} className={i.ok ? "ok" : "ng"}>{i.ok ? "✔" : "✖"} {i.message}</li>)}</ul>
+-        {c.missing.length > 0 && <p className="ut-missing">필수 항목 누락: {c.missing.join(", ")}</p>}
+-        {editor.canRequestReview && <div className="form-actions"><button className="button primary" disabled={pending} onClick={() => void act(() => utApi(`cases/${c.id}/review`, json("POST")), "검토를 요청했습니다.")}>검토요청</button></div>}
+-      </section>}
+-
+-      {editor.canDecideReview && c && <section className="panel">
+-        <div className="panel-head"><h2>PL 검토</h2><span>케이스 {c.displayId} · 작성자 {editor.writerName}</span></div>
+-        <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); const decision = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ?? "APPROVED"; void act(() => utApi(`cases/${c.id}/decision`, json("POST", { decision, reason: v("reason") })), decision === "APPROVED" ? "승인했습니다." : "반려했습니다."); }}>
+-          <label>반려 사유(반려 시 필수)<input name="reason" maxLength={1000} /></label>
+-          <button className="button primary" name="decision" value="APPROVED" disabled={pending}>승인</button>
+-          <button className="button secondary" name="decision" value="REJECTED" disabled={pending}>반려</button>
+-        </form>
+-      </section>}
+-
+       {editor.canExecute && c && <section className="panel">
+         <div className="panel-head"><h2>테스트 수행 결과 등록</h2><span>{latest ? `${latest.roundNo + 1}차` : "1차"} · 증적 필수(Pass·Fail)</span></div>
+-        <form className="ut-exec-form" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget); void act(() => utApi(`cases/${c.id}/executions`, { method: "POST", body }), "수행 결과를 등록했습니다."); }}>
++        <form className="ut-exec-form" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget); evidenceFiles.forEach((f) => body.append("evidence", f, f.name)); void act(async () => { await utApi(`cases/${c.id}/executions`, { method: "POST", body }); setEvidenceFiles([]); }, "수행 등록"); }}>
+           <div className="ut-field"><span>테스트 결과</span><VerdictChecks value={execVerdict} onChange={setExecVerdict} /><input type="hidden" name="verdict" value={execVerdict} /></div>
+           <div className="form-grid">
+             <label>테스트 수행일<input type="date" name="executedOn" defaultValue={today()} /></label>
+@@ -158,7 +159,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+           </div>
+           <label>실제결과(FAIL 필수)<textarea name="actualResult" rows={4} /></label>
+           <label>N/A 사유(N/A 필수)<input name="naReason" maxLength={1000} /></label>
+-          <label>증적 파일<input type="file" name="evidence" multiple /></label>
++          <UtEvidencePicker files={evidenceFiles} onChange={setEvidenceFiles} disabled={pending} />
+           <div className="form-actions"><button className="button primary" disabled={pending}>등록</button></div>
+         </form>
+       </section>}
+@@ -168,11 +169,11 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+         <dl className="ut-dl">
+           <div><dt>예상결과</dt><dd>{c?.expectedResult || "–"}</dd></div>
+           <div><dt>{latest.verdict === "NA" ? "N/A 사유" : "실제결과"}</dt><dd>{(latest.verdict === "NA" ? latest.naReason : latest.actualResult) || "–"}</dd></div>
+-          <div><dt>증적</dt><dd>{latest.evidences.length ? latest.evidences.map((x) => <a key={x.id} className={`table-link ut-file${x.viewed || viewed.has(x.id) ? " viewed" : ""}`} href={`/api/v1/mp/ut/evidences/${x.id}`} target="_blank" rel="noreferrer" onClick={() => setViewed((s0) => new Set(s0).add(x.id))}>{x.viewed || viewed.has(x.id) ? "✔ " : ""}{x.fileName}</a>) : "–"}</dd></div>
++          <div><dt>증적</dt><dd>{latest.evidences.length ? latest.evidences.map((x) => <a key={x.id} className={`table-link ut-file${x.viewed || viewed.has(x.id) ? " viewed" : ""}`} href={`/api/v1/mp/ut/evidences/${x.id}`} target="_blank" rel="noreferrer" onClick={(ev) => { setViewed((s0) => new Set(s0).add(x.id)); openEvidence(ev, x); }}>{x.viewed || viewed.has(x.id) ? "✔ " : ""}{x.fileName}</a>) : "–"}</dd></div>
+         </dl>
+-        <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); const decision = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ?? "APPROVED"; void act(() => utApi(`executions/${latest.id}/approval`, json("POST", { step: editor.canQc ? "QC" : "PL", decision, rejectReasonCodeId: v("rejectReasonCodeId") || null, comment: v("comment") })), decision === "APPROVED" ? "승인했습니다." : "반려했습니다."); }}>
++        <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); const decision = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ?? "APPROVED"; void act(() => utApi(`executions/${latest.id}/approval`, json("POST", { step: editor.canQc ? "QC" : "PL", decision, rejectReasonCodeId: v("rejectReasonCodeId") || null, comment: v("comment") })), ""); }}>
+           <label>반려 사유<select name="rejectReasonCodeId" defaultValue=""><option value="">(반려 시 선택)</option>{options.codes.rejectReasons.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
+-          <label>의견<input name="comment" maxLength={2000} /></label>
++          <label>의견<input className="ut-comment-input" name="comment" maxLength={2000} /></label>
+           <button className="button primary" name="decision" value="APPROVED" disabled={pending || !(latest.verdict === "NA" || (latest.evidences.length > 0 && latest.evidences.every((x) => x.viewed || viewed.has(x.id))))}>승인</button>
+           <button className="button secondary" name="decision" value="REJECTED" disabled={pending}>반려</button>
+         </form>
+@@ -199,7 +200,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+               </td>
+             </tr>,
+             openDefect?.id === d.id && <tr key={`${d.id}-form`}><td colSpan={10}>
+-              <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); void act(() => utApi(`defects/${d.id}/${openDefect.kind}`, json("POST", openDefect.kind === "fix" ? { fixedAt: v("date"), note: v("note"), version: d.version } : { result: v("result"), verifiedAt: v("date"), note: v("note"), version: d.version })), openDefect.kind === "fix" ? "조치를 등록했습니다." : "검증을 등록했습니다."); }}>
++              <form className="ut-decide" onSubmit={(e) => { const { v } = formValues(e); void act(() => utApi(`defects/${d.id}/${openDefect.kind}`, json("POST", openDefect.kind === "fix" ? { fixedAt: v("date"), note: v("note"), version: d.version } : { result: v("result"), verifiedAt: v("date"), note: v("note"), version: d.version })), openDefect.kind === "fix" ? "조치 등록" : "검증 등록"); }}>
+                 {openDefect.kind === "verify" && <label>검증결과<select name="result" defaultValue="PASS"><option value="PASS">적합</option><option value="FAIL">부적합(재조치)</option></select></label>}
+                 <label>{openDefect.kind === "fix" ? "조치일" : "검증일자"}<input type="date" name="date" required defaultValue={today()} /></label>
+                 <label>{openDefect.kind === "fix" ? "조치 내용" : "검증 의견(부적합 시 필수)"}<input name="note" maxLength={2000} /></label>
+@@ -210,7 +211,7 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+             d.actions.length > 0 && <tr key={`${d.id}-hist`}><td colSpan={10}><small className="ut-hint">이력: {d.actions.map((a) => `${dot(a.actedOn)} ${a.actionType === "FIX" ? "조치" : `검증(${a.verificationResult ? UT_VERIFICATION_LABEL[a.verificationResult as UtVerificationResult] : ""})`} ${a.actorName}${a.note ? ` — ${a.note}` : ""}`).join(" / ")}</small></td></tr>,
+           ])}</tbody>
+         </table></div>}
+-        {c && editor.canRegisterDefect && latest && <form className="ut-exec-form" onSubmit={(e) => { const { v } = formValues(e); void act(() => utApi(`executions/${latest.id}/defects`, json("POST", { description: v("description"), severity: v("severity"), defectTypeCodeId: v("defectTypeCodeId") || null, causeGroupId: v("causeGroupId") || null, vendorGroupId: v("vendorGroupId") || null, assigneeId: v("assigneeId") || null })), "결함을 등록했습니다."); }}>
++        {c && editor.canRegisterDefect && latest && <form className="ut-exec-form" onSubmit={(e) => { const { v } = formValues(e); void act(() => utApi(`executions/${latest.id}/defects`, json("POST", { description: v("description"), severity: v("severity"), defectTypeCodeId: v("defectTypeCodeId") || null, causeGroupId: v("causeGroupId") || null, vendorGroupId: v("vendorGroupId") || null, assigneeId: v("assigneeId") || null })), "결함 등록"); }}>
+           <strong>결함 등록 — {latest.roundNo}차 FAIL</strong>
+           <label>오류내용<textarea name="description" rows={2} required defaultValue={latest.actualResult} /></label>
+           <div className="form-grid triple">
+@@ -227,17 +228,91 @@ export function UtCaseScreen({ editor, options, leaves, projectCode, userId, mod
+       </section>
+ 
+       {c && c.executions.length > 0 && <section className="panel">
+-        <div className="panel-head"><h2>수행 이력</h2><span>차수별 테스트 결과·증적·QC/PL 확인</span></div>
+-        <div className="table-wrap"><table className="ut-table"><thead><tr><th>차수</th><th>판정</th><th>테스트수행일</th><th>담당자</th><th>실제결과/N/A 사유</th><th>증적</th><th>확인</th></tr></thead><tbody>
+-          {c.executions.map((e) => <tr key={e.id}><td>{e.roundNo}</td><td><span className={`badge ${STATUS_BAND[e.verdict]}`}>{UT_VERDICT_LABEL[e.verdict]}</span></td><td>{dot(e.executedOn)}</td><td>{e.executorName}</td><td>{e.actualResult || e.naReason || "–"}</td>
+-            <td>{e.evidences.map((v) => <a key={v.id} className="table-link ut-file" href={`/api/v1/mp/ut/evidences/${v.id}`} target="_blank" rel="noreferrer">{v.fileName}</a>)}</td>
+-            <td>{e.approvals.map((a, i) => <small key={i} className="ut-approval">{a.step} {a.decision === "APPROVED" ? "승인" : "반려"} · {a.approverName}{a.comment ? ` · ${a.comment}` : ""}</small>)}</td></tr>)}
++        <div className="panel-head"><h2>수행 이력</h2><span>차수별 테스트 결과·QC/PL 확인 · 증적은 "결과 보기" 팝업에서 확인</span></div>
++        <div className="table-wrap"><table className="ut-table"><thead><tr><th>차수</th><th>판정</th><th>테스트수행일</th><th>담당자</th><th>실제결과/N/A 사유</th><th>QC 확인</th><th>PL 확인</th><th>상세</th></tr></thead><tbody>
++          {c.executions.map((e) => <tr key={e.id}><td>{e.roundNo}</td><td><span className={`badge ${STATUS_BAND[e.verdict]}`}>{UT_VERDICT_LABEL[e.verdict]}</span></td><td>{dot(e.executedOn)}</td><td>{e.executorName}</td><td className="ut-pre">{e.actualResult || e.naReason || "–"}</td>
++            <td><ApprovalCell execution={e} step="QC" /></td><td><ApprovalCell execution={e} step="PL" /></td>
++            <td><button type="button" className="button secondary" onClick={() => setHistoryId(e.id)}>결과 보기</button></td></tr>)}
+         </tbody></table></div>
+       </section>}
++      {historyExec && <UtHistoryDialog execution={historyExec} onClose={() => setHistoryId(null)} onOpenEvidence={openEvidence} />}
++      {preview && <UtImagePreview image={preview} onClose={() => setPreview(null)} />}
+     </div>
+   </>;
+ }
+ 
++type Execution = NonNullable<Editor["case"]>["executions"][number];
++
++/** 수행 이력 상세 팝업 — 차수별 결과·증적·QC/PL 확인(2026-10-23 사용자 요청: 목록에는 첨부파일을 보이지 않는다). */
++function UtHistoryDialog({ execution: e, onClose, onOpenEvidence }: { execution: Execution; onClose: () => void; onOpenEvidence: (ev: MouseEvent<HTMLAnchorElement>, x: { id: string; fileName: string }) => void }) {
++  useEffect(() => {
++    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") { ev.stopPropagation(); onClose(); } };
++    window.addEventListener("keydown", onKey, true);
++    return () => window.removeEventListener("keydown", onKey, true);
++  }, [onClose]);
++  return createPortal(<div className="modal-backdrop ut-evidence-backdrop" role="dialog" aria-modal="true" aria-label={`${e.roundNo}차 수행 결과`} onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
++    <div className="modal-card ut-history-modal">
++      <h2>{e.roundNo}차 수행 결과</h2>
++      <table className="ut-table ut-history-table"><tbody>
++        <tr><th scope="row">판정</th><td><span className={`badge ${STATUS_BAND[e.verdict]}`}>{UT_VERDICT_LABEL[e.verdict]}</span></td></tr>
++        <tr><th scope="row">테스트수행일</th><td>{dot(e.executedOn)}</td></tr>
++        <tr><th scope="row">담당자</th><td>{e.executorName}</td></tr>
++        <tr><th scope="row">{e.verdict === "NA" ? "N/A 사유" : "실제결과"}</th><td className="ut-pre">{(e.verdict === "NA" ? e.naReason : e.actualResult) || "–"}</td></tr>
++        <tr><th scope="row">증적</th><td>{e.evidences.length ? e.evidences.map((v) => <a key={v.id} className="table-link ut-file" href={`/api/v1/mp/ut/evidences/${v.id}`} target="_blank" rel="noreferrer" onClick={(ev) => onOpenEvidence(ev, v)}>{v.fileName}</a>) : "–"}</td></tr>
++        <tr><th scope="row">QC 확인</th><td><ApprovalCell execution={e} step="QC" /></td></tr>
++        <tr><th scope="row">PL 확인</th><td><ApprovalCell execution={e} step="PL" /></td></tr>
++      </tbody></table>
++      <div className="modal-actions"><button type="button" className="button primary" onClick={onClose}>닫기</button></div>
++    </div>
++  </div>, document.body);
++}
++
++/** 차수의 QC 또는 PL 확인 결과 — 승인/반려, 확인자, 반려 사유, 의견. 아직 없으면 대기/해당 없음. */
++function ApprovalCell({ execution: e, step }: { execution: Execution; step: "QC" | "PL" }) {
++  const a = e.approvals.find((x) => x.step === step);
++  if (!a) return <>{step === "QC" && e.verdict === "NA" ? "해당 없음" : e.approvalStatus === `${step}_PENDING` ? "대기" : "–"}</>;
++  return <>
++    <span className={`badge ${a.decision === "APPROVED" ? "band-green" : "band-red"}`}>{a.decision === "APPROVED" ? "승인" : "반려"}</span>
++    <small className="ut-approval">{a.approverName}{a.actedOn ? ` · ${dot(a.actedOn)}` : ""}</small>
++    {(a.rejectReason || a.comment) && <small className="ut-approval">{[a.rejectReason, a.comment].filter(Boolean).join(" · ")}</small>}
++  </>;
++}
++
++/** 수행 상태 표시 — 최근 차수의 테스트 결과(판정). */
++function runOf(e: Execution | null): { text: string; tone: string } {
++  if (!e) return { text: "미수행", tone: "band-yellow" };
++  const tone = e.verdict === "PASS" ? "band-green" : e.verdict === "FAIL" ? "band-red" : e.verdict === "BLOCKED" ? "band-yellow" : "";
++  return { text: `수행 ${UT_VERDICT_LABEL[e.verdict]}`, tone };
++}
++
++/** 승인 단계 표시 — 최근 차수의 QC/PL 확인 상태를 단어형으로(2026-10-23 사용자 요청: 수행 상태와 함께 별도 영역에 크게). */
++function stageOf(e: Execution, step: "QC" | "PL"): { text: string; tone: string } {
++  const a = e.approvals.find((x) => x.step === step);
++  if (a) return a.decision === "APPROVED" ? { text: `${step} 승인`, tone: "band-green" } : { text: `${step} 반려`, tone: "band-red" };
++  if (step === "QC" && e.verdict === "NA") return { text: "QC 해당 없음", tone: "" };
++  if (e.approvalStatus === `${step}_PENDING`) return { text: `${step} 대기`, tone: "band-yellow" };
++  return { text: `${step} –`, tone: "" };
++}
++
++const isImageFile = (name: string) => /\.(png|jpe?g|gif|webp)$/i.test(name);
++
++/** 이미지 증적 미리보기 팝업 — 이미지를 불러오는 시점에 서버가 열람 기록을 남긴다. */
++function UtImagePreview({ image, onClose }: { image: { id: string; fileName: string }; onClose: () => void }) {
++  useEffect(() => {
++    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") { ev.stopPropagation(); onClose(); } };
++    window.addEventListener("keydown", onKey, true);
++    return () => window.removeEventListener("keydown", onKey, true);
++  }, [onClose]);
++  const src = `/api/v1/mp/ut/evidences/${image.id}`;
++  return createPortal(<div className="modal-backdrop ut-image-backdrop" role="dialog" aria-modal="true" aria-label={image.fileName} onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
++    <div className="modal-card ut-image-modal">
++      <div className="ut-image-head"><strong title={image.fileName}>{image.fileName}</strong><a className="table-link" href={src} target="_blank" rel="noreferrer">새 탭에서 열기</a><button type="button" className="button primary" onClick={onClose}>닫기</button></div>
++      {/* eslint-disable-next-line @next/next/no-img-element */}
++      <img className="ut-image-full" src={src} alt={image.fileName} />
++    </div>
++  </div>, document.body);
++}
++
+ const VERDICTS: UtVerdict[] = ["PASS", "FAIL", "BLOCKED", "NA"];
+ 
+ /** 단일 선택 체크박스 — 체크박스 모양이지만 1개만 선택된다(2026-10-21·22 사용자 요청: 테스트결과·케이스유형). disabled면 표시용. */
+diff --git a/screens/mp/ut/UtListScreen.tsx b/screens/mp/ut/UtListScreen.tsx
+index 62f4b07..0cb56df 100644
+--- a/screens/mp/ut/UtListScreen.tsx
++++ b/screens/mp/ut/UtListScreen.tsx
+@@ -1,4 +1,4 @@
+-import { UT_REVIEW_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtReviewStatus, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
++import { UT_VERDICT_LABEL, type UtVerdict } from "@/lib/domain/ut";
+ import type { UtSheetRow, UtTreeNode } from "@/lib/server/mp/ut/grid";
+ import { STATUS_BAND, dot } from "@/features/mp/ut/format";
+ import { UtPagination, type UtPageSize } from "@/features/mp/ut/UtPagination";
+@@ -6,7 +6,7 @@ import { UtWbsTree } from "@/features/mp/ut/UtWbsTree";
+ import { UtCaseModal } from "@/features/mp/ut/UtCaseModal";
+ import { UtModalLink } from "@/features/mp/ut/UtModalLink";
+ 
+-export const UT_TODO_LABEL: Record<string, string> = { review: "검토 대기", execute: "수행 대상", qc: "QC 확인 대기", pl: "PL 확인 대기", defect: "결함 조치·검증 대기", draft: "작성중" };
++export const UT_TODO_LABEL: Record<string, string> = { execute: "수행 대상", qc: "QC 확인 대기", pl: "PL 확인 대기", defect: "결함 조치·검증 대기" };
+ 
+ // 단위테스트 목록 — 사용자 양식 24개 열(2026-10-20). 케이스를 누르면 정보확인/처리 화면.
+ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree: UtTreeNode[]; rows: UtSheetRow[]; filters: Record<string, string>; paging: { pageSize: UtPageSize; page: number; total: number; totalPages: number }; canCreate: boolean }) {
+@@ -24,51 +24,37 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
+           {filters.wbs && <input type="hidden" name="wbs" value={filters.wbs} />}
+           {paging.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(paging.pageSize)} />}
+           <input name="q" defaultValue={filters.q ?? ""} placeholder="케이스 ID·명, 업무명, 요구사항·화면 ID 검색" aria-label="검색어" />
+-          <select name="review" defaultValue={filters.review ?? ""} aria-label="검토상태"><option value="">전체 검토상태</option>{(Object.keys(UT_REVIEW_STATUS_LABEL) as UtReviewStatus[]).map((k) => <option key={k} value={k}>{UT_REVIEW_STATUS_LABEL[k]}</option>)}</select>
+           <select name="verdict" defaultValue={filters.verdict ?? ""} aria-label="테스트 결과"><option value="">전체 결과</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BLOCKED">BLOCKED</option><option value="NA">N/A</option><option value="NONE">미수행</option></select>
+           <select name="todo" defaultValue={filters.todo ?? ""} aria-label="처리 대기"><option value="">전체 케이스</option><option value="any">내 처리 대기 전체</option>{Object.entries(UT_TODO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+           <button className="button secondary" type="submit">조회</button>
+           {canCreate && <UtModalLink className="button primary filter-primary-action" href={keep({ new: "1" })}>+ 신규 등록</UtModalLink>}
+         </form>
+         <section className="panel compact">
+-          {rows.length ? <div className="table-wrap wbs-table-wrap"><table className="ut-table ut-sheet">
++          {rows.length ? <div className="table-wrap ut-table-wrap"><table className="ut-table ut-sheet">
+             <thead><tr>
+-              <th>업무명</th><th>WBS ID</th><th>테스트 케이스 ID</th><th>테스트케이스명</th><th>검토상태</th><th>사전조건</th><th>입력 데이터</th><th>테스트 케이스 상세</th><th>예상결과</th><th>실제결과</th><th>테스트 결과</th><th>오류내용</th><th>업무 담당자</th>
+-              <th>테스트 수행일</th><th>테스트 수행자</th><th>화면 ID</th><th>화면명</th><th>요구사항 ID</th><th>결함 ID</th><th>조치일</th><th>조치자</th><th>검증결과</th><th>검증일자</th><th>검증자</th><th>완료여부</th>
++              <th>테스트케이스ID</th><th>테스트케이스명</th><th>케이스유형</th><th>업무명</th><th>작업자</th><th>작성자</th><th>수행자</th><th>수행일자</th><th>처리대기</th><th>수행결과</th><th>QC확인</th><th>PL확인</th><th>완료여부</th>
+             </tr></thead>
+             <tbody>{rows.map((r) => <tr key={r.caseId ?? `wbs-${r.wbsItemId ?? ""}`}>
+-              <td>{r.unit}</td>
+-              <td className="mono" title={r.wbsName}>{r.wbsDisplayId || "WBS 없음"}</td>
+               {r.caseId ? <>
+-                <td className="mono"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseDisplayId}</UtModalLink>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
++                <td className="mono"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseDisplayId}</UtModalLink></td>
+                 <td className="title-cell"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseName}</UtModalLink></td>
+               </> : <>
+                 <td>{canCreate ? <UtModalLink className="table-link" href={keep({ new: "1", ...(r.wbsItemId ? { newWbs: r.wbsItemId } : {}) })}>+ 케이스 등록</UtModalLink> : "–"}</td>
+                 <td className="title-cell ut-hint">{r.wbsName} · 케이스 미등록</td>
+               </>}
+-              <td>{r.reviewStatus ? <span className={`badge ${STATUS_BAND[r.reviewStatus]}`}>{UT_REVIEW_STATUS_LABEL[r.reviewStatus as UtReviewStatus]}</span> : "–"}</td>
+-              <td className="ut-pre">{r.precondition}</td>
+-              <td className="ut-pre">{r.inputData}</td>
+-              <td className="ut-pre ut-steps">{r.steps}</td>
+-              <td className="ut-pre">{r.expectedResult}</td>
+-              <td className="ut-pre">{r.actualResult}</td>
+-              <td>{r.verdict ? <span className={`badge ${STATUS_BAND[r.verdict]}`}>{UT_VERDICT_LABEL[r.verdict as UtVerdict]}</span> : "–"}</td>
+-              <td className="ut-pre">{r.errorContent || "–"}</td>
++              <td>{r.caseTypeLabel || "–"}</td>
++              <td>{r.unit || "–"}</td>
+               <td>{r.ownerName ?? "–"}</td>
+-              <td>{dot(r.executedOn)}</td>
++              <td>{r.creatorName || "–"}</td>
+               <td>{r.executorName ?? "–"}</td>
+-              <td className="mono">{r.screenId || "–"}</td>
+-              <td>{r.screenName || "–"}</td>
+-              <td className="mono">{r.requirementId || "–"}</td>
+-              <td className="mono">{r.defectId ?? "–"}</td>
+-              <td>{dot(r.fixedAt)}</td>
+-              <td>{r.fixerName ?? "–"}</td>
+-              <td>{r.verificationResult ? UT_VERIFICATION_LABEL[r.verificationResult as UtVerificationResult] : "–"}</td>
+-              <td>{dot(r.verifiedAt)}</td>
+-              <td>{r.verifierName ?? "–"}</td>
++              <td>{dot(r.executedOn)}</td>
++              <td>{r.todo.length ? r.todo.map((t) => <span key={t} className="ut-todo-chip">{UT_TODO_LABEL[t]}</span>) : "–"}</td>
++              <td>{r.verdict ? <span className={`badge ${STATUS_BAND[r.verdict]}`}>{UT_VERDICT_LABEL[r.verdict as UtVerdict]}</span> : "–"}</td>
++              <td>{r.qcResult || "–"}</td>
++              <td>{r.plResult || "–"}</td>
+               <td><span className={`badge ${r.done === "완료" ? "band-green" : r.done === "진행중" ? "band-yellow" : ""}`}>{r.done}</span></td>
+             </tr>)}</tbody>
+-          </table></div> : <div className="empty">{filters.wbs === "none" ? "WBS 없이 등록한 테스트가 없습니다." : filters.wbs ? "선택한 WBS에 단위테스트 대상 Task가 없습니다." : "WBS에서 단위테스트 대상으로 체크된 Task가 없습니다."}</div>}
++          </table></div> : <div className="empty">{filters.wbs === "none" ? "WBS 없이 등록한 테스트가 없습니다." : filters.wbs ? "선택한 WBS에 등록된 테스트케이스가 없습니다." : "등록된 테스트케이스가 없습니다."}</div>}
+         </section>
+         <UtPagination basePath="/mp-ut" filters={filters} {...paging} />
+       </div>
+diff --git a/screens/mp/ut/UtMilestonesScreen.tsx b/screens/mp/ut/UtMilestonesScreen.tsx
+index 60238cd..07c40c8 100644
+--- a/screens/mp/ut/UtMilestonesScreen.tsx
++++ b/screens/mp/ut/UtMilestonesScreen.tsx
+@@ -30,7 +30,7 @@ export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: R
+       <div className="ut-main">
+       {message && <p className={`action-message ${message.tone === "ok" ? "ut-ok" : ""}`} role="status">{message.text}</p>}
+       <section className="panel">
+-        <p className="ut-hint">UT완료 조건(①승인 ②수행 ③Pass·Open 결함 0 ④증적·PL확인)은 참고용 현황입니다. PL이 확인해 기록하며, WBS 진척률·실적종료일은 담당자가 WBS 화면에서 직접 입력합니다.</p>
++        <p className="ut-hint">UT완료 조건(①케이스 등록 ②수행 ③Pass·Open 결함 0 ④증적·PL확인)은 참고용 현황입니다. PL이 확인해 기록하며, WBS 진척률·실적종료일은 담당자가 WBS 화면에서 직접 입력합니다.</p>
+         <div className="table-wrap">
+           <table className="ut-table">
+             <thead><tr><th>WBS</th><th>Task</th><th>담당</th><th>계획종료</th><th>UT 조건</th><th>개발완료</th><th>PL 확인</th><th>UT완료</th><th>WBS 진척</th><th /></tr></thead>
+@@ -42,17 +42,17 @@ export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: R
+                 <td>{r.name}</td>
+                 <td>{r.ownerName ?? "–"}</td>
+                 <td>{dot(r.dueDate)}</td>
+-                <td title={`승인 ${r.conditions.approvedCount}/${r.conditions.activeCount} · 수행 ${r.conditions.executedCount}/${r.conditions.targetCount} · Pass ${r.conditions.passedCount} · Open 결함 ${r.conditions.blockingOpenDefectCount} · PL확인 ${r.conditions.confirmedCount}`}><span className={`badge ${met === 4 ? "band-green" : "band-yellow"}`}>{met}/4</span></td>
++                <td title={`등록 ${r.conditions.approvedCount}/${r.conditions.activeCount} · 수행 ${r.conditions.executedCount}/${r.conditions.targetCount} · Pass ${r.conditions.passedCount} · Open 결함 ${r.conditions.blockingOpenDefectCount} · PL확인 ${r.conditions.confirmedCount}`}><span className={`badge ${met === 4 ? "band-green" : "band-yellow"}`}>{met}/4</span></td>
+                 <td>{r.devCompletedOn ? `${dot(r.devCompletedOn)} · ${r.devDeclaredBy}` : "–"}</td>
+                 <td>{r.devConfirmedBy ?? (r.devCompletedOn ? "확인 대기" : "–")}</td>
+                 <td>{r.utCompletedOn ? `${dot(r.utCompletedOn)} · ${r.utRecordedBy}` : "–"}</td>
+                 <td>{Math.round(r.wbsProgress * 100)}%{r.mismatch && <small className="ut-missing">UT완료 미기록</small>}</td>
+                 <td className="ut-actions">
+-                  {r.can.declare && <button className="button secondary" disabled={pending} onClick={() => { const d = ask("개발완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/declare`, { devCompletedOn: d }, "개발완료를 선언했습니다."); }}>개발완료 선언</button>}
+-                  {r.can.confirm && <button className="button primary" disabled={pending} onClick={() => act(`milestones/${r.wbsItemId}/confirm`, { decision: "APPROVED", version: r.version }, "개발완료를 확인했습니다.")}>개발완료 확인</button>}
+-                  {r.can.confirm && <button className="button secondary" disabled={pending} onClick={() => { const reason = ask("반려 사유"); if (reason) act(`milestones/${r.wbsItemId}/confirm`, { decision: "REJECTED", reason, version: r.version }, "개발완료를 반려했습니다."); }}>반려</button>}
+-                  {r.can.recordUt && <button className="button primary" disabled={pending} onClick={() => { if (met < 4 && !window.confirm(`UT완료 조건 ${met}/4 충족입니다. 그래도 UT완료를 기록할까요? (1단계 수기 판단)`)) return; const d = ask("UT완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/ut`, { utCompletedOn: d }, "UT완료를 기록했습니다."); }}>UT완료 기록</button>}
+-                  {r.can.cancel && <button className="button secondary" disabled={pending} onClick={() => { const target = r.utCompletedOn ? "UT" : "DEV"; const reason = ask(`${target === "UT" ? "UT완료" : "개발완료"} 기록 취소 사유`); if (reason) act(`milestones/${r.wbsItemId}/cancel`, { target, reason }, "기록을 취소했습니다."); }}>기록 취소</button>}
++                  {r.can.declare && <button className="button secondary" disabled={pending} onClick={() => { const d = ask("개발완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/declare`, { devCompletedOn: d }, "개발완료 선언"); }}>개발완료 선언</button>}
++                  {r.can.confirm && <button className="button primary" disabled={pending} onClick={() => act(`milestones/${r.wbsItemId}/confirm`, { decision: "APPROVED", version: r.version }, "개발완료 확인")}>개발완료 확인</button>}
++                  {r.can.confirm && <button className="button secondary" disabled={pending} onClick={() => { const reason = ask("반려 사유"); if (reason) act(`milestones/${r.wbsItemId}/confirm`, { decision: "REJECTED", reason, version: r.version }, "개발완료 반려"); }}>반려</button>}
++                  {r.can.recordUt && <button className="button primary" disabled={pending} onClick={() => { if (met < 4 && !window.confirm(`UT완료 조건 ${met}/4 충족입니다. 그래도 UT완료를 기록할까요? (1단계 수기 판단)`)) return; const d = ask("UT완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/ut`, { utCompletedOn: d }, "UT완료 기록"); }}>UT완료 기록</button>}
++                  {r.can.cancel && <button className="button secondary" disabled={pending} onClick={() => { const target = r.utCompletedOn ? "UT" : "DEV"; const reason = ask(`${target === "UT" ? "UT완료" : "개발완료"} 기록 취소 사유`); if (reason) act(`milestones/${r.wbsItemId}/cancel`, { target, reason }, "기록 취소"); }}>기록 취소</button>}
+                 </td>
+               </tr>;
+             })}</tbody>
+diff --git a/screens/mp/ut/UtSettingsScreen.tsx b/screens/mp/ut/UtSettingsScreen.tsx
+index 0f5ad04..80932bb 100644
+--- a/screens/mp/ut/UtSettingsScreen.tsx
++++ b/screens/mp/ut/UtSettingsScreen.tsx
+@@ -20,12 +20,12 @@ export function UtSettingsScreen({ settings, canManage }: { settings: Settings;
+   function save(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault();
+     const f = new FormData(event.currentTarget);
+-    call("settings", "PUT", { utStartDate: f.get("utStartDate") || null, utEndDate: f.get("utEndDate") || null, samplingRate: Number(f.get("samplingRate")) }, "설정을 저장했습니다.");
++    call("settings", "PUT", { utStartDate: f.get("utStartDate") || null, utEndDate: f.get("utEndDate") || null, samplingRate: Number(f.get("samplingRate")) }, "설정 저장");
+   }
+   function lock(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault();
+     const reason = new FormData(event.currentTarget).get("reason");
+-    call("settings/lock", "POST", { locked: !settings.lockedAt, reason }, settings.lockedAt ? "잠금을 해제했습니다." : "마감 잠금했습니다.");
++    call("settings/lock", "POST", { locked: !settings.lockedAt, reason }, settings.lockedAt ? "잠금 해제" : "마감 잠금");
+   }
+ 
+   return <>
+diff --git a/screens/mp/ut/UtStatsScreen.tsx b/screens/mp/ut/UtStatsScreen.tsx
+new file mode 100644
+index 0000000..ae45a1f
+--- /dev/null
++++ b/screens/mp/ut/UtStatsScreen.tsx
+@@ -0,0 +1,97 @@
++import type { UtRunBucket, UtStatRow, UtStats } from "@/lib/server/mp/ut/stats";
++
++const DEFECT_STATUS_ROWS = [{ key: "REGISTERED", label: "등록" }, { key: "FIXED", label: "조치완료" }, { key: "VERIFIED", label: "검증완료" }, { key: "REFIX", label: "재조치" }] as const;
++const DEFECT_SEVERITY_COLUMNS = [{ key: "CRITICAL", label: "Critical" }, { key: "MAJOR", label: "Major" }, { key: "MINOR", label: "Minor" }, { key: "TRIVIAL", label: "Trivial" }] as const;
++
++const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 1000) / 10}%` : "–");
++
++/** 수행 결과 구성 막대 — 미수행·Pass·Fail·Blocked·N/A 비율(CSS 누적 막대). */
++function RunBar({ b }: { b: UtRunBucket }) {
++  if (!b.total) return <div className="ut-bar ut-bar-empty" />;
++  const seg = (n: number, cls: string, label: string) => n > 0 && <span className={`ut-bar-seg ${cls}`} style={{ width: `${(n / b.total) * 100}%` }} title={`${label} ${n}건`} />;
++  return <div className="ut-bar" role="img" aria-label={`Pass ${b.pass}, Fail ${b.fail}, Blocked ${b.blocked}, N/A ${b.na}, 미수행 ${b.none}`}>
++    {seg(b.pass, "pass", "Pass")}{seg(b.fail, "fail", "Fail")}{seg(b.blocked, "blocked", "Blocked")}{seg(b.na, "na", "N/A")}{seg(b.none, "none", "미수행")}
++  </div>;
++}
++
++function StatTable({ title, hint, rows, firstLabel }: { title: string; hint?: string; rows: UtStatRow[]; firstLabel: string }) {
++  return <section className="panel">
++    <div className="panel-head"><h2>{title}</h2>{hint && <span>{hint}</span>}</div>
++    {rows.length ? <div className="table-wrap"><table className="ut-table ut-stat-table">
++      <thead><tr><th>{firstLabel}</th><th data-numeric>케이스</th><th data-numeric>수행</th><th data-numeric>미수행</th><th data-numeric>Pass</th><th data-numeric>Fail</th><th data-numeric>Blocked</th><th data-numeric>N/A</th><th data-numeric>수행률</th><th data-numeric>Pass율</th><th className="ut-bar-col">수행결과 구성</th></tr></thead>
++      <tbody>{rows.map((r) => {
++        const executed = r.total - r.none;
++        return <tr key={r.key}>
++          <td>{r.label}</td><td data-numeric>{r.total}</td><td data-numeric>{executed}</td><td data-numeric>{r.none}</td><td data-numeric>{r.pass}</td><td data-numeric>{r.fail}</td><td data-numeric>{r.blocked}</td><td data-numeric>{r.na}</td>
++          <td data-numeric>{pct(executed, r.total)}</td><td data-numeric>{pct(r.pass, executed)}</td><td className="ut-bar-col"><RunBar b={r} /></td>
++        </tr>;
++      })}</tbody>
++    </table></div> : <div className="empty">집계할 케이스가 없습니다.</div>}
++  </section>;
++}
++
++// 단위테스트 작성현황·수행결과 통계 화면 — 초안(2026-10-23). 요약 → 수행결과 → 확인 진행 → 결함 → 구분별 표 순서. WBS 트리는 두지 않는다(2026-10-23 사용자 요청).
++export function UtStatsScreen({ stats }: { stats: UtStats }) {
++  const s = stats.summary;
++  const c = stats.confirm;
++  const d = stats.defects;
++  const kpis: { label: string; value: string; sub?: string; tone?: string }[] = [
++    { label: "단위테스트 대상 Task", value: String(s.targetTasks), sub: `케이스 등록 ${s.tasksWithCases}건` },
++    { label: "작성률", value: pct(s.tasksWithCases, s.targetTasks), sub: "케이스가 등록된 Task / 대상 Task" },
++    { label: "테스트 케이스", value: String(s.caseTotal), sub: `수행 ${s.executed} · 미수행 ${s.notExecuted}` },
++    { label: "수행률", value: pct(s.executed, s.caseTotal), sub: "수행 결과가 있는 케이스 / 전체" },
++    { label: "Pass율", value: pct(s.pass, s.executed), sub: `Pass ${s.pass} · Fail ${s.fail} · Blocked ${s.blocked} · N/A ${s.na}` },
++    { label: "PL 확인 완료", value: String(s.confirmed), sub: `QC 대기 ${c.qcPending} · PL 대기 ${c.plPending}` },
++    { label: "미조치 결함", value: String(s.openDefects), sub: "등록 + 조치완료 + 재조치", tone: s.openDefects ? "critical" : undefined },
++    { label: "확인 반려", value: String(c.rejected), sub: "최근 차수 기준", tone: c.rejected ? "critical" : undefined },
++  ];
++  const confirmRows = [
++    { step: "수행", state: "결과 없음·확인 대상 아님", count: c.notRequested },
++    { step: "QC", state: "확인 대기", count: c.qcPending },
++    { step: "PL", state: "확인 대기", count: c.plPending },
++    { step: "PL", state: "확인 완료", count: c.confirmed },
++    { step: "QC·PL", state: "반려(재수행 대기)", count: c.rejected },
++  ];
++  return <>
++    <header className="topbar"><div><h1>작성현황·수행결과 통계</h1><p>활성 테스트 케이스의 최근 차수 기준 · 초안</p></div></header>
++    <div className="content">
++      <div className="ut-main">
++        <div className="kpi-grid ut-stat-kpis">
++          {kpis.map((k) => <div className="kpi" key={k.label}><span>{k.label}</span><strong className={k.tone}>{k.value}</strong>{k.sub && <small>{k.sub}</small>}</div>)}
++        </div>
++
++        <section className="panel">
++          <div className="panel-head"><h2>수행결과 구성</h2><span>전체 {stats.run.total}건</span></div>
++          <RunBar b={stats.run} />
++          <ul className="ut-legend">
++            <li><i className="ut-bar-seg pass" />Pass {stats.run.pass}</li><li><i className="ut-bar-seg fail" />Fail {stats.run.fail}</li>
++            <li><i className="ut-bar-seg blocked" />Blocked {stats.run.blocked}</li><li><i className="ut-bar-seg na" />N/A {stats.run.na}</li><li><i className="ut-bar-seg none" />미수행 {stats.run.none}</li>
++          </ul>
++        </section>
++
++        <div className="ut-stat-pair">
++          <section className="panel">
++            <div className="panel-head"><h2>QC·PL 확인 진행</h2><span>최근 차수 기준 · 전체 {stats.run.total}건</span></div>
++            <div className="table-wrap"><table className="ut-table ut-stat-table">
++              <thead><tr><th>단계</th><th>상태</th><th data-numeric>건수</th><th data-numeric>비율</th></tr></thead>
++              <tbody>{confirmRows.map((r) => <tr key={r.step + r.state}><td>{r.step}</td><td>{r.state}</td><td data-numeric>{r.count}</td><td data-numeric>{pct(r.count, stats.run.total)}</td></tr>)}</tbody>
++              <tfoot><tr><th colSpan={2}>합계</th><th data-numeric>{stats.run.total}</th><th data-numeric>{stats.run.total ? "100%" : "–"}</th></tr></tfoot>
++            </table></div>
++          </section>
++          <section className="panel">
++            <div className="panel-head"><h2>결함 현황</h2><span>활성 케이스의 결함 · 상태 × 심각도</span></div>
++            <div className="table-wrap"><table className="ut-table ut-stat-table">
++              <thead><tr><th>상태</th>{DEFECT_SEVERITY_COLUMNS.map((sv) => <th key={sv.key} data-numeric>{sv.label}</th>)}<th data-numeric>합계</th></tr></thead>
++              <tbody>{DEFECT_STATUS_ROWS.map((st) => <tr key={st.key}><td>{st.label}</td>{DEFECT_SEVERITY_COLUMNS.map((sv) => <td key={sv.key} data-numeric>{d[st.key][sv.key]}</td>)}<td data-numeric>{DEFECT_SEVERITY_COLUMNS.reduce((n, sv) => n + d[st.key][sv.key], 0)}</td></tr>)}</tbody>
++              <tfoot><tr><th>합계</th>{DEFECT_SEVERITY_COLUMNS.map((sv) => <th key={sv.key} data-numeric>{DEFECT_STATUS_ROWS.reduce((n, st) => n + d[st.key][sv.key], 0)}</th>)}<th data-numeric>{DEFECT_STATUS_ROWS.reduce((n, st) => n + DEFECT_SEVERITY_COLUMNS.reduce((m, sv) => m + d[st.key][sv.key], 0), 0)}</th></tr></tfoot>
++            </table></div>
++          </section>
++        </div>
++
++        <StatTable title="업무단위별" hint="케이스 작성 건수와 수행결과" rows={stats.byGroup} firstLabel="업무단위" />
++        <StatTable title="케이스유형별" rows={stats.byType} firstLabel="케이스유형" />
++        <StatTable title="수행자별" hint="수행 담당자 기준" rows={stats.byExecutor} firstLabel="수행자" />
++      </div>
++    </div>
++  </>;
++}

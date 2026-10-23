@@ -70,13 +70,13 @@ async function loadWbsContext(actor: UtActor, wbsItemId: string) {
   return { cases, wbs, ms };
 }
 
-/** 개발완료 선언(개발자) — 전제: PL 승인된 케이스 1건 이상(케이스 사후 작성 방지). */
+/** 개발완료 선언(개발자) — 전제: 등록된 케이스 1건 이상(케이스 사후 작성 방지). */
 export async function declareUtDevComplete(actor: UtActor, wbsItemId: string, input: unknown) {
   const { devCompletedOn } = z.object({ devCompletedOn: ymd }).parse(input);
   const { cases, wbs, ms } = await loadWbsContext(actor, wbsItemId);
   const isOwner = wbs.ownerUserId === actor.userId || cases.some((c) => c.executorId === actor.userId);
   if (!isOwner && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "WBS 담당자 또는 케이스 수행 담당자만 개발완료를 선언할 수 있습니다.");
-  if (!cases.some((c) => !["DRAFT", "REVIEW_REQUESTED", "REJECTED"].includes(c.status))) throw new DomainError("INVALID_STATE", "PL 승인된 케이스가 1건 이상 있어야 개발완료를 선언할 수 있습니다.");
+  if (!cases.length) throw new DomainError("INVALID_STATE", "등록된 케이스가 1건 이상 있어야 개발완료를 선언할 수 있습니다.");
   if (ms?.devCompletedOn) throw new DomainError("INVALID_STATE", "이미 개발완료가 선언되었습니다.");
   await getPrisma().utWbsMilestone.upsert({
     where: { wbsItemId },

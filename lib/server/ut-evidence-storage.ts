@@ -12,8 +12,8 @@ import { DomainError } from "@/lib/server/errors";
 // 로컬 개발: 환경변수가 없으면 프로젝트 폴더의 .ut-evidence / .ut-evidence-tmp (gitignore).
 // ---------------------------------------------------------------------------
 
-const ALLOWED = new Set(["png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "log", "json", "xml", "html", "csv", "xlsx", "docx", "zip"]);
-const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf", txt: "text/plain", log: "text/plain", json: "application/json", xml: "application/xml", html: "text/html", csv: "text/csv", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", zip: "application/zip" };
+const ALLOWED = new Set(["png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "log", "json", "xml", "html", "csv", "xls", "xlsx", "doc", "docx", "ppt", "pptx", "zip"]);
+const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf", txt: "text/plain", log: "text/plain", json: "application/json", xml: "application/xml", html: "text/html", csv: "text/csv", xls: "application/vnd.ms-excel", doc: "application/msword", ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", zip: "application/zip" };
 
 function root() { return process.env.UT_EVIDENCE_ROOT || path.join(process.cwd(), ".ut-evidence"); }
 function tmpRoot() { return process.env.UT_EVIDENCE_TMP || path.join(process.cwd(), ".ut-evidence-tmp"); }

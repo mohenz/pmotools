@@ -1,4 +1,4 @@
-import { UT_REVIEW_STATUS_LABEL, UT_VERDICT_LABEL, UT_VERIFICATION_LABEL, type UtReviewStatus, type UtVerdict, type UtVerificationResult } from "@/lib/domain/ut";
+import { UT_VERDICT_LABEL, type UtVerdict } from "@/lib/domain/ut";
 import type { UtSheetRow, UtTreeNode } from "@/lib/server/mp/ut/grid";
 import { STATUS_BAND, dot } from "@/features/mp/ut/format";
 import { UtPagination, type UtPageSize } from "@/features/mp/ut/UtPagination";
@@ -6,7 +6,7 @@ import { UtWbsTree } from "@/features/mp/ut/UtWbsTree";
 import { UtCaseModal } from "@/features/mp/ut/UtCaseModal";
 import { UtModalLink } from "@/features/mp/ut/UtModalLink";
 
-export const UT_TODO_LABEL: Record<string, string> = { review: "검토 대기", execute: "수행 대상", qc: "QC 확인 대기", pl: "PL 확인 대기", defect: "결함 조치·검증 대기", draft: "작성중" };
+export const UT_TODO_LABEL: Record<string, string> = { execute: "수행 대상", qc: "QC 확인 대기", pl: "PL 확인 대기", defect: "결함 조치·검증 대기" };
 
 // 단위테스트 목록 — 사용자 양식 24개 열(2026-10-20). 케이스를 누르면 정보확인/처리 화면.
 export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree: UtTreeNode[]; rows: UtSheetRow[]; filters: Record<string, string>; paging: { pageSize: UtPageSize; page: number; total: number; totalPages: number }; canCreate: boolean }) {
@@ -24,51 +24,37 @@ export function UtListScreen({ tree, rows, filters, paging, canCreate }: { tree:
           {filters.wbs && <input type="hidden" name="wbs" value={filters.wbs} />}
           {paging.pageSize !== 20 && <input type="hidden" name="pageSize" value={String(paging.pageSize)} />}
           <input name="q" defaultValue={filters.q ?? ""} placeholder="케이스 ID·명, 업무명, 요구사항·화면 ID 검색" aria-label="검색어" />
-          <select name="review" defaultValue={filters.review ?? ""} aria-label="검토상태"><option value="">전체 검토상태</option>{(Object.keys(UT_REVIEW_STATUS_LABEL) as UtReviewStatus[]).map((k) => <option key={k} value={k}>{UT_REVIEW_STATUS_LABEL[k]}</option>)}</select>
           <select name="verdict" defaultValue={filters.verdict ?? ""} aria-label="테스트 결과"><option value="">전체 결과</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BLOCKED">BLOCKED</option><option value="NA">N/A</option><option value="NONE">미수행</option></select>
           <select name="todo" defaultValue={filters.todo ?? ""} aria-label="처리 대기"><option value="">전체 케이스</option><option value="any">내 처리 대기 전체</option>{Object.entries(UT_TODO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <button className="button secondary" type="submit">조회</button>
           {canCreate && <UtModalLink className="button primary filter-primary-action" href={keep({ new: "1" })}>+ 신규 등록</UtModalLink>}
         </form>
         <section className="panel compact">
-          {rows.length ? <div className="table-wrap wbs-table-wrap"><table className="ut-table ut-sheet">
+          {rows.length ? <div className="table-wrap ut-table-wrap"><table className="ut-table ut-sheet">
             <thead><tr>
-              <th>업무명</th><th>WBS ID</th><th>테스트 케이스 ID</th><th>테스트케이스명</th><th>검토상태</th><th>사전조건</th><th>입력 데이터</th><th>테스트 케이스 상세</th><th>예상결과</th><th>실제결과</th><th>테스트 결과</th><th>오류내용</th><th>업무 담당자</th>
-              <th>테스트 수행일</th><th>테스트 수행자</th><th>화면 ID</th><th>화면명</th><th>요구사항 ID</th><th>결함 ID</th><th>조치일</th><th>조치자</th><th>검증결과</th><th>검증일자</th><th>검증자</th><th>완료여부</th>
+              <th>테스트케이스ID</th><th>테스트케이스명</th><th>케이스유형</th><th>업무명</th><th>작업자</th><th>작성자</th><th>수행자</th><th>수행일자</th><th>처리대기</th><th>수행결과</th><th>QC확인</th><th>PL확인</th><th>완료여부</th>
             </tr></thead>
             <tbody>{rows.map((r) => <tr key={r.caseId ?? `wbs-${r.wbsItemId ?? ""}`}>
-              <td>{r.unit}</td>
-              <td className="mono" title={r.wbsName}>{r.wbsDisplayId || "WBS 없음"}</td>
               {r.caseId ? <>
-                <td className="mono"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseDisplayId}</UtModalLink>{r.todo.length > 0 && <small className="ut-todo">{r.todo.map((t) => UT_TODO_LABEL[t]).join(" · ")}</small>}</td>
+                <td className="mono"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseDisplayId}</UtModalLink></td>
                 <td className="title-cell"><UtModalLink className="table-link" href={keep({ case: r.caseId })}>{r.caseName}</UtModalLink></td>
               </> : <>
                 <td>{canCreate ? <UtModalLink className="table-link" href={keep({ new: "1", ...(r.wbsItemId ? { newWbs: r.wbsItemId } : {}) })}>+ 케이스 등록</UtModalLink> : "–"}</td>
                 <td className="title-cell ut-hint">{r.wbsName} · 케이스 미등록</td>
               </>}
-              <td>{r.reviewStatus ? <span className={`badge ${STATUS_BAND[r.reviewStatus]}`}>{UT_REVIEW_STATUS_LABEL[r.reviewStatus as UtReviewStatus]}</span> : "–"}</td>
-              <td className="ut-pre">{r.precondition}</td>
-              <td className="ut-pre">{r.inputData}</td>
-              <td className="ut-pre ut-steps">{r.steps}</td>
-              <td className="ut-pre">{r.expectedResult}</td>
-              <td className="ut-pre">{r.actualResult}</td>
-              <td>{r.verdict ? <span className={`badge ${STATUS_BAND[r.verdict]}`}>{UT_VERDICT_LABEL[r.verdict as UtVerdict]}</span> : "–"}</td>
-              <td className="ut-pre">{r.errorContent || "–"}</td>
+              <td>{r.caseTypeLabel || "–"}</td>
+              <td>{r.unit || "–"}</td>
               <td>{r.ownerName ?? "–"}</td>
-              <td>{dot(r.executedOn)}</td>
+              <td>{r.creatorName || "–"}</td>
               <td>{r.executorName ?? "–"}</td>
-              <td className="mono">{r.screenId || "–"}</td>
-              <td>{r.screenName || "–"}</td>
-              <td className="mono">{r.requirementId || "–"}</td>
-              <td className="mono">{r.defectId ?? "–"}</td>
-              <td>{dot(r.fixedAt)}</td>
-              <td>{r.fixerName ?? "–"}</td>
-              <td>{r.verificationResult ? UT_VERIFICATION_LABEL[r.verificationResult as UtVerificationResult] : "–"}</td>
-              <td>{dot(r.verifiedAt)}</td>
-              <td>{r.verifierName ?? "–"}</td>
+              <td>{dot(r.executedOn)}</td>
+              <td>{r.todo.length ? r.todo.map((t) => <span key={t} className="ut-todo-chip">{UT_TODO_LABEL[t]}</span>) : "–"}</td>
+              <td>{r.verdict ? <span className={`badge ${STATUS_BAND[r.verdict]}`}>{UT_VERDICT_LABEL[r.verdict as UtVerdict]}</span> : "–"}</td>
+              <td>{r.qcResult || "–"}</td>
+              <td>{r.plResult || "–"}</td>
               <td><span className={`badge ${r.done === "완료" ? "band-green" : r.done === "진행중" ? "band-yellow" : ""}`}>{r.done}</span></td>
             </tr>)}</tbody>
-          </table></div> : <div className="empty">{filters.wbs === "none" ? "WBS 없이 등록한 테스트가 없습니다." : filters.wbs ? "선택한 WBS에 단위테스트 대상 Task가 없습니다." : "WBS에서 단위테스트 대상으로 체크된 Task가 없습니다."}</div>}
+          </table></div> : <div className="empty">{filters.wbs === "none" ? "WBS 없이 등록한 테스트가 없습니다." : filters.wbs ? "선택한 WBS에 등록된 테스트케이스가 없습니다." : "등록된 테스트케이스가 없습니다."}</div>}
         </section>
         <UtPagination basePath="/mp-ut" filters={filters} {...paging} />
       </div>

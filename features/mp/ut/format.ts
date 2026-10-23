@@ -3,7 +3,7 @@ export const dot = (value: string | null | undefined) => (value ? value.replaceA
 export const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
 export const STATUS_BAND: Record<string, string> = {
-  DRAFT: "", REVIEW_REQUESTED: "band-yellow", APPROVED: "band-green", REJECTED: "band-red",
+  DRAFT: "", REVIEW_REQUESTED: "band-yellow", APPROVED: "band-green", REJECTED: "band-red", // 검토 폐지(2026-10-23) 이전 데이터용
   IN_EXECUTION: "band-yellow", QC_PENDING: "band-yellow", PL_PENDING: "band-yellow", PL_CONFIRMED: "band-green",
   REGISTERED: "band-red", FIXED: "band-yellow", VERIFIED: "band-green", REFIX: "band-red",
   PASS: "band-green", FAIL: "band-red", BLOCKED: "band-yellow", NA: "",

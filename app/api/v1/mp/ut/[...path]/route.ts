@@ -4,7 +4,7 @@ import { mutationErrorResponse } from "@/lib/server/http";
 import { DomainError } from "@/lib/server/errors";
 import type { UtActor } from "@/lib/server/mp/ut/common";
 import {
-  createUtCase, decideUtCaseReview, getPlReference, getUtFormOptions, listUtReviewInbox, listUtWbsLeaves, reassignUtCasePl, requestUtCaseReview, setUtCaseActive, updateUtCase,
+  createUtCase, getPlReference, getUtFormOptions, listUtWbsLeaves, reassignUtCasePl, setUtCaseActive, updateUtCase,
 } from "@/lib/server/mp/ut/cases";
 import { decideUtApproval, listMyUtExecutionTargets, listUtApprovalInbox, openUtEvidence, registerUtExecution } from "@/lib/server/mp/ut/executions";
 import { fixUtDefect, listUtDefectActions, listUtRunRows, registerUtDefect, updateUtDefect, verifyUtDefect } from "@/lib/server/mp/ut/defects";
@@ -40,8 +40,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
     const [a, id, b] = path;
     if (a === "options") return ok({ ...(await getUtFormOptions(actor.projectId)), wbsLeaves: await listUtWbsLeaves(actor.projectId), plReference: await getPlReference(actor.projectId, actor.userId) });
     if (a === "inbox") {
-      const [targets, reviews, qc, pl] = await Promise.all([listMyUtExecutionTargets(projectIds, actor.userId), listUtReviewInbox(projectIds, actor.userId), listUtApprovalInbox(projectIds, actor.userId, "QC"), listUtApprovalInbox(projectIds, actor.userId, "PL")]);
-      return ok({ targets, reviews, qc, pl });
+      const [targets, qc, pl] = await Promise.all([listMyUtExecutionTargets(projectIds, actor.userId), listUtApprovalInbox(projectIds, actor.userId, "QC"), listUtApprovalInbox(projectIds, actor.userId, "PL")]);
+      return ok({ targets, qc, pl });
     }
     if (a === "evidences" && id) {
       const file = await openUtEvidence(projectIds, actor.userId, id);
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       return ok({ editor, options, leaves: tree.filter((n) => n.isLeaf), projectCode: project?.code ?? "", userId: actor.userId });
     }
     if (a === "sheet") {
-      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, review: sp.get("review") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
+      const rows = await listUtCaseSheet(actor.projectId, actor, { wbs: sp.get("wbs") || undefined, q: sp.get("q") || undefined, verdict: sp.get("verdict") || undefined, todo: sp.get("todo") || undefined });
       const buffer = await buildUtSheetWorkbook(rows);
       return new NextResponse(new Uint8Array(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("단위테스트_목록.xlsx")}` } });
     }
@@ -84,8 +84,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const [a, id, b] = (await params).path;
     const actor = await writeActor();
     if (a === "cases" && !id) return ok(await createUtCase(actor, await body(request)), 201);
-    if (a === "cases" && id && b === "review") return ok(await requestUtCaseReview(actor, id));
-    if (a === "cases" && id && b === "decision") return ok(await decideUtCaseReview(actor, id, await body(request)));
     if (a === "cases" && id && b === "executions") {
       const form = await request.formData();
       const files = form.getAll("evidence").filter((f): f is File => typeof f !== "string" && f.size > 0);

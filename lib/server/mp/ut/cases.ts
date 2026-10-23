@@ -4,11 +4,11 @@ import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { listWbsItems } from "@/lib/server/mp/wbs";
 import { listProjectMembers } from "@/lib/server/users";
-import { assertSeparation, caseDisplayIdError, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, type UtCaseStatus } from "@/lib/domain/ut";
-import { assertActiveMember, assertNotLocked, dateOnly, isUtManager, listUtCodes, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
+import { assertSeparation, canEditCase, caseDisplayIdError, isUtTargetTask } from "@/lib/domain/ut";
+import { assertActiveMember, assertNotLocked, isUtAdmin, isUtManager, listUtCodes, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
-// 테스트 케이스 — 작성(개발자) → 검토요청 → PL 승인/반려(설계서 6장 2~3단계, 4.4 PL 수기 지정).
+// 테스트 케이스 — 작성(개발자) 후 검토·승인 없이 바로 수행 대기(2026-10-23 사용자 확정, 4.4 PL 수기 지정).
 // 시나리오 없이 케이스가 WBS Task(또는 WBS 없음)에 바로 속한다(2026-10-21 사용자 확정).
 // ---------------------------------------------------------------------------
 
@@ -21,6 +21,7 @@ const caseFields = {
   groupId: z.string().uuid(),
   screenId: z.string().trim().max(100).default(""), // 화면ID — 수기 입력(2026-10-21 사용자 확정)
   screenName: z.string().trim().max(200).default(""), // 화면명 — 수기 입력
+  screenUrl: z.string().trim().max(500).default(""), // 화면 URL — 수기 입력(2026-10-23)
   requirementId: optionalId,
   plUserId: optionalId,
   caseTypeCodeId: z.string({ error: "케이스유형을 선택해 주세요." }).uuid("케이스유형을 선택해 주세요."), // 케이스유형 — 공통코드 ut_case_type(화면·기능·API), 필수(2026-10-21)
@@ -104,23 +105,22 @@ export async function createUtCase(actor: UtActor, input: unknown) {
   const wbs = data.wbsItemId ? (await listUtWbsLeaves(actor.projectId)).find((w) => w.id === data.wbsItemId) ?? null : null;
   if (data.wbsItemId && !wbs) throw new DomainError("INVALID_CODE", "WBS에서 단위테스트 대상으로 체크된 개발 단계 최하위(Leaf) Task만 선택할 수 있습니다.");
   await assertCaseRefs(actor.projectId, data);
-  if (data.plUserId === actor.userId) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
   await assertUniqueDisplayId(actor.projectId, data.displayId);
   const created = await getPrisma().$transaction(async (tx) => {
     // seq는 같은 WBS 안의 등록 순서(정렬 보조)로만 쓴다.
     const seq = await nextSequence(tx, data.wbsItemId ? `case:${data.wbsItemId}` : `case:nowbs:${actor.projectId}`);
-    return tx.utCase.create({ data: { ...data, plannedDate: toDate(data.plannedDate), projectId: actor.projectId, seq, createdBy: actor.userId } });
+    return tx.utCase.create({ data: { ...data, workerUserId: wbs?.ownerUserId ?? null, workerName: wbs?.ownerName ?? "", status: "IN_EXECUTION", plannedDate: toDate(data.plannedDate), projectId: actor.projectId, seq, createdBy: actor.userId } });
   }).catch((error) => duplicateIdError(error, data.displayId));
   await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_INSERT", "ut_cases", created.id, null, { displayId: created.displayId, wbsItemId: data.wbsItemId });
   return { id: created.id, displayId: created.displayId };
 }
 
-/** 작성중·반려 상태에서 작성자 또는 PM/PMO만 수정한다. */
+/** 등록 후 첫 수행 등록 전까지 작성자 또는 PM/PMO만 수정한다(검토·승인 없음, 2026-10-23). */
 async function loadEditableCase(actor: UtActor, caseId: string) {
   const c = await getPrisma().utCase.findUnique({ where: { id: caseId } });
   if (!c || c.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
   if (c.createdBy !== actor.userId && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "작성자 또는 PM/PMO만 수정할 수 있습니다.");
-  await rule(() => nextCaseReviewStatus(c.status, "EDIT"));
+  if (!isUtAdmin(actor) && !canEditCase(c.status, await getPrisma().utExecution.count({ where: { caseId } }))) throw new DomainError("INVALID_STATE", "수행 결과가 등록된 케이스는 수정할 수 없습니다.");
   await assertNotLocked(actor.projectId);
   return c;
 }
@@ -129,7 +129,6 @@ export async function updateUtCase(actor: UtActor, caseId: string, input: unknow
   const data = caseUpdateSchema.parse(input);
   const before = await loadEditableCase(actor, caseId);
   await assertCaseRefs(actor.projectId, data);
-  if (data.plUserId && data.plUserId === before.createdBy) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
   await assertUniqueDisplayId(actor.projectId, data.displayId, caseId);
   const { version, plannedDate, ...rest } = data;
   const result = await getPrisma().utCase.updateMany({ where: { id: caseId, version }, data: { ...rest, plannedDate: toDate(plannedDate), updatedBy: actor.userId, version: { increment: 1 } } }).catch((error) => duplicateIdError(error, data.displayId));
@@ -145,7 +144,6 @@ export async function reassignUtCasePl(actor: UtActor, caseId: string, input: un
   const c = await getPrisma().utCase.findUnique({ where: { id: caseId } });
   if (!c || c.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
   await assertActiveMember(actor.projectId, plUserId, "PL 확인자");
-  if (plUserId === c.createdBy) throw new DomainError("FORBIDDEN", "작성자 본인을 PL 확인자로 지정할 수 없습니다.");
   await rule(() => assertSeparation({ executorId: c.executorId, qcUserId: c.qcUserId, plUserId }));
   await getPrisma().utCase.update({ where: { id: caseId }, data: { plUserId, updatedBy: actor.userId, version: { increment: 1 } } });
   await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_PL_REASSIGN", "ut_cases", caseId, { plUserId: c.plUserId }, { plUserId });
@@ -159,41 +157,4 @@ export async function setUtCaseActive(actor: UtActor, caseId: string, isActive: 
   await getPrisma().utCase.update({ where: { id: caseId }, data: { isActive, updatedBy: actor.userId, version: { increment: 1 } } });
   await writeAuditLog(actor.projectId, actor.userId, isActive ? "UT_CASE_ACTIVATE" : "UT_CASE_DEACTIVATE", "ut_cases", caseId, { isActive: c.isActive }, { isActive });
   return { ok: true };
-}
-
-// ---------------------------------------------------------------------------
-// 검토요청 → PL 승인/반려(케이스 단위)
-// ---------------------------------------------------------------------------
-
-export async function requestUtCaseReview(actor: UtActor, caseId: string) {
-  const c = await loadEditableCase(actor, caseId);
-  if (!c.isActive) throw new DomainError("INVALID_STATE", "비활성 케이스는 검토요청할 수 없습니다.");
-  if (!c.plUserId) throw new DomainError("INVALID_STATE", "PL 확인자를 지정한 뒤 검토요청할 수 있습니다.");
-  const missing = missingCaseFields({ ...c, plannedDate: dateOnly(c.plannedDate) });
-  if (missing.length) throw new DomainError("INVALID_STATE", `필수 항목이 비어 있습니다: ${missing.join(", ")}`);
-  const next = await rule(() => nextCaseReviewStatus(c.status, "REQUEST"));
-  await getPrisma().utCase.update({ where: { id: caseId }, data: { status: next, reviewRequestedAt: new Date(), rejectReason: "", updatedBy: actor.userId, version: { increment: 1 } } });
-  await writeAuditLog(actor.projectId, actor.userId, "UT_CASE_REVIEW_REQUEST", "ut_cases", caseId, { status: c.status }, { status: next });
-  return { ok: true };
-}
-
-export async function decideUtCaseReview(actor: UtActor, caseId: string, input: unknown) {
-  const data = z.object({ decision: z.enum(["APPROVED", "REJECTED"]), reason: z.string().trim().max(1000).default("") }).parse(input);
-  const c = await getPrisma().utCase.findUnique({ where: { id: caseId } });
-  if (!c || c.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
-  if (c.plUserId !== actor.userId) throw new DomainError("FORBIDDEN", "지정된 PL만 검토할 수 있습니다.");
-  if (c.createdBy === actor.userId) throw new DomainError("FORBIDDEN", "작성자는 자기 케이스를 승인할 수 없습니다.");
-  if (data.decision === "REJECTED" && !data.reason) throw new DomainError("INVALID_STATE", "반려 사유를 입력해 주세요.");
-  await assertNotLocked(actor.projectId);
-  const next = await rule(() => nextCaseReviewStatus(c.status, data.decision === "APPROVED" ? "APPROVE" : "REJECT"));
-  const approved = next === "APPROVED";
-  await getPrisma().utCase.update({ where: { id: caseId }, data: approved ? { status: next, approvedAt: new Date(), approvedBy: actor.userId, version: { increment: 1 } } : { status: next, rejectReason: data.reason, version: { increment: 1 } } });
-  await writeAuditLog(actor.projectId, actor.userId, approved ? "UT_CASE_APPROVE" : "UT_CASE_REJECT", "ut_cases", caseId, { status: c.status }, { status: next, reason: data.reason || undefined });
-  return { ok: true };
-}
-
-/** 검토함 — 내가 PL이고 검토요청 상태인 케이스. */
-export async function listUtReviewInbox(projectIds: string[], userId: string) {
-  const rows = await getPrisma().utCase.findMany({ where: { projectId: { in: projectIds }, isActive: true, status: "REVIEW_REQUESTED" satisfies UtCaseStatus, plUserId: userId }, include: { wbsItem: { select: { displayId: true, name: true } }, creator: { select: { name: true } } }, orderBy: { reviewRequestedAt: "asc" } });
-  return rows.map((c) => ({ id: c.id, displayId: c.displayId, name: c.name, wbsItemId: c.wbsItemId, wbsDisplayId: c.wbsItem?.displayId ?? "", wbsName: c.wbsItem?.name ?? "", writerName: c.creator.name, requestedAt: c.reviewRequestedAt?.toISOString() ?? null }));
 }

@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   afterExecution, applyApproval, applyDefectFix, applyDefectVerify, assertApprover, assertDevConfirm, assertSeparation, canExecuteCase,
-  caseDisplayIdError, defectDisplayId, utReviewStatus, isUtTargetStage, isUtTargetTask, missingCaseFields, nextCaseReviewStatus, nextRoundNo, reviewChecklist, utCompletionConditions, validateExecution,
-  type UtCaseDraft,
+  caseDisplayIdError, canEditCase, defectDisplayId, isUtTargetStage, isUtTargetTask, nextRoundNo, utCompletionConditions, validateExecution,
 } from "@/lib/domain/ut";
-
-const draft = (over: Partial<UtCaseDraft> = {}): UtCaseDraft => ({ name: "수량 검증", precondition: "재고 10개", steps: "1. 수량 입력", inputData: "수량 = 3", expectedResult: "장바구니에 3개 저장", executorId: "dev", plannedDate: "2026-11-01", qcUserId: "qc", ...over });
 
 describe("채번 (4.7)", () => {
   it("케이스 ID(수기 입력 검증)·결함 ID", () => {
@@ -14,25 +11,6 @@ describe("채번 (4.7)", () => {
     expect(caseDisplayIdError("UTC 001")).not.toBeNull();
     expect(caseDisplayIdError("x".repeat(51))).not.toBeNull();
     expect(defectDisplayId("2026-10-20", 12)).toBe("DF-261020-0012");
-  });
-});
-
-describe("케이스 작성", () => {
-  it("필수 필드 누락 목록", () => {
-    expect(missingCaseFields(draft())).toEqual([]);
-    expect(missingCaseFields(draft({ steps: " ", qcUserId: null }))).toEqual(["테스트스텝", "QC 확인자"]);
-  });
-
-  it("체크리스트 — 차단 없이 결과만(유형·우선순위 항목 없음)", () => {
-    const ok = reviewChecklist([draft(), draft({ inputData: "10" }), draft({ inputData: "0" })]);
-    expect(ok.every((i) => i.ok)).toBe(true);
-    expect(ok.map((i) => i.key)).toEqual(["ambiguous", "length", "duplicate"]);
-  });
-
-  it("모호어만 있는 예상결과·중복", () => {
-    const items = reviewChecklist([draft({ expectedResult: "정상 처리 확인" }), draft(), draft()]);
-    expect(items.find((i) => i.key === "ambiguous")!.ok).toBe(false);
-    expect(items.find((i) => i.key === "duplicate")!.ok).toBe(false);
   });
 });
 
@@ -45,18 +23,22 @@ describe("직무 분리", () => {
   });
 });
 
-describe("케이스 검토", () => {
-  it("작성중·반려 → 검토요청 → 승인/반려", () => {
-    expect(nextCaseReviewStatus("DRAFT", "REQUEST")).toBe("REVIEW_REQUESTED");
-    expect(nextCaseReviewStatus("REJECTED", "REQUEST")).toBe("REVIEW_REQUESTED");
-    expect(nextCaseReviewStatus("REVIEW_REQUESTED", "APPROVE")).toBe("APPROVED");
-    expect(nextCaseReviewStatus("REVIEW_REQUESTED", "REJECT")).toBe("REJECTED");
-    expect(() => nextCaseReviewStatus("APPROVED", "EDIT")).toThrow();
+describe("케이스 수정", () => {
+  it("검토·승인 없이 수행 대기 케이스는 첫 수행 등록 전까지만 수정", () => {
+    expect(canEditCase("IN_EXECUTION", 0)).toBe(true);
+    expect(canEditCase("IN_EXECUTION", 1)).toBe(false);
+    expect(canEditCase("QC_PENDING", 0)).toBe(false);
+    // 검토 폐지 전 상태도 운영 데이터 변환 전까지 같은 규칙으로 다룬다
+    expect(canEditCase("DRAFT", 0)).toBe(true);
+    expect(canEditCase("REVIEW_REQUESTED", 0)).toBe(true);
+    expect(canEditCase("REJECTED", 1)).toBe(false);
+    expect(canExecuteCase("DRAFT")).toBe(true);
   });
 });
 
 describe("수행", () => {
-  it("승인·수행중 케이스만 수행, 차수는 최대 + 1", () => {
+  it("수행중(검토 폐지 전 승인 포함) 케이스만 수행, 차수는 최대 + 1", () => {
+    expect(canExecuteCase("IN_EXECUTION")).toBe(true);
     expect(canExecuteCase("APPROVED")).toBe(true);
     expect(canExecuteCase("QC_PENDING")).toBe(false);
     expect(nextRoundNo([])).toBe(1);
@@ -68,6 +50,8 @@ describe("수행", () => {
     expect(() => validateExecution({ verdict: "FAIL", actualResult: "", naReason: "", evidenceCount: 1 })).toThrow(/실제결과/);
     expect(() => validateExecution({ verdict: "NA", actualResult: "", naReason: "", evidenceCount: 0 })).toThrow(/사유/);
     expect(() => validateExecution({ verdict: "BLOCKED", actualResult: "", naReason: "", evidenceCount: 0 })).not.toThrow();
+    expect(() => validateExecution({ verdict: "PASS", actualResult: "", naReason: "", evidenceCount: 3 })).not.toThrow();
+    expect(() => validateExecution({ verdict: "PASS", actualResult: "", naReason: "", evidenceCount: 4 })).toThrow(/최대 3개/);
   });
 
   it("판정 직후 상태", () => {
@@ -95,6 +79,14 @@ describe("결과 확인 QC → PL", () => {
     expect(() => assertApprover({ ...base, actorId: "pl" })).toThrow();
     expect(() => assertApprover({ ...base, actorId: "qc", hasViewedEvidence: false })).toThrow(/열람/);
     expect(() => assertApprover({ ...base, actorId: "qc" })).not.toThrow();
+  });
+
+  it("관리자(anyDesignee)는 지정자·수행자 여부와 관계없이 확인하되 증적 미열람은 막는다", () => {
+    const base = { executorId: "dev", qcUserId: "qc", plUserId: "pl", hasViewedEvidence: true, verdict: "PASS" as const, anyDesignee: true };
+    expect(() => assertApprover({ ...base, step: "QC", actorId: "admin" })).not.toThrow();
+    expect(() => assertApprover({ ...base, step: "PL", actorId: "admin" })).not.toThrow();
+    expect(() => assertApprover({ ...base, step: "QC", actorId: "dev" })).not.toThrow();
+    expect(() => assertApprover({ ...base, step: "QC", actorId: "admin", hasViewedEvidence: false })).toThrow(/열람/);
   });
 });
 
@@ -155,13 +147,18 @@ describe("단위테스트 대상 Task", () => {
   });
 });
 
-describe("PL 검토 상태", () => {
-  it("승인 이후 수행·확인 단계는 승인으로 본다", () => {
-    expect(utReviewStatus("DRAFT")).toBe("DRAFT");
-    expect(utReviewStatus("REVIEW_REQUESTED")).toBe("REVIEW_REQUESTED");
-    expect(utReviewStatus("REJECTED")).toBe("REJECTED");
-    expect(utReviewStatus("APPROVED")).toBe("APPROVED");
-    expect(utReviewStatus("QC_PENDING")).toBe("APPROVED");
-    expect(utReviewStatus("PL_CONFIRMED")).toBe("APPROVED");
+describe("관리자 강제 처리(force)", () => {
+  it("확인 대기 상태가 아니어도 확인 결과를 계산한다", () => {
+    expect(() => applyApproval({ approvalStatus: null, verdict: "PASS", step: "QC", decision: "APPROVED" })).toThrow();
+    expect(applyApproval({ approvalStatus: null, verdict: "PASS", step: "QC", decision: "APPROVED", force: true })).toEqual({ approvalStatus: "PL_PENDING", caseStatus: "PL_PENDING" });
+    expect(applyApproval({ approvalStatus: "APPROVED", verdict: "PASS", step: "PL", decision: "APPROVED", force: true }).caseStatus).toBe("PL_CONFIRMED");
+  });
+
+  it("결함 조치·검증은 상태·조치자 제한 없이 처리", () => {
+    expect(() => applyDefectFix("VERIFIED")).toThrow();
+    expect(applyDefectFix("VERIFIED", true)).toBe("FIXED");
+    expect(() => applyDefectVerify({ status: "REGISTERED", result: "PASS", fixedBy: "a", verifierId: "a" })).toThrow();
+    expect(applyDefectVerify({ status: "REGISTERED", result: "PASS", fixedBy: "a", verifierId: "a", force: true })).toBe("VERIFIED");
+    expect(applyDefectVerify({ status: "FIXED", result: "FAIL", fixedBy: "a", verifierId: "a", force: true })).toBe("REFIX");
   });
 });

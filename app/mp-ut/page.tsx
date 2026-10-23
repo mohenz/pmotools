@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 export default async function UtListPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const pick = (key: string) => (typeof params[key] === "string" ? (params[key] as string) : "");
-  const filters = { wbs: pick("wbs"), q: pick("q"), review: pick("review"), verdict: pick("verdict"), todo: pick("todo") };
+  const filters = { wbs: pick("wbs"), q: pick("q"), verdict: pick("verdict"), todo: pick("todo") };
   const scope = await getMpScope();
   if (scope.isTopLevel) return <div className="content"><p className="action-message">단위테스트는 하위 프로젝트 단위로 관리합니다. 상단에서 하위 프로젝트를 선택해 주세요.</p></div>;
   const c = scope.context;
   const { page, pageSize } = parsePaging(params);
-  const [tree, all] = await Promise.all([getUtWbsTree(c.projectId), listUtCaseSheet(c.projectId, { projectId: c.projectId, userId: c.userId, role: c.role, jobTitle: c.jobTitle }, { wbs: filters.wbs || undefined, q: filters.q || undefined, review: filters.review || undefined, verdict: filters.verdict || undefined, todo: filters.todo || undefined })]);
+  const [tree, all] = await Promise.all([getUtWbsTree(c.projectId), listUtCaseSheet(c.projectId, { projectId: c.projectId, userId: c.userId, role: c.role, jobTitle: c.jobTitle }, { wbs: filters.wbs || undefined, q: filters.q || undefined, verdict: filters.verdict || undefined, todo: filters.todo || undefined })]);
   const result = paginate(all, page, pageSize);
   return <UtListScreen tree={tree} rows={result.rows} filters={filters} paging={{ pageSize, page: result.page, total: result.total, totalPages: result.totalPages }} canCreate />;
 }

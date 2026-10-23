@@ -30,7 +30,7 @@ export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: R
       <div className="ut-main">
       {message && <p className={`action-message ${message.tone === "ok" ? "ut-ok" : ""}`} role="status">{message.text}</p>}
       <section className="panel">
-        <p className="ut-hint">UT완료 조건(①승인 ②수행 ③Pass·Open 결함 0 ④증적·PL확인)은 참고용 현황입니다. PL이 확인해 기록하며, WBS 진척률·실적종료일은 담당자가 WBS 화면에서 직접 입력합니다.</p>
+        <p className="ut-hint">UT완료 조건(①케이스 등록 ②수행 ③Pass·Open 결함 0 ④증적·PL확인)은 참고용 현황입니다. PL이 확인해 기록하며, WBS 진척률·실적종료일은 담당자가 WBS 화면에서 직접 입력합니다.</p>
         <div className="table-wrap">
           <table className="ut-table">
             <thead><tr><th>WBS</th><th>Task</th><th>담당</th><th>계획종료</th><th>UT 조건</th><th>개발완료</th><th>PL 확인</th><th>UT완료</th><th>WBS 진척</th><th /></tr></thead>
@@ -42,17 +42,17 @@ export function UtMilestonesScreen({ tree, rows }: { tree: UtTreeNode[]; rows: R
                 <td>{r.name}</td>
                 <td>{r.ownerName ?? "–"}</td>
                 <td>{dot(r.dueDate)}</td>
-                <td title={`승인 ${r.conditions.approvedCount}/${r.conditions.activeCount} · 수행 ${r.conditions.executedCount}/${r.conditions.targetCount} · Pass ${r.conditions.passedCount} · Open 결함 ${r.conditions.blockingOpenDefectCount} · PL확인 ${r.conditions.confirmedCount}`}><span className={`badge ${met === 4 ? "band-green" : "band-yellow"}`}>{met}/4</span></td>
+                <td title={`등록 ${r.conditions.approvedCount}/${r.conditions.activeCount} · 수행 ${r.conditions.executedCount}/${r.conditions.targetCount} · Pass ${r.conditions.passedCount} · Open 결함 ${r.conditions.blockingOpenDefectCount} · PL확인 ${r.conditions.confirmedCount}`}><span className={`badge ${met === 4 ? "band-green" : "band-yellow"}`}>{met}/4</span></td>
                 <td>{r.devCompletedOn ? `${dot(r.devCompletedOn)} · ${r.devDeclaredBy}` : "–"}</td>
                 <td>{r.devConfirmedBy ?? (r.devCompletedOn ? "확인 대기" : "–")}</td>
                 <td>{r.utCompletedOn ? `${dot(r.utCompletedOn)} · ${r.utRecordedBy}` : "–"}</td>
                 <td>{Math.round(r.wbsProgress * 100)}%{r.mismatch && <small className="ut-missing">UT완료 미기록</small>}</td>
                 <td className="ut-actions">
-                  {r.can.declare && <button className="button secondary" disabled={pending} onClick={() => { const d = ask("개발완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/declare`, { devCompletedOn: d }, "개발완료를 선언했습니다."); }}>개발완료 선언</button>}
-                  {r.can.confirm && <button className="button primary" disabled={pending} onClick={() => act(`milestones/${r.wbsItemId}/confirm`, { decision: "APPROVED", version: r.version }, "개발완료를 확인했습니다.")}>개발완료 확인</button>}
-                  {r.can.confirm && <button className="button secondary" disabled={pending} onClick={() => { const reason = ask("반려 사유"); if (reason) act(`milestones/${r.wbsItemId}/confirm`, { decision: "REJECTED", reason, version: r.version }, "개발완료를 반려했습니다."); }}>반려</button>}
-                  {r.can.recordUt && <button className="button primary" disabled={pending} onClick={() => { if (met < 4 && !window.confirm(`UT완료 조건 ${met}/4 충족입니다. 그래도 UT완료를 기록할까요? (1단계 수기 판단)`)) return; const d = ask("UT완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/ut`, { utCompletedOn: d }, "UT완료를 기록했습니다."); }}>UT완료 기록</button>}
-                  {r.can.cancel && <button className="button secondary" disabled={pending} onClick={() => { const target = r.utCompletedOn ? "UT" : "DEV"; const reason = ask(`${target === "UT" ? "UT완료" : "개발완료"} 기록 취소 사유`); if (reason) act(`milestones/${r.wbsItemId}/cancel`, { target, reason }, "기록을 취소했습니다."); }}>기록 취소</button>}
+                  {r.can.declare && <button className="button secondary" disabled={pending} onClick={() => { const d = ask("개발완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/declare`, { devCompletedOn: d }, "개발완료 선언"); }}>개발완료 선언</button>}
+                  {r.can.confirm && <button className="button primary" disabled={pending} onClick={() => act(`milestones/${r.wbsItemId}/confirm`, { decision: "APPROVED", version: r.version }, "개발완료 확인")}>개발완료 확인</button>}
+                  {r.can.confirm && <button className="button secondary" disabled={pending} onClick={() => { const reason = ask("반려 사유"); if (reason) act(`milestones/${r.wbsItemId}/confirm`, { decision: "REJECTED", reason, version: r.version }, "개발완료 반려"); }}>반려</button>}
+                  {r.can.recordUt && <button className="button primary" disabled={pending} onClick={() => { if (met < 4 && !window.confirm(`UT완료 조건 ${met}/4 충족입니다. 그래도 UT완료를 기록할까요? (1단계 수기 판단)`)) return; const d = ask("UT완료일 (YYYY-MM-DD)", today()); if (d) act(`milestones/${r.wbsItemId}/ut`, { utCompletedOn: d }, "UT완료 기록"); }}>UT완료 기록</button>}
+                  {r.can.cancel && <button className="button secondary" disabled={pending} onClick={() => { const target = r.utCompletedOn ? "UT" : "DEV"; const reason = ask(`${target === "UT" ? "UT완료" : "개발완료"} 기록 취소 사유`); if (reason) act(`milestones/${r.wbsItemId}/cancel`, { target, reason }, "기록 취소"); }}>기록 취소</button>}
                 </td>
               </tr>;
             })}</tbody>

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
 import { applyDefectFix, applyDefectVerify, defectDisplayId } from "@/lib/domain/ut";
-import { assertActiveMember, assertNotLocked, assertUtCode, dateOnly, isUtManager, koreaToday, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
+import { assertActiveMember, assertNotLocked, assertUtCode, dateOnly, isUtAdmin, isUtManager, koreaToday, nextSequence, rule, toDate, versionConflict, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
 // 결함 등록·조치·검증(설계서 5.1, C9) — 수기 등록. 조치·검증은 ut_defect_actions에 이력을 추가로 남긴다.
@@ -43,7 +43,7 @@ export async function registerUtDefect(actor: UtActor, executionId: string, inpu
   const prisma = getPrisma();
   const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: true } });
   if (!e || e.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "수행 결과를 찾을 수 없습니다.");
-  if (e.verdict !== "FAIL") throw new DomainError("INVALID_STATE", "Fail 판정 결과에만 결함을 등록할 수 있습니다.");
+  if (e.verdict !== "FAIL" && !isUtAdmin(actor)) throw new DomainError("INVALID_STATE", "Fail 판정 결과에만 결함을 등록할 수 있습니다.");
   const allowed = [e.executorId, e.case.qcUserId, e.case.plUserId].includes(actor.userId) || isUtManager(actor);
   if (!allowed) throw new DomainError("FORBIDDEN", "수행자·QC·PL 또는 PM/PMO만 결함을 등록할 수 있습니다.");
   await assertDefectRefs(actor.projectId, data);
@@ -81,7 +81,7 @@ export async function fixUtDefect(actor: UtActor, defectId: string, input: unkno
   if (!d || d.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "결함을 찾을 수 없습니다.");
   const owner = d.assigneeId ?? d.case.executorId;
   if (owner !== actor.userId && !isUtManager(actor)) throw new DomainError("FORBIDDEN", "조치 담당자만 조치를 등록할 수 있습니다.");
-  const next = await rule(() => applyDefectFix(d.status));
+  const next = await rule(() => applyDefectFix(d.status, isUtAdmin(actor)));
   await prisma.$transaction(async (tx) => {
     const result = await tx.utDefect.updateMany({ where: { id: defectId, version: data.version }, data: { status: next, fixedAt: toDate(data.fixedAt), fixedBy: actor.userId, verificationResult: null, verifiedAt: null, verifiedBy: null, updatedBy: actor.userId, version: { increment: 1 } } });
     if (!result.count) versionConflict();
@@ -101,7 +101,7 @@ export async function verifyUtDefect(actor: UtActor, defectId: string, input: un
   const allowed = [d.case.executorId, d.case.qcUserId].includes(actor.userId) || isUtManager(actor);
   if (!allowed) throw new DomainError("FORBIDDEN", "테스트 수행자·QC 또는 PM/PMO만 검증할 수 있습니다.");
   if (data.result === "FAIL" && !data.note.trim()) throw new DomainError("INVALID_STATE", "부적합 검증은 사유를 입력해 주세요.");
-  const next = await rule(() => applyDefectVerify({ status: d.status, result: data.result, fixedBy: d.fixedBy, verifierId: actor.userId }));
+  const next = await rule(() => applyDefectVerify({ status: d.status, result: data.result, fixedBy: d.fixedBy, verifierId: actor.userId, force: isUtAdmin(actor) }));
   await prisma.$transaction(async (tx) => {
     const result = await tx.utDefect.updateMany({ where: { id: defectId, version: data.version }, data: { status: next, verificationResult: data.result, verifiedAt: toDate(data.verifiedAt), verifiedBy: actor.userId, updatedBy: actor.userId, version: { increment: 1 } } });
     if (!result.count) versionConflict();
@@ -156,8 +156,8 @@ export async function listUtRunRows(projectIds: string[], viewer: UtActor, filte
       const owner = d.assigneeId ?? e.case.executorId;
       rows.push({
         ...base, defectId: d.id, defectDisplayId: d.displayId, defectStatus: d.status, severity: d.severity, version: d.version,
-        canFix: (d.status === "REGISTERED" || d.status === "REFIX") && (owner === viewer.userId || manager),
-        canVerify: d.status === "FIXED" && d.fixedBy !== viewer.userId && ([e.case.executorId, e.case.qcUserId].includes(viewer.userId) || manager),
+        canFix: isUtAdmin(viewer) || ((d.status === "REGISTERED" || d.status === "REFIX") && (owner === viewer.userId || manager)),
+        canVerify: isUtAdmin(viewer) || (d.status === "FIXED" && d.fixedBy !== viewer.userId && ([e.case.executorId, e.case.qcUserId].includes(viewer.userId) || manager)),
         description: d.description, fixedAt: dateOnly(d.fixedAt), fixerName: d.fixer?.name ?? null,
         verificationResult: d.verificationResult, verifiedAt: dateOnly(d.verifiedAt), verifierName: d.verifier?.name ?? null,
       });

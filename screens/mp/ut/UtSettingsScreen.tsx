@@ -20,12 +20,12 @@ export function UtSettingsScreen({ settings, canManage }: { settings: Settings; 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const f = new FormData(event.currentTarget);
-    call("settings", "PUT", { utStartDate: f.get("utStartDate") || null, utEndDate: f.get("utEndDate") || null, samplingRate: Number(f.get("samplingRate")) }, "설정을 저장했습니다.");
+    call("settings", "PUT", { utStartDate: f.get("utStartDate") || null, utEndDate: f.get("utEndDate") || null, samplingRate: Number(f.get("samplingRate")) }, "설정 저장");
   }
   function lock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const reason = new FormData(event.currentTarget).get("reason");
-    call("settings/lock", "POST", { locked: !settings.lockedAt, reason }, settings.lockedAt ? "잠금을 해제했습니다." : "마감 잠금했습니다.");
+    call("settings/lock", "POST", { locked: !settings.lockedAt, reason }, settings.lockedAt ? "잠금 해제" : "마감 잠금");
   }
 
   return <>

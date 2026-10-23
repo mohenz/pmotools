@@ -1717,9 +1717,6 @@ a.history-item:hover { background: var(--accent); }
 .ut-hint { display: block; color: var(--muted-foreground); font-size: 12px; }
 .ut-ok { border-color: color-mix(in oklch, var(--success), transparent 60%); background: var(--success-bg); }
 .ut-detail .ut-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.ut-checklist { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
-.ut-checklist .ok { color: var(--success); }
-.ut-checklist .ng { color: var(--destructive); }
 .ut-case-form, .ut-exec-form { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }
 .ut-expand td { background: var(--secondary); }
 .ut-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0 0 10px; }
@@ -1783,10 +1780,55 @@ a.history-item:hover { background: var(--accent); }
 .ut-modal-wide { width: min(640px, 100%); }
 @media (max-width: 1000px) { .ut-split { grid-template-columns: 1fr; } .ut-tree { position: static; max-height: 320px; } }
 .ut-sheet td { vertical-align: top; }
+.ut-sheet td.title-cell { min-width: 380px; max-width: 380px; }
+/* 단위테스트 목록 틀고정 — 타이틀 행(thead)과 테스트케이스ID·테스트케이스명 열을 고정하고 나머지 열만 가로 스크롤(2026-10-23 사용자 요청). */
+.ut-table-wrap { max-height: 70vh; overflow-y: auto; }
+.ut-table-wrap thead th { position: sticky; top: 0; z-index: 2; background: var(--card); }
+.ut-table-wrap th:nth-child(-n+2), .ut-table-wrap td:nth-child(-n+2) { position: sticky; background: var(--card); }
+.ut-table-wrap th:nth-child(-n+2) { z-index: 3; }
+.ut-table-wrap td:nth-child(-n+2) { z-index: 1; }
+.ut-table-wrap tbody tr:hover td:nth-child(-n+2) { background: var(--accent); }
+.ut-table-wrap th:nth-child(1), .ut-table-wrap td:nth-child(1) { left: 0; width: 200px; min-width: 200px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.ut-table-wrap th:nth-child(2), .ut-table-wrap td:nth-child(2) { left: 200px; box-shadow: 2px 0 4px -2px rgb(0 0 0 / 30%); }
 .ut-sheet .ut-pre { max-width: 240px; font-size: 12px; }
 .ut-todo { display: block; color: var(--primary); font-size: 11px; font-weight: 700; }
+.ut-todo-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 2px 8px; border-radius: 999px; background: color-mix(in oklch, var(--primary), transparent 88%); color: var(--primary); font-size: 12px; font-weight: 700; white-space: nowrap; }
 /* 테스트 케이스 정보 모달 */
 .ut-case-backdrop { overflow: hidden; }
+/* 케이스 팝업 위에 겹쳐 뜨는 팝업(증적 선택·수행 결과·이미지) — 바닥 팝업과 구분되도록 더 어두운 배경·테두리·그림자 */
+.ut-evidence-backdrop, .ut-image-backdrop { background: rgb(0 0 0 / 72%); backdrop-filter: blur(2px); }
+.ut-evidence-modal, .ut-history-modal, .ut-image-modal { border: 1px solid color-mix(in oklch, var(--foreground), transparent 65%); background: color-mix(in oklch, var(--card), var(--foreground) 7%); box-shadow: 0 0 0 1px rgb(0 0 0 / 60%), 0 24px 80px rgb(0 0 0 / 70%); }
+.ut-evidence-backdrop { z-index: 110; }
+.ut-image-backdrop { z-index: 120; }
+.ut-stage { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.ut-stage-round { font-size: 13px; font-weight: 600; color: var(--muted-foreground, inherit); }
+.ut-stage-chip { padding: 5px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 15px; font-weight: 700; line-height: 1.2; }
+.ut-stage-chip.band-green { background: var(--success-bg); color: var(--success); border-color: color-mix(in oklch, var(--success), transparent 60%); }
+.ut-stage-chip.band-red { background: var(--destructive-bg); color: var(--destructive); border-color: color-mix(in oklch, var(--destructive), transparent 60%); }
+.ut-stage-chip.band-yellow { background: var(--warning-bg); color: var(--warning); border-color: color-mix(in oklch, var(--warning), transparent 60%); }
+.ut-image-modal { width: min(1100px, 100%); max-height: calc(100vh - 40px); padding: 14px; gap: 10px; overflow: hidden; }
+.ut-image-head { display: flex; align-items: center; gap: 12px; }
+.ut-image-head strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ut-image-full { display: block; max-width: 100%; max-height: calc(100vh - 140px); margin: 0 auto; object-fit: contain; }
+.ut-evidence-modal { width: min(520px, 100%); }
+.ut-history-modal { width: min(1120px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
+.ut-history-table { width: 100%; border-collapse: collapse; }
+.ut-history-table th, .ut-history-table td { padding: 10px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+/* 전역 "tbody tr:last-child td { border-bottom: 0 }"가 마지막 줄 테두리를 지우므로 다시 지정 */
+.ut-history-table tbody tr:last-child th, .ut-history-table tbody tr:last-child td { border-bottom: 1px solid var(--border); }
+.ut-history-table th { width: 140px; white-space: nowrap; font-size: 13px; font-weight: 600; background: color-mix(in oklch, var(--foreground), transparent 94%); }
+.ut-history-table td > a, .ut-history-table td > small { display: block; }
+.ut-history-table td > a + a, .ut-history-table td > .badge + small, .ut-history-table td > small + small { margin-top: 4px; }
+.ut-history-detail { display: grid; gap: 10px; margin: 0; }
+.ut-history-detail > div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: start; }
+.ut-history-detail dt { color: var(--muted-foreground, inherit); font-size: 13px; }
+.ut-history-detail dd { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ut-evidence-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ut-evidence-drop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.ut-evidence-drop:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.ut-evidence-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ut-evidence-list li { display: flex; align-items: center; gap: 8px; }
+.ut-evidence-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ut-case-modal { display: flex; flex-direction: column; width: min(1200px, 100%); height: calc(100vh - 40px); max-height: calc(100vh - 40px); padding: 0; gap: 0; overflow: hidden; }
 .ut-case-modal .topbar { flex: none; border-radius: var(--radius) var(--radius) 0 0; }
 .ut-case-modal .content { flex: 1 1 auto; min-height: 0; padding: 14px 18px 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; align-content: start; grid-auto-rows: max-content; }
@@ -1799,3 +1841,20 @@ a.history-item:hover { background: var(--accent); }
 .ut-edit .ut-decide { align-items: center; }
 .ut-edit .ut-decide label { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
 .ut-edit .ut-decide label input, .ut-edit .ut-decide label select { width: auto; min-width: 180px; }
+.ut-edit .ut-decide label input.ut-comment-input { min-width: 360px; }
+/* 단위테스트 작성현황·수행결과 통계(초안, 2026-10-23) */
+.ut-stat-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ut-stat-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ut-stat-table td, .ut-stat-table th { white-space: nowrap; }
+.ut-bar-col { min-width: 220px; width: 30%; }
+.ut-bar { display: flex; height: 14px; overflow: hidden; border-radius: 999px; background: color-mix(in oklch, var(--foreground), transparent 90%); }
+.ut-bar-seg { display: inline-block; height: 100%; }
+.ut-bar-seg.pass { background: var(--success); }
+.ut-bar-seg.fail { background: var(--destructive); }
+.ut-bar-seg.blocked { background: var(--warning); }
+.ut-bar-seg.na { background: var(--muted-foreground); }
+.ut-bar-seg.none { background: color-mix(in oklch, var(--foreground), transparent 75%); }
+.ut-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.ut-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.ut-legend i { width: 12px; height: 12px; border-radius: 3px; }
+@media (max-width: 1100px) { .ut-stat-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ut-stat-pair { grid-template-columns: 1fr; } }

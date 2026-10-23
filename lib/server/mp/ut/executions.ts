@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { DomainError } from "@/lib/server/errors";
-import { afterExecution, applyApproval, assertApprover, canExecuteCase, nextRoundNo, validateExecution } from "@/lib/domain/ut";
+import { UT_LEGACY_PRE_EXECUTION_STATUSES, afterExecution, applyApproval, assertApprover, canExecuteCase, nextRoundNo, validateExecution } from "@/lib/domain/ut";
 import { readEvidenceFile, saveEvidenceFile, assertEvidenceFile } from "@/lib/server/ut-evidence-storage";
-import { assertNotLocked, assertUtCode, dateOnly, koreaToday, rule, toDate, type UtActor } from "@/lib/server/mp/ut/common";
+import { assertNotLocked, assertUtCode, dateOnly, isUtAdmin, koreaToday, rule, toDate, type UtActor } from "@/lib/server/mp/ut/common";
 
 // ---------------------------------------------------------------------------
 // 수행(6장 4단계) · 결과 확인 QC → PL(5~6단계) · 증적 열람. 수행·승인·증적은 INSERT 전용(DB 트리거).
@@ -22,7 +22,7 @@ const executionSchema = z.object({
 /** 내 수행 목록 — 내가 수행 담당자이고 수행 가능(승인·수행중)한 케이스. 반려 건 우선. */
 export async function listMyUtExecutionTargets(projectIds: string[], userId: string) {
   const rows = await getPrisma().utCase.findMany({
-    where: { projectId: { in: projectIds }, executorId: userId, isActive: true, status: { in: ["APPROVED", "IN_EXECUTION"] } },
+    where: { projectId: { in: projectIds }, executorId: userId, isActive: true, status: { in: ["APPROVED", "IN_EXECUTION", ...UT_LEGACY_PRE_EXECUTION_STATUSES] } },
     include: { wbsItem: { select: { displayId: true, name: true } }, executions: { orderBy: { roundNo: "desc" }, take: 1, select: { roundNo: true, verdict: true, approvalStatus: true } } },
     orderBy: [{ plannedDate: "asc" }, { displayId: "asc" }],
   });
@@ -40,8 +40,8 @@ export async function registerUtExecution(actor: UtActor, caseId: string, input:
   const prisma = getPrisma();
   const c = await prisma.utCase.findUnique({ where: { id: caseId }, include: { executions: { select: { roundNo: true } } } });
   if (!c || c.projectId !== actor.projectId || !c.isActive) throw new DomainError("NOT_FOUND", "케이스를 찾을 수 없습니다.");
-  if (c.executorId !== actor.userId) throw new DomainError("FORBIDDEN", "배정된 수행 담당자만 결과를 등록할 수 있습니다.");
-  if (!canExecuteCase(c.status)) throw new DomainError("INVALID_STATE", "승인되었거나 재수행 대기인 케이스만 수행 결과를 등록할 수 있습니다.");
+  if (c.executorId !== actor.userId && !isUtAdmin(actor)) throw new DomainError("FORBIDDEN", "배정된 수행 담당자 또는 관리자만 결과를 등록할 수 있습니다.");
+  if (!canExecuteCase(c.status) && !isUtAdmin(actor)) throw new DomainError("INVALID_STATE", "승인되었거나 재수행 대기인 케이스만 수행 결과를 등록할 수 있습니다.");
   for (const file of files) assertEvidenceFile(file);
   await rule(() => validateExecution({ verdict: data.verdict, actualResult: data.actualResult, naReason: data.naReason, evidenceCount: files.length }));
   await assertUtCode(actor.projectId, data.envCodeId, "ut_env", "수행 환경");
@@ -114,10 +114,11 @@ export async function decideUtApproval(actor: UtActor, executionId: string, inpu
   const e = await prisma.utExecution.findUnique({ where: { id: executionId }, include: { case: true, evidences: { select: { id: true, views: { where: { viewerId: actor.userId }, select: { id: true }, take: 1 } } } } });
   if (!e || e.projectId !== actor.projectId) throw new DomainError("NOT_FOUND", "수행 결과를 찾을 수 없습니다.");
   const hasViewedEvidence = e.evidences.length > 0 && e.evidences.every((v) => v.views.length > 0);
-  await rule(() => assertApprover({ step: data.step, actorId: actor.userId, executorId: e.executorId, qcUserId: e.case.qcUserId, plUserId: e.case.plUserId, hasViewedEvidence, verdict: e.verdict }));
-  if (data.step === "PL" && e.case.qcUserId === actor.userId) throw new DomainError("FORBIDDEN", "QC 확인자는 PL 확인을 할 수 없습니다.");
+  await rule(() => assertApprover({ step: data.step, actorId: actor.userId, executorId: e.executorId, qcUserId: e.case.qcUserId, plUserId: e.case.plUserId, hasViewedEvidence, verdict: e.verdict, anyDesignee: isUtAdmin(actor) }));
+  if (data.step === "PL" && !isUtAdmin(actor) && (e.case.qcUserId === actor.userId || (await prisma.utApproval.count({ where: { executionId, step: "QC", approverId: actor.userId } })))) throw new DomainError("FORBIDDEN", "QC 확인자는 PL 확인을 할 수 없습니다.");
+  if (await prisma.utApproval.count({ where: { executionId, step: data.step } })) throw new DomainError("INVALID_STATE", `이미 ${data.step} 확인이 기록된 차수입니다. 확인 이력은 수정할 수 없어 새 차수로 재수행해 주세요.`);
   await assertUtCode(actor.projectId, data.rejectReasonCodeId, "ut_reject_reason", "반려 사유");
-  const next = await rule(() => applyApproval({ approvalStatus: e.approvalStatus, verdict: e.verdict, step: data.step, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment }));
+  const next = await rule(() => applyApproval({ approvalStatus: e.approvalStatus, verdict: e.verdict, step: data.step, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment, force: isUtAdmin(actor) }));
   await prisma.$transaction([
     prisma.utApproval.create({ data: { projectId: e.projectId, executionId, wbsItemId: e.wbsItemId, step: data.step, approverId: actor.userId, decision: data.decision, rejectReasonCodeId: data.rejectReasonCodeId, comment: data.comment } }),
     prisma.utExecution.update({ where: { id: executionId }, data: { approvalStatus: next.approvalStatus, approvalUpdatedAt: new Date() } }),

@@ -99,7 +99,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     const moduleGroups: Record<string, {label:string;tabs:{href:string;label:string}[]}[]> = {
       "/mp-ut": [
         // 화면 2개 체계(2026-10-20 사용자 지시): 목록 + 정보확인/처리(신규 등록 포함). 이정표·설정은 메뉴에서 제외(경로는 유지).
-        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut?new=1",label:"신규 등록"}] },
+        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut/stats",label:"통계보기"}] },
       ],
     };
     const groups = moduleGroups[currentTool.href];

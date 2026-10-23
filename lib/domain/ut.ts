@@ -32,13 +32,6 @@ export function isUtTargetTask(item: { stage: string | null | undefined; isUnitT
   return item.isLeaf && item.isUnitTestTarget && isUtTargetStage(item.stage);
 }
 
-/** PL 검토 상태(목록 "검토상태" 열, 2026-10-22 사용자 확정) — 케이스 상태에서 읽는다. 승인 이후 수행·확인 단계는 모두 "승인". */
-export type UtReviewStatus = "DRAFT" | "REVIEW_REQUESTED" | "APPROVED" | "REJECTED";
-export const UT_REVIEW_STATUS_LABEL: Record<UtReviewStatus, string> = { DRAFT: "작성중", REVIEW_REQUESTED: "검토요청", APPROVED: "승인", REJECTED: "반려" };
-export function utReviewStatus(status: UtCaseStatus): UtReviewStatus {
-  return status === "DRAFT" || status === "REVIEW_REQUESTED" || status === "REJECTED" ? status : "APPROVED";
-}
-
 export class UtRuleError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
@@ -63,65 +56,6 @@ export function defectDisplayId(date: string, seq: number) {
 }
 
 // ---------------------------------------------------------------------------
-// 케이스 작성 — 필수 필드(입력 검증, 유지)와 PL 검토 체크리스트(같은 WBS Task의 케이스 묶음 기준, 수기 확인·차단하지 않음 — AU-06 보류)
-// ---------------------------------------------------------------------------
-
-export type UtCaseDraft = {
-  displayId?: string;
-  name: string;
-  precondition: string;
-  steps: string;
-  inputData: string;
-  expectedResult: string;
-  executorId: string | null;
-  plannedDate: string | null;
-  qcUserId: string | null;
-};
-
-export const EXPECTED_RESULT_MAX = 200;
-const AMBIGUOUS_WORDS = ["정상 처리", "정상처리", "정상적으로", "확인"];
-
-/** 검토요청 전 필수 필드 누락 — 비어 있으면 검토요청 불가(5장 필수 12개 중 케이스 단위 항목). */
-export function missingCaseFields(c: UtCaseDraft): string[] {
-  const missing: string[] = [];
-  if (!c.name.trim()) missing.push("케이스명");
-  if (!c.precondition.trim()) missing.push("사전조건");
-  if (!c.steps.trim()) missing.push("테스트스텝");
-  if (!c.inputData.trim()) missing.push("입력데이터");
-  if (!c.expectedResult.trim()) missing.push("예상결과");
-  if (!c.executorId) missing.push("수행 담당자");
-  if (!c.plannedDate) missing.push("예정일");
-  if (!c.qcUserId) missing.push("QC 확인자");
-  return missing;
-}
-
-export type UtChecklistItem = { key: string; ok: boolean; message: string };
-
-/** PL 검토 체크리스트(5장) — 결과만 보여 주고 차단하지 않는다.
- *  정상·예외·경계 유형과 우선순위(H등급)는 화면에서 삭제되어(2026-10-21) 해당 항목은 두지 않는다. */
-export function reviewChecklist(cases: UtCaseDraft[]): UtChecklistItem[] {
-  const ambiguous = cases.filter((c) => {
-    const text = c.expectedResult.replace(/\s+/g, " ").trim();
-    if (!text) return false;
-    const stripped = AMBIGUOUS_WORDS.reduce((acc, w) => acc.split(w).join(""), text).replace(/[\s.,!·]/g, "");
-    return stripped.length === 0;
-  });
-  const tooLong = cases.filter((c) => c.expectedResult.length > EXPECTED_RESULT_MAX);
-  const seen = new Map<string, number>();
-  for (const c of cases) {
-    const key = `${c.inputData.trim()}|${c.expectedResult.trim()}`;
-    if (c.inputData.trim() || c.expectedResult.trim()) seen.set(key, (seen.get(key) ?? 0) + 1);
-  }
-  const duplicates = [...seen.values()].filter((n) => n > 1).length;
-  const items: UtChecklistItem[] = [
-    { key: "ambiguous", ok: ambiguous.length === 0, message: ambiguous.length ? `예상결과가 모호어만으로 된 케이스 ${ambiguous.length}건` : "예상결과 모호어 없음" },
-    { key: "length", ok: tooLong.length === 0, message: tooLong.length ? `예상결과 ${EXPECTED_RESULT_MAX}자 초과 ${tooLong.length}건` : `예상결과 ${EXPECTED_RESULT_MAX}자 이내` },
-    { key: "duplicate", ok: duplicates === 0, message: duplicates ? `입력데이터·예상결과가 같은 중복 ${duplicates}묶음` : "중복 케이스 없음" },
-  ];
-  return items;
-}
-
-// ---------------------------------------------------------------------------
 // 직무 분리(4.3 규칙 5) — 입력 검증
 // ---------------------------------------------------------------------------
 
@@ -133,41 +67,38 @@ export function assertSeparation(input: { executorId?: string | null; qcUserId?:
 }
 
 // ---------------------------------------------------------------------------
-// 케이스 검토(6장 2~3단계) — 시나리오 제거로 케이스 단위(2026-10-21)
+// 케이스 수정 — 검토·승인 없음(2026-10-23 사용자 확정). 등록 즉시 수행 대기(IN_EXECUTION)이며 첫 수행 등록 전까지만 수정한다.
 // ---------------------------------------------------------------------------
 
-export function nextCaseReviewStatus(current: UtCaseStatus, action: "REQUEST" | "APPROVE" | "REJECT" | "EDIT"): UtCaseStatus {
-  switch (action) {
-    case "REQUEST":
-      if (current === "DRAFT" || current === "REJECTED") return "REVIEW_REQUESTED";
-      break;
-    case "APPROVE":
-    case "REJECT":
-      if (current === "REVIEW_REQUESTED") return action === "APPROVE" ? "APPROVED" : "REJECTED";
-      break;
-    case "EDIT":
-      if (current === "DRAFT" || current === "REJECTED") return current;
-      break;
-  }
-  throw new UtRuleError("INVALID_TRANSITION", `현재 상태(${UT_CASE_STATUS_LABEL[current]})에서는 처리할 수 없습니다.`);
+/** 검토·승인 폐지(2026-10-23) 이전 상태 — 운영 데이터 변환 전에도 수행 대기 케이스와 똑같이 다룬다. */
+export const UT_LEGACY_PRE_EXECUTION_STATUSES: UtCaseStatus[] = ["DRAFT", "REVIEW_REQUESTED", "REJECTED"];
+const isPreExecution = (status: UtCaseStatus) => status === "IN_EXECUTION" || UT_LEGACY_PRE_EXECUTION_STATUSES.includes(status);
+
+export function canEditCase(status: UtCaseStatus, executionCount: number) {
+  return isPreExecution(status) && executionCount === 0;
 }
 
 // ---------------------------------------------------------------------------
 // 수행(6장 4단계) — 차수, 판정 입력 검증, 승인 상태 초기값
 // ---------------------------------------------------------------------------
 
+/** APPROVED는 검토 폐지(2026-10-23) 이전에 승인된 케이스 — 계속 수행 가능. */
 export function canExecuteCase(status: UtCaseStatus) {
-  return status === "APPROVED" || status === "IN_EXECUTION";
+  return status === "APPROVED" || isPreExecution(status);
 }
 
 export function nextRoundNo(existingRounds: number[]) {
   return existingRounds.length ? Math.max(...existingRounds) + 1 : 1;
 }
 
+/** 수행 1회에 올릴 수 있는 증적 파일 수(2026-10-23 사용자 확정). */
+export const UT_EVIDENCE_MAX_FILES = 3;
+
 export function validateExecution(input: { verdict: UtVerdict; actualResult: string; naReason: string; evidenceCount: number }) {
   const { verdict, actualResult, naReason, evidenceCount } = input;
   if (verdict === "FAIL" && !actualResult.trim()) throw new UtRuleError("REQUIRED", "Fail 판정은 실제결과를 입력해야 합니다.");
   if (verdict === "NA" && !naReason.trim()) throw new UtRuleError("REQUIRED", "N/A 판정은 사유를 입력해야 합니다.");
+  if (evidenceCount > UT_EVIDENCE_MAX_FILES) throw new UtRuleError("EVIDENCE_LIMIT", `증적은 최대 ${UT_EVIDENCE_MAX_FILES}개까지 첨부할 수 있습니다.`);
   if ((verdict === "PASS" || verdict === "FAIL") && evidenceCount < 1) throw new UtRuleError("EVIDENCE_REQUIRED", "Pass·Fail 판정은 증적을 1건 이상 첨부해야 합니다.");
 }
 
@@ -182,22 +113,22 @@ export function afterExecution(verdict: UtVerdict): { approvalStatus: UtApproval
 // 결과 확인(6장 5~6단계) — QC → PL. 반려 시 차수 종료, 재수행은 roundNo + 1.
 // ---------------------------------------------------------------------------
 
-export function applyApproval(input: { approvalStatus: UtApprovalStatus | null; verdict: UtVerdict; step: UtApprovalStep; decision: UtDecision; rejectReasonCodeId?: string | null; comment?: string }) {
+export function applyApproval(input: { approvalStatus: UtApprovalStatus | null; verdict: UtVerdict; step: UtApprovalStep; decision: UtDecision; rejectReasonCodeId?: string | null; comment?: string; force?: boolean }) {
   const { approvalStatus, verdict, step, decision } = input;
   const expected: UtApprovalStatus = step === "QC" ? "QC_PENDING" : "PL_PENDING";
-  if (approvalStatus !== expected) throw new UtRuleError("INVALID_TRANSITION", step === "QC" ? "QC 확인 대기 상태가 아닙니다." : "PL 확인 대기 상태가 아닙니다.");
-  if (step === "QC" && verdict === "NA") throw new UtRuleError("INVALID_TRANSITION", "N/A 판정은 QC 확인 없이 PL이 사유를 승인합니다.");
+  if (approvalStatus !== expected && !input.force) throw new UtRuleError("INVALID_TRANSITION", step === "QC" ? "QC 확인 대기 상태가 아닙니다." : "PL 확인 대기 상태가 아닙니다.");
+  if (step === "QC" && verdict === "NA" && !input.force) throw new UtRuleError("INVALID_TRANSITION", "N/A 판정은 QC 확인 없이 PL이 사유를 승인합니다.");
   if (decision === "REJECTED" && (!input.rejectReasonCodeId || !input.comment?.trim())) throw new UtRuleError("REQUIRED", "반려 시 사유코드와 의견을 입력해야 합니다.");
   if (decision === "REJECTED") return { approvalStatus: "REJECTED" as const, caseStatus: "IN_EXECUTION" as const };
   return step === "QC" ? { approvalStatus: "PL_PENDING" as const, caseStatus: "PL_PENDING" as const } : { approvalStatus: "APPROVED" as const, caseStatus: "PL_CONFIRMED" as const };
 }
 
-/** 확인자 자격 — 수행자는 확인할 수 없고, 지정된 확인자 본인만 처리(PM/PMO 대리 지정은 서버에서). */
-export function assertApprover(input: { step: UtApprovalStep; actorId: string; executorId: string; qcUserId: string | null; plUserId: string | null; hasViewedEvidence: boolean; verdict: UtVerdict }) {
+/** 확인자 자격 — 수행자는 확인할 수 없고, 지정된 확인자 본인만 처리(관리자·슈퍼관리자는 anyDesignee로 지정·직무 분리 검사를 모두 생략). */
+export function assertApprover(input: { step: UtApprovalStep; actorId: string; executorId: string; qcUserId: string | null; plUserId: string | null; hasViewedEvidence: boolean; verdict: UtVerdict; anyDesignee?: boolean }) {
   const { step, actorId, executorId, qcUserId, plUserId } = input;
-  if (actorId === executorId) throw new UtRuleError("SEPARATION", "수행자는 자신의 결과를 확인할 수 없습니다.");
-  if (step === "QC" && actorId !== qcUserId) throw new UtRuleError("FORBIDDEN", "지정된 QC 확인자만 처리할 수 있습니다.");
-  if (step === "PL" && actorId !== plUserId) throw new UtRuleError("FORBIDDEN", "지정된 PL 확인자만 처리할 수 있습니다.");
+  if (actorId === executorId && !input.anyDesignee) throw new UtRuleError("SEPARATION", "수행자는 자신의 결과를 확인할 수 없습니다.");
+  if (step === "QC" && !input.anyDesignee && actorId !== qcUserId) throw new UtRuleError("FORBIDDEN", "지정된 QC 확인자만 처리할 수 있습니다.");
+  if (step === "PL" && !input.anyDesignee && actorId !== plUserId) throw new UtRuleError("FORBIDDEN", "지정된 PL 확인자만 처리할 수 있습니다.");
   if (input.verdict !== "NA" && !input.hasViewedEvidence) throw new UtRuleError("EVIDENCE_NOT_VIEWED", "증적을 열람한 뒤 확인할 수 있습니다.");
 }
 
@@ -205,12 +136,13 @@ export function assertApprover(input: { step: UtApprovalStep; actorId: string; e
 // 결함 조치·검증(5.1, C9)
 // ---------------------------------------------------------------------------
 
-export function applyDefectFix(status: UtDefectStatus): UtDefectStatus {
-  if (status === "REGISTERED" || status === "REFIX") return "FIXED";
+export function applyDefectFix(status: UtDefectStatus, force = false): UtDefectStatus {
+  if (status === "REGISTERED" || status === "REFIX" || force) return "FIXED";
   throw new UtRuleError("INVALID_TRANSITION", `현재 상태(${UT_DEFECT_STATUS_LABEL[status]})에서는 조치를 등록할 수 없습니다.`);
 }
 
-export function applyDefectVerify(input: { status: UtDefectStatus; result: UtVerificationResult; fixedBy: string | null; verifierId: string }): UtDefectStatus {
+export function applyDefectVerify(input: { status: UtDefectStatus; result: UtVerificationResult; fixedBy: string | null; verifierId: string; force?: boolean }): UtDefectStatus {
+  if (input.force) return input.result === "PASS" ? "VERIFIED" : "REFIX";
   if (input.status !== "FIXED") throw new UtRuleError("INVALID_TRANSITION", "조치완료 상태에서만 검증할 수 있습니다.");
   if (input.fixedBy && input.fixedBy === input.verifierId) throw new UtRuleError("SEPARATION", "조치자는 같은 결함을 검증할 수 없습니다.");
   return input.result === "PASS" ? "VERIFIED" : "REFIX";
