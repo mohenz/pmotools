@@ -6,6 +6,8 @@ import { getProjectInformation } from "@/lib/server/project-information";
 import { ProjectInformationForm } from "@/features/project/ProjectInformationForm";
 import { ProjectMembersPanel } from "@/features/project/ProjectMembersPanel";
 import { listAssignableUsers, listProjectAssignees } from "@/lib/server/projects-admin";
+import { listTestStages } from "@/lib/server/mp/defects/stages";
+import { ProjectTestStagesPanel } from "@/features/project/ProjectTestStagesPanel";
 import { NUMBERED_SEQUENCES, firstNumberOf } from "@/lib/domain/numbering";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +18,12 @@ export default async function PlatformProjectEditPage({ params }: { params: Prom
   const { id } = await params;
   const row = await getPrisma().project.findUnique({ where: { id }, select: { id: true, numberingBase: true, parent: { select: { code: true, name: true } } } });
   if (!row) notFound();
-  const [project, members, candidates] = await Promise.all([getProjectInformation(id), listProjectAssignees(userId, id), listAssignableUsers(userId, id)]);
+  const [project, members, candidates, stages] = await Promise.all([getProjectInformation(id), listProjectAssignees(userId, id), listAssignableUsers(userId, id), listTestStages(userId, id)]);
   return <>
     <header className="topbar"><div><h1>프로젝트 정보 · {project.name}</h1><p>{project.code}{row.parent ? ` · 상위 ${row.parent.name} (${row.parent.code})` : " · 최상위(대표) 프로젝트"}</p></div>
       <div className="topbar-actions"><Link className="button secondary" href="/settings/projects">프로젝트 목록</Link></div>
     </header>
-    <div className="content settings-content"><ProjectInformationForm project={project} endpoint={`/api/v1/admin/projects/${id}`} /><NumberingPanel base={row.numberingBase} /><ProjectMembersPanel projectId={id} members={members} candidates={candidates} /></div>
+    <div className="content settings-content"><ProjectInformationForm project={project} endpoint={`/api/v1/admin/projects/${id}`} /><NumberingPanel base={row.numberingBase} /><ProjectTestStagesPanel key={stages.map((s) => `${s.id}${s.locked}`).join()} projectId={id} stages={stages} /><ProjectMembersPanel projectId={id} members={members} candidates={candidates} /></div>
   </>;
 }
 

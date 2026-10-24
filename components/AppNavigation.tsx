@@ -1,6 +1,6 @@
 "use client";
 
-import type { ElementType } from "react";
+import { useState, useEffect, type ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -16,6 +16,7 @@ const TOOL_LABEL: Record<string, string> = { portfolio: "통합 현황", "manage
 
 export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false }: { area: "sidebar" | "workspace"; menuPrefs?: MenuPreferenceRow[]; canManageWorkLogs?: boolean }) {
   const pathname = usePathname();
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const { data: session } = useSession();
   const role = session?.user?.role ?? "MEMBER";
   const hasRestrictedToolAccess = hasPmPmoAccess(session?.user?.jobTitle, role);
@@ -25,6 +26,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   const toolActive = (key: string, href: string) => {
     if (key === "issues") return pathname.startsWith("/issues");
+    if (key === "test") return pathname.startsWith("/mp-ut") || pathname.startsWith("/mp-defects");
     if (key === "management-tasks") return pathname.startsWith("/management-tasks") || pathname.startsWith("/action-items");
     return pathname.startsWith(href);
   };
@@ -99,17 +101,75 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     const moduleGroups: Record<string, {label:string;tabs:{href:string;label:string}[]}[]> = {
       "/mp-ut": [
         // 화면 2개 체계(2026-10-20 사용자 지시): 목록 + 정보확인/처리(신규 등록 포함). 이정표·설정은 메뉴에서 제외(경로는 유지).
-        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut/stats",label:"통계보기"}] },
+        { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut/stats",label:"단위테스트 수행현황"}] },
+        { label: "결함관리", tabs: [{href:"/mp-defects",label:"결함 목록"},{href:"/mp-defects/new",label:"결함 등록"},{href:"/mp-defects/unassigned",label:"미배정 결함"},{href:"/mp-defects/stats",label:"통계보기"},{href:"/mp-defects/settings",label:"설정"}] },
       ],
     };
     const groups = moduleGroups[currentTool.href];
     if (groups) {
       const activeGroup = groups.find((g) => g.tabs.some((t) => pathname === t.href || pathname.startsWith(`${t.href}/`)));
-      return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}{activeGroup ? <span className="workspace-tool-sub"> › {activeGroup.label}</span> : null}</strong>
-        <nav className="tool-tabs tool-tabs-grouped" aria-label={`${currentTool.label} 기능`}>{groups.map((g) => <div className="tool-tab-group" key={g.label}>
-          <span className="tool-tab-group-label">{g.label}</span>
-          {g.tabs.map((tab)=><Link className={pathname===tab.href?"active":""} aria-current={pathname===tab.href?"page":undefined} href={tab.href} key={tab.href}>{tab.label}</Link>)}
-        </div>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
+
+      const toggleGroup = (label: string, currentExpanded: boolean) => {
+        setExpandedGroups((prev) => ({
+          ...prev,
+          [label]: !currentExpanded,
+        }));
+      };
+
+      return (
+        <div className="workspace-nav">
+          <strong className="workspace-tool-name">
+            {currentTool.label}
+            {activeGroup ? <span className="workspace-tool-sub"> › {activeGroup.label}</span> : null}
+          </strong>
+          <nav className="tool-tabs tool-tabs-grouped" aria-label={`${currentTool.label} 기능`}>
+            {groups.map((g) => {
+              const isGroupActive = g.tabs.some((t) => pathname === t.href || pathname.startsWith(`${t.href}/`));
+              const isExpanded = expandedGroups[g.label] ?? isGroupActive;
+
+              return (
+                <div className={`tool-tab-group ${isExpanded ? "expanded" : "collapsed"}`} key={g.label}>
+                  <button
+                    type="button"
+                    className="tool-tab-group-toggle"
+                    onClick={() => toggleGroup(g.label, isExpanded)}
+                    aria-expanded={isExpanded}
+                    aria-controls={`tool-items-${g.label}`}
+                  >
+                    <span className="tool-tab-group-label">{g.label}</span>
+                    <span className={`tool-tab-group-arrow ${isExpanded ? "expanded" : "collapsed"}`} aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </span>
+                  </button>
+                  <div
+                    id={`tool-items-${g.label}`}
+                    className={`tool-tab-group-items ${isExpanded ? "open" : "closed"}`}
+                  >
+                    {g.tabs.map((tab) => {
+                      const isExternal = tab.href.startsWith("/test_view");
+                      return (
+                        <Link
+                          className={pathname === tab.href ? "active" : ""}
+                          aria-current={pathname === tab.href ? "page" : undefined}
+                          href={tab.href}
+                          key={tab.href}
+                          target={isExternal ? "_blank" : undefined}
+                          rel={isExternal ? "noopener noreferrer" : undefined}
+                        >
+                          {tab.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </nav>
+          <Link className="mobile-global-link" href="/settings/system">설정</Link>
+        </div>
+      );
     }
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }

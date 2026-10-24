@@ -3,7 +3,7 @@ import { getPrisma } from "@/lib/server/db-pg";
 import { getMpSelection } from "@/lib/server/mp/context";
 import { MpProjectSelector } from "@/features/mp/MpProjectSelector";
 
-type Feature = "wbs" | "work-logs" | "requirements" | "ut";
+type Feature = "wbs" | "work-logs" | "requirements" | "ut" | "defects";
 
 // 하위 프로젝트는 설정(공통코드·업무그룹)이 비어 있는 채로 선택될 수 있어, 등록 화면이 막히기 전에 무엇을 먼저 해야 하는지 알려 준다.
 async function missingSetup(projectId: string, feature: Feature) {

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "PMOTOOLS 결함 등록",
+  "short_name": "결함 등록",
+  "version": "1.1.0",
+  "description": "테스트 중인 화면의 주소·화면명과 캡처를 담아 PMOTOOLS 결함 등록 창을 엽니다.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "action": { "default_title": "결함 등록" },
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html"
+}

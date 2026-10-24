@@ -7,6 +7,7 @@ export const MANUALS = [
   { slug: "meeting-rooms", title: "회의실", description: "회의실 조회·예약·취소와 관리자 운영 절차", file: "/manuals/meeting-rooms.html" },
   { slug: "wbs", title: "WBS", description: "WBS 항목 등록·조회·수정, 엑셀 업/다운로드, 통계 절차", file: "/manuals/wbs.html" },
   { slug: "requirements-excel", title: "요구사항관리 엑셀관리", description: "요구사항정의서 엑셀 다운로드와 요구사항 ID 매칭 동기화(신규·수정·삭제) 절차", file: "/manuals/requirements-excel.html" },
+  { slug: "defect-widget", title: "결함 등록 위젯·확장 프로그램 설치", description: "테스트 사이트 위젯 삽입, Chrome 확장 프로그램 설치, 대상 도메인 등록과 결함 신고 절차", file: "/manuals/defect-widget.html" },
 ] as const;
 
 export function getManual(slug: string) {

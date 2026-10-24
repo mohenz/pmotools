@@ -15,6 +15,7 @@
     "deploy:prod": "git push origin master",
     "start": "next start --port 3020",
     "lint": "tsc --noEmit",
+    "defect:guard": "node scripts/check-defect-ut-guard.mjs",
     "test": "vitest run",
     "test:jest": "jest --runInBand",
     "test:e2e": "playwright test"

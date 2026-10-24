@@ -53,7 +53,7 @@ export function UtStatsScreen({ stats }: { stats: UtStats }) {
     { step: "QC·PL", state: "반려(재수행 대기)", count: c.rejected },
   ];
   return <>
-    <header className="topbar"><div><h1>작성현황·수행결과 통계</h1><p>활성 테스트 케이스의 최근 차수 기준 · 초안</p></div></header>
+    <header className="topbar"><div><h1>단위테스트 수행현황</h1><p>활성 테스트 케이스의 최근 차수 기준 · 초안</p></div></header>
     <div className="content">
       <div className="ut-main">
         <div className="kpi-grid ut-stat-kpis">

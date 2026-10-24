@@ -1751,11 +1751,72 @@ a.history-item:hover { background: var(--accent); }
 
 /* 3단계 메뉴 — 좌측 패널 하위 메뉴 묶음(상위 메뉴 → 묶음 → 기능), 2026-10-20 */
 .workspace-tool-sub { color: var(--muted-foreground); font-weight: 600; }
-.tool-tabs-grouped { gap: 12px; }
-.tool-tab-group { display: flex; align-items: stretch; gap: 4px; }
-.tool-tab-group-label { display: flex; align-items: center; padding: 0 6px; color: var(--muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.tool-tabs-grouped { display: flex; flex-direction: column; gap: 8px; }
+.tool-tab-group { display: flex; flex-direction: column; gap: 2px; }
+.tool-tab-group-label { display: flex; align-items: center; color: var(--muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
 .module-sidebar .tool-tab-group { flex-direction: column; gap: 2px; }
-.module-sidebar .tool-tab-group-label { padding: 6px 10px 4px; border-bottom: 1px dashed var(--border); }
+
+/* 상위 메뉴 아코디언 토글 버튼 */
+.module-sidebar .tool-tab-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+  text-align: left;
+}
+.module-sidebar .tool-tab-group-toggle:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.module-sidebar .tool-tab-group-toggle .tool-tab-group-label {
+  padding: 0;
+  border-bottom: none;
+  font-size: 11px;
+  color: inherit;
+}
+.tool-tab-group-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tool-tab-group-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+.tool-tab-group-arrow.expanded {
+  transform: rotate(0deg);
+}
+
+/* 하위 메뉴 아이템 아코디언 컨테이너 */
+.module-sidebar .tool-tab-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  transition: max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+}
+.module-sidebar .tool-tab-group-items.open {
+  max-height: 400px;
+  opacity: 1;
+}
+.module-sidebar .tool-tab-group-items.closed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .module-sidebar .tool-tab-group a { padding-left: 20px; }
 
 /* 단위테스트 — 설계서 8장: 목록 화면 좌측 WBS 트리 고정 */
@@ -1858,3 +1919,76 @@ a.history-item:hover { background: var(--accent); }
 .ut-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .ut-legend i { width: 12px; height: 12px; border-radius: 3px; }
 @media (max-width: 1100px) { .ut-stat-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ut-stat-pair { grid-template-columns: 1fr; } }
+
+/* 결함관리(2026-10-24) — 등록·상세 화면은 단위테스트 정보 화면(.ut-edit)과 같은 배치를 쓰고, 아래는 결함관리 전용 보조 스타일 */
+.defect-hit-list { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; }
+.defect-hit-list button { min-height: 36px; padding: 4px 8px; border: 0; background: none; color: var(--primary); cursor: pointer; text-align: left; }
+.defect-hit-list button:hover { background: var(--accent); }
+.defect-inline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.defect-inline select { width: auto; min-width: 120px; }
+.defect-file-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.defect-file-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.defect-evidence-image { max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.defect-history td { vertical-align: top; }
+@media (max-width: 720px) { .ut-edit .ut-fieldset label:not(.toggle) { grid-template-columns: 1fr; } .defect-inline select, .defect-inline button { min-height: 44px; } }
+.defect-wrap { overflow-wrap: anywhere; min-width: 120px; }
+.defect-wrap.mono { min-width: 240px; }
+.defect-assignee { min-width: 200px; }
+.defect-assignee .defect-inline > input { flex: 1 1 220px; min-width: 0; width: auto; }
+/* 담당자 검색 공통 팝업 — 크기 고정, 결과 영역만 스크롤 */
+.calendar-modal.person-search-dialog { display: flex; flex-direction: column; width: min(640px, calc(100vw - 32px)); height: min(520px, calc(100vh - 48px)); overflow: hidden; }
+.person-search-bar { display: flex; flex: none; gap: 8px; }
+.person-search-bar input { flex: 1; min-width: 0; width: auto; }
+.person-search-dialog > .ut-hint { flex: none; margin: 8px 0; }
+.person-search-results { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.defect-icon-button { min-width: 40px; padding: 6px 10px; }
+.defect-icon-button svg { width: 16px; height: 16px; }
+@media (max-width: 720px) { .defect-icon-button { min-width: 44px; min-height: 44px; } }
+/* 담당자 입력창과 아이콘 버튼 사이에는 여백을 둔다 */
+.defect-assignee .defect-inline { flex-wrap: nowrap; gap: 8px; }
+.defect-checks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.defect-checks label.toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
+.defect-checks input[type="checkbox"] { width: auto; min-height: 0; }
+.defect-action-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; }
+@media (max-width: 720px) { .defect-action-row { grid-template-columns: 1fr; } }
+
+/* 결함 등록 팝업 모드 — 헤더/사이드바 없이 폼만 깔끔하게 띄운다 */
+.popup-main {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--background);
+  display: flex;
+  flex-direction: column;
+}
+/* 팝업에서는 대상 프로젝트 선택줄을 화면에서만 숨긴다(컴포넌트는 그대로 두어 현재 선택된 프로젝트로 등록된다). */
+.popup-main .mp-project-bar { display: none; }
+.popup-main .popup-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 16px 24px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.popup-main .popup-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--foreground);
+}
+.popup-main .popup-header p {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  margin: 4px 0 0;
+}
+.popup-main .popup-content {
+  padding: 20px 24px 40px;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+  flex: 1 1 auto;
+}
+.popup-main .form-panel {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}

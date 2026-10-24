@@ -108,6 +108,8 @@ model User {
   utQcCases                     UtCase[]                      @relation("UtCaseQc")
   utCreatedCases                UtCase[]                      @relation("UtCaseCreator")
   utWorkerCases                 UtCase[]                      @relation("UtCaseWorker")
+  defectsCreated                Defect[]                      @relation("DefectCreator")
+  defectsAssigned               Defect[]                      @relation("DefectAssignee")
   utExecutions                  UtExecution[]                 @relation("UtExecutionExecutor")
   utApprovals                   UtApproval[]                  @relation("UtApprovalApprover")
   utUploadedEvidences           UtEvidence[]                  @relation("UtEvidenceUploader")
@@ -222,6 +224,12 @@ model Project {
   requirementChanges        RequirementChange[]
   requirementChangeSequence RequirementChangeSequence?
   menuPreferences           MenuPreference[]
+  defects                   Defect[]
+  defectStatusClasses       DefectStatusClass[]
+  defectSeveritySettings    DefectSeveritySetting[]
+  defectTargetSites         DefectTargetSite[]
+  defectScreens             DefectScreen[]
+  wbsItemTestStages         WbsItemTestStage[]
   portfolioPanelPreferences PortfolioPanelPreference[]
   announcements             Announcement[]
   managementTasks           ManagementTask[]
@@ -311,6 +319,7 @@ model Groups {
   utCases          UtCase[]     @relation("UtCaseGroup")
   utCauseDefects   UtDefect[]   @relation("UtDefectCauseGroup")
   utVendorDefects  UtDefect[]   @relation("UtDefectVendorGroup")
+  defects          Defect[]     @relation("DefectGroup")
 
   @@unique([projectId, groupType, code])
   @@index([leaderId])
@@ -429,6 +438,14 @@ model CommonCode {
   utApprovalRejectReasons UtApproval[] @relation("UtApprovalRejectReason")
   utDefectTypes          UtDefect[]    @relation("UtDefectType")
   utCaseTypes            UtCase[]      @relation("UtCaseTypeCode")
+  defectTestStages       Defect[]      @relation("DefectTestStage")
+  defectSeverities       Defect[]      @relation("DefectSeverity")
+  defectPriorities       Defect[]      @relation("DefectPriority")
+  defectStatuses         Defect[]      @relation("DefectStatus")
+  defectIdentifications  Defect[]      @relation("DefectIdentification")
+  defectStatusClasses    DefectStatusClass[]    @relation("DefectStatusClassCode")
+  defectSeveritySettings DefectSeveritySetting[] @relation("DefectSeveritySettingCode")
+  wbsItemTestStages      WbsItemTestStage[]     @relation("WbsItemTestStageCode")
 
   @@unique([groupId, code])
   @@map("common_codes")
@@ -2209,4 +2226,225 @@ model UtSequence {
   value Int    @default(0)
 
   @@map("ut_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// 결함관리 (설계: docs/결함관리 프로그램 설계서.md, 2026-10-24 승인)
+// 규칙 1: 단위테스트(ut_*) 테이블에는 외래 키·역관계를 두지 않는다 — caseId·executionId는 소프트 참조(문자열 id).
+// wbsItemId·requirementId도 소프트 참조로 두어 WbsItem·Requirement 모델 정의를 바꾸지 않는다.
+// 결함 번호 체계: DF-{yyMMdd}-{순번 4자리}, 결함관리 순번은 5001~9999(단위테스트 0001~4999와 겹치지 않음) — 설계서 3.4.
+// ---------------------------------------------------------------------------
+
+enum DefectSource {
+  MANUAL    // 결함 화면에서 직접 등록
+  ENTRY     // 단위테스트 화면에서 확장·위젯으로 진입해 등록
+  WIDGET    // 테스트 대상 사이트의 위젯
+  EXTENSION // Chrome 확장 프로그램
+}
+
+enum DefectStatusClassType {
+  OPEN   // 미조치
+  DONE   // 조치완료
+  CLOSED // 종결
+}
+
+enum DefectHistoryAction {
+  CREATE
+  UPDATE
+  ASSIGN
+  STATUS
+  LINK
+  DELETE
+}
+
+model Defect {
+  id                   String       @id @default(uuid())
+  projectId            String
+  displayId            String // DF-{yyMMdd}-{5001~9999}
+  seq                  Int // 같은 날짜의 결함관리 순번(5001~9999)
+  title                String
+  stepsToRepro         String       @default("")
+  testStageCodeId      String // 공통코드 defect_test_stage
+  severityCodeId       String // 공통코드 defect_severity — 결함 자체의 영향도(조치 상태와 별개)
+  priorityCodeId       String? // 공통코드 defect_priority
+  statusCodeId         String // 공통코드 defect_status — 분류는 defect_status_classes
+  identificationCodeId String? // 공통코드 defect_identification
+  screenPath           String       @default("") // 화면경로(선택): 직접 입력·화면 목록 선택·수집 URL 자동 매칭
+  menuName             String       @default("")
+  screenName           String       @default("")
+  screenUrl            String       @default("") // 결함 수집 시 획득한 URL(http/https)
+  envInfo              String       @default("")
+  groupId              String? // 업무단위(Groups) — 업무그룹리더 판정
+  wbsItemId            String? // 소프트 참조(wbs_items)
+  caseId               String? // 소프트 참조(ut_cases) — 규칙 1: FK 없음
+  executionId          String? // 소프트 참조(ut_executions) — 규칙 1: FK 없음
+  requirementId        String? // 소프트 참조(requirements)
+  createdBy            String // 등록자
+  assigneeUserId       String? // 조치 담당자(null = 미지정). 기본값: WBS Task의 작업자
+  actionComment        String       @default("")
+  actionDueDate        DateTime?    @db.Date
+  actionStartDate      DateTime?    @db.Date
+  actionEndDate        DateTime?    @db.Date
+  sourceType           DefectSource @default(MANUAL)
+  sourceMeta           Json? // 위젯·확장이 보낸 pageUrl·pageTitle·userAgent
+  isActive             Boolean      @default(true) // 논리 삭제
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testStage      CommonCode      @relation("DefectTestStage", fields: [testStageCodeId], references: [id], onDelete: Restrict)
+  severity       CommonCode      @relation("DefectSeverity", fields: [severityCodeId], references: [id], onDelete: Restrict)
+  priority       CommonCode?     @relation("DefectPriority", fields: [priorityCodeId], references: [id], onDelete: SetNull)
+  status         CommonCode      @relation("DefectStatus", fields: [statusCodeId], references: [id], onDelete: Restrict)
+  identification CommonCode?     @relation("DefectIdentification", fields: [identificationCodeId], references: [id], onDelete: SetNull)
+  group          Groups?         @relation("DefectGroup", fields: [groupId], references: [id], onDelete: SetNull)
+  creator        User            @relation("DefectCreator", fields: [createdBy], references: [id])
+  assignee       User?           @relation("DefectAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  histories      DefectHistory[]
+  evidences      DefectEvidence[]
+
+  @@unique([projectId, displayId])
+  @@index([projectId, isActive, statusCodeId])
+  @@index([projectId, testStageCodeId])
+  @@index([projectId, createdAt])
+  @@index([assigneeUserId])
+  @@index([createdBy])
+  @@index([caseId])
+  @@index([wbsItemId])
+  @@index([groupId])
+  @@map("defects")
+}
+
+// 이력 — INSERT 전용(마이그레이션의 트리거로 강제). 증적 원문은 복사하지 않는다.
+model DefectHistory {
+  id                 String              @id @default(uuid())
+  defectId           String
+  action             DefectHistoryAction
+  statusBeforeCodeId String?
+  statusAfterCodeId  String?
+  changedData        Json                @default("{}") // { 필드: { before, after } }
+  actorId            String
+  actorName          String
+  createdAt          DateTime            @default(now())
+
+  defect Defect @relation(fields: [defectId], references: [id], onDelete: Restrict)
+
+  @@index([defectId, createdAt])
+  @@map("defect_histories")
+}
+
+// 증적 — INSERT 전용. 파일은 서버 디스크(증적 저장소)에 저장한다.
+model DefectEvidence {
+  id         String   @id @default(uuid())
+  projectId  String
+  defectId   String
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  sha256     String
+  storageKey String   @unique
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  defect Defect @relation(fields: [defectId], references: [id], onDelete: Restrict)
+
+  @@index([defectId])
+  @@index([projectId])
+  @@map("defect_evidences")
+}
+
+// 상태 코드를 통계 기준(미조치·조치완료·종결)으로 묶는다.
+model DefectStatusClass {
+  id          String                @id @default(uuid())
+  projectId   String
+  statusCodeId String
+  statusClass DefectStatusClassType
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  statusCode CommonCode @relation("DefectStatusClassCode", fields: [statusCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, statusCodeId])
+  @@map("defect_status_classes")
+}
+
+// "미조치 중대 결함" 기준 — 심각도 코드별 중대 여부(기본 Critical·Major).
+model DefectSeveritySetting {
+  id             String   @id @default(uuid())
+  projectId      String
+  severityCodeId String
+  isMajorImpact  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  severityCode CommonCode @relation("DefectSeveritySettingCode", fields: [severityCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, severityCodeId])
+  @@map("defect_severity_settings")
+}
+
+// WBS Task – 테스트 단계 연결. 결함관리 전용 신규 테이블이며 wbs_items·단위테스트 대상 판정은 바꾸지 않는다(규칙 1).
+model WbsItemTestStage {
+  id              String   @id @default(uuid())
+  projectId       String
+  wbsItemId       String // 소프트 참조(wbs_items)
+  testStageCodeId String
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testStage CommonCode @relation("WbsItemTestStageCode", fields: [testStageCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([wbsItemId, testStageCodeId])
+  @@index([projectId, testStageCodeId])
+  @@map("wbs_item_test_stages")
+}
+
+// 위젯·확장 프로그램이 동작할 테스트 대상 사이트(허용 출처).
+model DefectTargetSite {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  origin    String // 예: http://localhost:8080
+  isActive  Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, origin])
+  @@map("defect_target_sites")
+}
+
+// 화면 목록 — 엑셀 일괄 등록, 결함 등록 때 화면경로 선택·수집 URL 자동 매칭. pathKey는 공백 제거·소문자 비교용 유일 키.
+model DefectScreen {
+  id        String   @id @default(uuid())
+  projectId String
+  path      String
+  pathKey   String
+  url       String?
+  name      String   @default("")
+  isActive  Boolean  @default(true)
+  createdBy String
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, pathKey])
+  @@index([projectId, isActive])
+  @@map("defect_screens")
+}
+
+// 채번 — scope: defect:{projectId}:{yyMMdd}, 값은 5000에서 시작해 1씩 증가(발번 값 5001~9999).
+model DefectSequence {
+  scope String @id
+  value Int    @default(5000)
+
+  @@map("defect_sequences")
 }

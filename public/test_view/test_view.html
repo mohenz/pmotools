@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>테스트 벤치 - Project Zero Retail App</title>
+    <style>
+        * { box-sizing: border-box; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.55rem 1.1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            font-family: inherit;
+            text-decoration: none;
+        }
+        .btn-primary { background: #2563eb; color: #fff; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; color: #1e293b; }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: #f1f5f9;
+            display: block;
+            overflow-y: auto;
+        }
+
+        .test-header {
+            background: #fff;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            padding: 3rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .product-card {
+            background: #fff;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .product-img {
+            height: 200px;
+            background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .product-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .product-img::after {
+            content: '';
+            position: absolute;
+            inset: auto 0 0 0;
+            height: 45%;
+            background: linear-gradient(to top, rgba(15, 23, 42, 0.22), transparent);
+            pointer-events: none;
+        }
+
+        .product-info {
+            padding: 1.5rem;
+        }
+
+        .price {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        /* 버그 유발 스타일들 */
+        .bug-overflow {
+            white-space: nowrap;
+            overflow: visible;
+            width: 100px;
+            color: red;
+            font-weight: 800;
+            border: 2px dashed red;
+        }
+
+        /* 레이아웃 깨짐 버그 */
+        .bug-hidden-btn {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* 버튼 안눌림 버그 */
+        .bug-wrong-calc {
+            color: #dc2626;
+            text-decoration: line-through;
+            margin-right: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        /* 가격 계산 오류 시각화 */
+
+        /* 결함 보고 플로팅 버튼 */
+        .report-fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #2563eb;
+            color: #fff;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4);
+            z-index: 1000;
+            transition: transform 0.2s;
+        }
+
+        .report-fab:hover {
+            transform: scale(1.1);
+        }
+
+        .report-tooltip {
+            position: fixed;
+            bottom: 5.5rem;
+            right: 2rem;
+            background: #1e293b;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: 0.3s;
+            pointer-events: none;
+        }
+
+        .report-fab:hover+.report-tooltip {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-header">
+        <div class="store-name"
+            style="font-weight: 800; font-size: 1.2rem; display: flex; align-items: center; gap: 0.75rem;">
+            <i class="fas fa-shopping-cart" style="color: #2563eb;"></i>
+            ZeroStore Online
+        </div>
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            <a href="./mobile_test_bed.html" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; gap: 0.4rem;">
+                <i class="fas fa-mobile-screen"></i> 모바일 테스트베드
+            </a>
+            <div style="color: #64748b; font-size: 0.875rem; font-weight: 500;">
+                <i class="fas fa-shield-halved"></i> PMOTOOLS QA Sandbox
+            </div>
+            <button class="btn btn-primary"
+                style="background: #ef4444; border: none; padding: 0.6rem 1.2rem; display: flex; align-items: center; gap: 0.5rem;"
+                onclick="openRegister()">
+                <i class="fas fa-plus-circle"></i> 신규 결함 등록
+            </button>
+        </div>
+    </div>
+
+    <div
+        style="background: #fff; padding: 1.5rem; text-align: center; border-bottom: 1px solid #e2e8f0; box-shadow: 0 4px 12px -5px rgba(0,0,0,0.05);">
+        <h1 style="font-size: 1.5rem; color: #1e293b; margin-bottom: 0.5rem;">쇼핑몰 메인 상품 목록</h1>
+        <p
+            style="color: #475569; font-size: 0.95rem; margin: 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            <i class="fas fa-circle-info" style="color: #3b82f6;"></i>
+            <strong>QA 안내:</strong> 본 화면은 테스트용 시뮬레이션입니다. 상단 혹은 하단의 버튼을 눌러 발견한 결함을 등록해 주세요.
+        </p>
+        <p style="color: #64748b; font-size: 0.9rem; margin-top: 0.75rem;">
+            테스트용 상품 목록 수량: <strong id="productCountLabel">100개</strong>
+        </p>
+    </div>
+
+    <div class="product-grid" id="productGrid"></div>
+
+
+    <script>
+        function createProductCard(product) {
+            const descClass = product.descriptionClass ? ` class="${product.descriptionClass}"` : '';
+            const buttonClass = product.buttonClass ? ` ${product.buttonClass}` : '';
+            const imageSrc = product.imageSrc || './assets/products/apple.webp';
+
+            return `
+                <div class="product-card">
+                    <div class="product-img">
+                        <img src="${imageSrc}" alt="${product.title}" loading="eager" decoding="sync">
+                    </div>
+                    <div class="product-info">
+                        <h3>${product.title}</h3>
+                        <p${descClass} style="${product.descriptionClass ? '' : 'color: #64748b; margin: 0.5rem 0;'}">${product.description}</p>
+                        <div class="price">${product.priceHtml}</div>
+                        <button class="btn btn-primary${buttonClass}" style="width: 100%; margin-top: 1rem;">${product.buttonLabel}</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function buildProductImagePath(fileName) {
+            return `./assets/products/${fileName}`;
+        }
+
+        function buildTestProducts(totalCount = 100) {
+            const products = [
+                {
+                    imageSrc: buildProductImagePath('red-apple-fruits.jpg'),
+                    title: '유기농 사과 세트',
+                    description: '신선한 경북 사과 10kg',
+                    priceHtml: '55,000원',
+                    buttonLabel: '장바구니 담기'
+                },
+                {
+                    imageSrc: buildProductImagePath('assorted-breads.jpg'),
+                    title: '프리미엄 베이커리 세트 (가정용/피크닉용/단체주문환영)',
+                    description: '이 텍스트는 너무 길어서 레이아웃을 뚫고 나가는 심각한 UI 결함이 있습니다.',
+                    descriptionClass: 'bug-overflow',
+                    priceHtml: '12,000원',
+                    buttonLabel: '구매하기'
+                },
+                {
+                    imageSrc: buildProductImagePath('beef-steak.webp'),
+                    title: '냉장 숙성 비프 스테이크',
+                    description: '프리미엄 냉장 육류 기획전 상품',
+                    priceHtml: '245,000원',
+                    buttonLabel: '품절 (클릭 불가)',
+                    buttonClass: 'bug-hidden-btn'
+                },
+                {
+                    imageSrc: buildProductImagePath('nescafe-coffee.webp'),
+                    title: '프리미엄 원두 커피 기획전',
+                    description: '브루잉용 원두와 머그 연출 컷이 포함된 대표 상품입니다.',
+                    priceHtml: '<span class="bug-wrong-calc">35,000원</span><span style="color: #2563eb;">0원 (???)</span>',
+                    buttonLabel: '이득보기'
+                }
+            ];
+
+            const productPool = [
+                { title: '담백한 식빵 모음', description: '아침 식사용으로 잘 팔리는 베이커리 묶음입니다.', imageSrc: buildProductImagePath('assorted-breads.jpg') },
+                { title: '제주 감귤 주스', description: '과즙 함량을 강조한 시원한 음료 상품입니다.', imageSrc: buildProductImagePath('orange-juice.jpg') },
+                { title: '신선 우유', description: '냉장 배송 테스트에 자주 쓰는 우유 카드입니다.', imageSrc: buildProductImagePath('milk.webp') },
+                { title: '방목 유정란', description: '계란 이미지 렌더링 품질을 확인하기 좋은 카드입니다.', imageSrc: buildProductImagePath('eggs.webp') },
+                { title: '허니 글라스 보틀', description: '유리병 반사 표현이 포함된 테스트 상품입니다.', imageSrc: buildProductImagePath('honey-jar.webp') },
+                { title: '키위 박스', description: '과일 단면과 입체감이 잘 보이는 카드입니다.', imageSrc: buildProductImagePath('kiwi.webp') },
+                { title: '프리미엄 아이스크림', description: '텍스처와 라벨이 함께 보이는 냉동 상품입니다.', imageSrc: buildProductImagePath('ice-cream.webp') },
+                { title: '프리미엄 식용유', description: '플라스틱 용기와 라벨 선명도를 보기 좋은 카드입니다.', imageSrc: buildProductImagePath('cooking-oil.webp') },
+                { title: '레드 애플 묶음', description: '색 대비가 강한 과일 이미지 테스트용 카드입니다.', imageSrc: buildProductImagePath('apple.webp') },
+                { title: '스테이크 플래터', description: '어두운 색상과 지방 표현이 섞인 육류 카드입니다.', imageSrc: buildProductImagePath('beef-steak.webp') },
+                { title: '아메리카노 원두', description: '브라운 톤 제품 이미지 확인용 커피 카드입니다.', imageSrc: buildProductImagePath('nescafe-coffee.webp') },
+                { title: '과즙 주스팩', description: '밝은 배경 위 패키지 선명도를 확인하는 카드입니다.', imageSrc: buildProductImagePath('juice.webp') }
+            ];
+
+            for (let i = products.length; i < totalCount; i += 1) {
+                const index = i % productPool.length;
+                const price = 4900 + (i * 1370);
+                const baseProduct = productPool[index];
+
+                products.push({
+                    imageSrc: baseProduct.imageSrc,
+                    title: `테스트 상품 ${String(i + 1).padStart(3, '0')} - ${baseProduct.title}`,
+                    description: `${baseProduct.description} 캡처 품질 검증용 테스트 상품 카드 ${i + 1}번입니다.`,
+                    priceHtml: `${price.toLocaleString('ko-KR')}원`,
+                    buttonLabel: i % 7 === 0 ? '바로 구매' : '장바구니 담기'
+                });
+            }
+
+            return products.slice(0, totalCount);
+        }
+
+        function renderProductGrid(totalCount = 100) {
+            const grid = document.getElementById('productGrid');
+            const label = document.getElementById('productCountLabel');
+
+            if (!grid) {
+                return;
+            }
+
+            const products = buildTestProducts(totalCount);
+            grid.innerHTML = products.map(createProductCard).join('');
+
+            if (label) {
+                label.textContent = `${products.length}개`;
+            }
+        }
+
+        // 결함 등록은 PMOTOOLS 위젯(캡처 포함)이 처리한다. 헤더 버튼은 위젯을 호출한다.
+        function openRegister() { window.PmoDefectWidget && window.PmoDefectWidget.open(); }
+
+        renderProductGrid(100);
+    </script>
+    <!-- PMOTOOLS 결함 등록 위젯 연동 -->
+    <script src="/defect-widget/pmo-defect-widget.js" data-test-stage="통합" defer></script>
+</body>
+
+</html>

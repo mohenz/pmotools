@@ -37,6 +37,7 @@ export function AuthenticatedAppShell({
   // 로그인 화면이 제공하는 "캘린더/회의실 조회" 공개 미리보기(iframe src=".../calendar?embedded=1")는
   // 로그인 상태와 무관하게(관리자가 미리보기를 열어도) 앱 상단 메뉴 없이 콘텐츠만 보여줘야 한다.
   const isEmbedded = searchParams.get("embedded") === "1";
+  const isPopup = searchParams.get("popup") === "1";
 
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -241,6 +242,10 @@ export function AuthenticatedAppShell({
 
   if (status !== "authenticated") {
     return <main className="main" id="main-content" tabIndex={-1} aria-busy="true" />;
+  }
+
+  if (isPopup) {
+    return <main className="main popup-main" id="main-content" tabIndex={-1}>{children}</main>;
   }
 
   return (
