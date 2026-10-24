@@ -48,10 +48,11 @@ export async function getWorkLogManagementOptions(projectId: string, userId: str
   const groupIds = groups.map((group) => group.id);
   const assignees = await getPrisma().user.findMany({
     where: { deletedAt: null, groupMemberships: { some: { groupId: { in: groupIds } } } },
-    select: { id: true, userId: true, name: true },
+    select: { id: true, userId: true, name: true, groupMemberships: { where: { groupId: { in: groupIds } }, select: { group: { select: { label: true } } } } },
     orderBy: [{ name: "asc" }, { userId: "asc" }],
   });
-  return { manager, groups, assignees };
+  // 담당자 검색 팝업(PersonSearchDialog)이 업무그룹으로도 조회·구분할 수 있게 소속 그룹명을 붙인다.
+  return { manager, groups, assignees: assignees.map(({ groupMemberships, ...user }) => ({ ...user, groups: groupMemberships.map((m) => m.group.label).join(", ") })) };
 }
 
 export async function listManagedWorkLogs(projectId: string, userId: string, filters: WorkLogFilters = {}) {

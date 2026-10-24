@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ClickableTableRow } from "@/components/ClickableTableRow";
+import { PersonFilterField } from "@/components/PersonFilterField";
 import { WORK_LOG_STATUSES, workLogStatusLabel } from "@/lib/domain/work-logs";
 import type { getWorkLogManagementOptions, WorkLogListResult } from "@/lib/server/work-logs";
 
@@ -25,7 +26,7 @@ export function WorkLogManagementScreen({ result, options, filters }: { result: 
         <label>시작일<input type="date" name="dateFrom" defaultValue={filters.dateFrom} /></label>
         <label>종료일<input type="date" name="dateTo" defaultValue={filters.dateTo} /></label>
         <select name="groupId" defaultValue={filters.groupId} aria-label="업무그룹"><option value="">전체 업무그룹</option>{options.groups.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select>
-        <select name="assigneeId" defaultValue={filters.assigneeId} aria-label="담당자"><option value="">전체 담당자</option>{options.assignees.map((user) => <option value={user.id} key={user.id}>{user.name} ({user.userId})</option>)}</select>
+        <PersonFilterField name="assigneeId" initialId={filters.assigneeId} people={options.assignees} />
         <select name="status" defaultValue={filters.status} aria-label="진행상태"><option value="">전체 진행상태</option>{WORK_LOG_STATUSES.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}</select>
         <button className="button secondary" type="submit">조회</button><Link className="button ghost" href="/work-logs/manage">초기화</Link>
       </form>

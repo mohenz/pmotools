@@ -1933,6 +1933,10 @@ a.history-item:hover { background: var(--accent); }
 @media (max-width: 720px) { .ut-edit .ut-fieldset label:not(.toggle) { grid-template-columns: 1fr; } .defect-inline select, .defect-inline button { min-height: 44px; } }
 .defect-wrap { overflow-wrap: anywhere; min-width: 120px; }
 .defect-wrap.mono { min-width: 240px; }
+.person-filter { display: inline-flex; align-items: center; gap: 6px; }
+.person-filter > input[readonly] { width: 200px; min-width: 0; }
+.person-filter-button { display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; }
+.person-filter-button svg { width: 16px; height: 16px; }
 .defect-assignee { min-width: 200px; }
 .defect-assignee .defect-inline > input { flex: 1 1 220px; min-width: 0; width: auto; }
 /* 담당자 검색 공통 팝업 — 크기 고정, 결과 영역만 스크롤 */
