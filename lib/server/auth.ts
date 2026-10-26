@@ -70,6 +70,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // 상대 경로인 경우 baseUrl(localhost 등)을 강제 접두하지 않고 그대로 반환하여,
+      // 클라이언트 브라우저가 현재 접속 중인 도메인/IP(사내 서버 10.147.148.101 등)를 유지하도록 보장.
+      if (url.startsWith("/")) return url;
+      try {
+        const parsed = new URL(url);
+        if (parsed.origin === baseUrl) return url;
+      } catch {
+        /* URL 파싱 실패 시 fallback */
+      }
+      return baseUrl;
+    },
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.userId = user.id;
