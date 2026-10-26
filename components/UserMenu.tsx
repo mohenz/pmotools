@@ -41,6 +41,11 @@ export function UserMenu() {
     router.refresh();
   }
 
+  async function handleLogout() {
+    await signOut({ redirect: false });
+    window.location.href = "/login";
+  }
+
   return (
     <div className="user-menu">
       <Link className="user-profile-link" href="/settings/profile" title="나의 정보 보기">
@@ -62,7 +67,7 @@ export function UserMenu() {
         <Link href="/messages" aria-label={unread ? `초청 ${unread}건` : "초청"} title="초청" className={pathname.startsWith("/messages") ? "active header-invite-link" : "header-invite-link"}><MessageIcon aria-hidden="true" />{unread > 0 && <span className="nav-badge">{unread}</span>}</Link>
         <Link href="/settings/system" aria-label="설정" title="설정" className={settingsActive ? "active" : ""}><Settings aria-hidden="true" /></Link>
         <ThemeToggleButton />
-        <button type="button" aria-label="로그아웃" title="로그아웃" onClick={() => signOut({ callbackUrl: "/login" })}><LogOut aria-hidden="true" /></button>
+        <button type="button" aria-label="로그아웃" title="로그아웃" onClick={handleLogout}><LogOut aria-hidden="true" /></button>
       </div>
     </div>
   );

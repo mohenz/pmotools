@@ -18,11 +18,12 @@ export function SessionIdleGuard() {
     let lastWrittenAt = 0;
     let signingOut = false;
 
-    const forceSignOut = () => {
+    const forceSignOut = async () => {
       if (signingOut) return;
       signingOut = true;
       try { localStorage.removeItem(activityKey); } catch { /* storage가 차단돼도 로그아웃은 수행한다. */ }
-      void signOut({ callbackUrl: "/login?reason=idle" });
+      await signOut({ redirect: false });
+      window.location.href = "/login?reason=idle";
     };
 
     const scheduleSignOut = (lastActivityAt: number) => {
