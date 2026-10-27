@@ -4,6 +4,7 @@ import { hash } from "bcryptjs";
 import { getPrisma, writeAuditLog } from "@/lib/server/db-pg";
 import { assertAdmin } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
+import { resolveRootProjectId } from "@/lib/server/project-access";
 import type { GroupType, UserRole, UserStatus } from "@/lib/generated/prisma/client";
 
 // role = 계정 역할(User.role, 2026-09-29 계정 역할 통일). legacyProjectRole = 로그인 프로젝트에서의 이전 프로젝트별 역할(참고용, 권한 판단에 안 씀)
@@ -227,7 +228,7 @@ export async function listGroups(projectId: string, groupType?: GroupType): Prom
 }
 
 const codePattern = /^[A-Za-z][A-Za-z0-9_-]*$/;
-const createGroupSchema = z.object({ groupType: z.enum(["WORK_MODULE", "COMPANY"]), code: z.string().trim().min(1).max(50).regex(codePattern), label: z.string().trim().min(1).max(100), color: z.string().trim().max(20).nullable().optional(), sortOrder: z.number().int().min(0).max(9999), leaderId: z.string().uuid().nullable().optional() });
+const createGroupSchema = z.object({ groupType: z.enum(["WORK_MODULE", "COMPANY"]), code: z.string().trim().min(1).max(50).regex(codePattern), label: z.string().trim().min(1).max(100), color: z.string().trim().max(20).nullable().optional(), sortOrder: z.number().int().min(0).max(9999), leaderId: z.string().uuid().nullable().optional(), syncToRoot: z.boolean().optional() });
 export async function createGroup(projectId: string, adminUserId: string, input: unknown) {
   await assertAdmin(projectId, adminUserId);
   const data = createGroupSchema.parse(input);
@@ -235,8 +236,49 @@ export async function createGroup(projectId: string, adminUserId: string, input:
   if (data.leaderId) await assertProjectUser(projectId, data.leaderId);
   const existing = await prisma.groups.findFirst({ where: { projectId, groupType: data.groupType, code: { equals: data.code, mode: "insensitive" } } });
   if (existing) throw new DomainError("DUPLICATE_CODE", "동일한 그룹 코드가 이미 존재합니다.");
-  const group = await prisma.groups.create({ data: { projectId, groupType: data.groupType, code: data.code, label: data.label, color: data.color || null, sortOrder: data.sortOrder, leaderId: data.groupType === "WORK_MODULE" ? data.leaderId || null : null } });
-  await writeAuditLog(projectId, adminUserId, "GROUPS_INSERT", "groups", group.id, null, group);
+
+  const rootProjectId = await resolveRootProjectId(projectId);
+  const shouldSyncToRoot = Boolean(data.syncToRoot && data.groupType === "WORK_MODULE" && rootProjectId !== projectId);
+
+  const group = await prisma.$transaction(async (tx) => {
+    const created = await tx.groups.create({
+      data: {
+        projectId,
+        groupType: data.groupType,
+        code: data.code,
+        label: data.label,
+        color: data.color || null,
+        sortOrder: data.sortOrder,
+        leaderId: data.groupType === "WORK_MODULE" ? data.leaderId || null : null,
+      },
+    });
+
+    if (shouldSyncToRoot) {
+      const rootExisting = await tx.groups.findFirst({
+        where: { projectId: rootProjectId, groupType: data.groupType, code: { equals: data.code, mode: "insensitive" } },
+      });
+      if (!rootExisting) {
+        await tx.groups.create({
+          data: {
+            projectId: rootProjectId,
+            groupType: data.groupType,
+            code: data.code,
+            label: data.label,
+            color: data.color || null,
+            sortOrder: data.sortOrder,
+            leaderId: null,
+          },
+        });
+      }
+    }
+
+    return created;
+  });
+
+  await writeAuditLog(projectId, adminUserId, "GROUPS_INSERT", "groups", group.id, null, {
+    ...group,
+    syncToRoot: shouldSyncToRoot ? rootProjectId : false,
+  });
   return group;
 }
 

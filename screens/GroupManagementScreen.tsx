@@ -7,7 +7,7 @@ import type { GroupRow } from "@/lib/server/admin";
 import type { ProjectMemberOption } from "@/lib/server/users";
 import { WarningDialog } from "@/components/WarningDialog";
 
-export function GroupManagementScreen({ groups, groupType, members }: { groups: GroupRow[]; groupType: "WORK_MODULE" | "COMPANY"; members: ProjectMemberOption[] }) {
+export function GroupManagementScreen({ groups, groupType, members, isSubProject = false }: { groups: GroupRow[]; groupType: "WORK_MODULE" | "COMPANY"; members: ProjectMemberOption[]; isSubProject?: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState("");
   const [message, setMessage] = useState("");
@@ -16,7 +16,8 @@ export function GroupManagementScreen({ groups, groupType, members }: { groups: 
     event.preventDefault();
     const form = event.currentTarget, data = new FormData(form);
     setPending("create"); setMessage("");
-    const response = await fetch("/api/v1/admin/groups", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ groupType, code: data.get("code"), label: data.get("label"), color: data.get("color") || null, sortOrder: Number(data.get("sortOrder")), leaderId: data.get("leaderId") || null }) });
+    const syncToRoot = isSubProject && groupType === "WORK_MODULE" ? data.get("syncToRoot") === "on" : false;
+    const response = await fetch("/api/v1/admin/groups", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ groupType, code: data.get("code"), label: data.get("label"), color: data.get("color") || null, sortOrder: Number(data.get("sortOrder")), leaderId: data.get("leaderId") || null, syncToRoot }) });
     const payload = await response.json().catch(() => null);
     setPending("");
     if (!response.ok) { setMessage(payload?.error?.message ?? "그룹을 추가하지 못했습니다."); return; }
@@ -58,14 +59,30 @@ export function GroupManagementScreen({ groups, groupType, members }: { groups: 
           </form>)}
           {!groups.length && <p className="empty">등록된 그룹이 없습니다.</p>}
         </div>
-        <form className={`code-row ${groupType === "WORK_MODULE" ? "with-leader" : ""} code-create`} onSubmit={createGroup}>
-          <input name="code" aria-label="신규 그룹 코드" placeholder="코드 (예: TRACK_E)" pattern="[A-Za-z][A-Za-z0-9_-]*" required maxLength={50} />
-          <input name="label" aria-label="신규 그룹 명칭" placeholder="표시 명칭" required maxLength={100} />
-          {groupType === "WORK_MODULE" && <select name="leaderId" aria-label="신규 그룹 업무리더" defaultValue=""><option value="">업무리더 미지정</option>{members.map((member) => <option value={member.id} key={member.id}>{member.name} ({member.userId})</option>)}</select>}
-          <input name="color" aria-label="신규 그룹 색상" type="color" defaultValue="#3358E0" />
-          <input name="sortOrder" aria-label="신규 그룹 순서" type="number" min="0" max="9999" defaultValue="99" required />
-          <span />
-          <button className="button primary" type="submit" disabled={!!pending}>{pending === "create" ? "추가 중…" : "+ 그룹 추가"}</button>
+        <form className="group-create-form-wrap" onSubmit={createGroup}>
+          <div className={`code-row ${groupType === "WORK_MODULE" ? "with-leader" : ""} code-create`}>
+            <input name="code" aria-label="신규 그룹 코드" placeholder="코드 (예: TRACK_E)" pattern="[A-Za-z][A-Za-z0-9_-]*" required maxLength={50} />
+            <input name="label" aria-label="신규 그룹 명칭" placeholder="표시 명칭" required maxLength={100} />
+            {groupType === "WORK_MODULE" && <select name="leaderId" aria-label="신규 그룹 업무리더" defaultValue=""><option value="">업무리더 미지정</option>{members.map((member) => <option value={member.id} key={member.id}>{member.name} ({member.userId})</option>)}</select>}
+            <input name="color" aria-label="신규 그룹 색상" type="color" defaultValue="#3358E0" />
+            <input name="sortOrder" aria-label="신규 그룹 순서" type="number" min="0" max="9999" defaultValue="99" required />
+            <span />
+            <button className="button primary" type="submit" disabled={!!pending}>{pending === "create" ? "추가 중…" : "+ 그룹 추가"}</button>
+          </div>
+          {groupType === "WORK_MODULE" && (
+            <div className="group-sync-root-bar">
+              {isSubProject ? (
+                <label className="toggle sync-to-root-toggle" title="체크 시 최상위 통합 프로젝트에도 동일한 업무그룹이 자동 등록되어 위클리 리포트에 포함됩니다.">
+                  <input name="syncToRoot" type="checkbox" defaultChecked />
+                  <span>통합 위클리리포트에 포함 (상위 프로젝트 자동 등록)</span>
+                </label>
+              ) : (
+                <span className="sync-root-notice">
+                  ✓ 최상위 통합 프로젝트: 신규 등록되는 업무그룹은 통합 위클리 리포트 집계에 자동으로 포함됩니다.
+                </span>
+              )}
+            </div>
+          )}
         </form>
       </section>
     </div>

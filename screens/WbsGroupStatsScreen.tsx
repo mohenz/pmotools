@@ -2,7 +2,7 @@ import Link from "next/link";
 import { WbsStageChart } from "@/components/WbsStageChart";
 import type { WbsWorkGroupStats } from "@/lib/server/wbs";
 
-const pct = (value: number) => { const p = value * 100; return p > 0 && p < 1 ? p.toFixed(1) : String(Math.round(p)); };
+const pct = (value: number) => (Number.isFinite(value) ? (value * 100).toFixed(1) : "0.0");
 const fmt = (value: number) => value.toLocaleString("ko-KR");
 
 export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
@@ -32,7 +32,7 @@ export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
               <td data-numeric>{fmt(group.itemCount)}건</td>
               <td data-numeric>{pct(group.planned)}%</td>
               <td data-numeric>{pct(group.actual)}%</td>
-              <td data-numeric>{group.planned === 0 ? "-" : `${Math.round((group.actual / group.planned) * 100)}%`}</td>
+              <td data-numeric>{group.planned === 0 ? "-" : `${pct(group.actual / group.planned)}%`}</td>
               <td data-numeric><Link className="table-link" href={`/wbs/group-tasks?group=${encodeURIComponent(group.groupLabel)}&delayed=1`}>{pct(group.delayRate)}%</Link> <small>({fmt(group.delayedCount)}/{fmt(group.delayTrackedCount)})</small></td>
               <td>{group.delayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
             </tr>)}</tbody>
@@ -42,7 +42,7 @@ export function WbsGroupStatsScreen({ stats }: { stats: WbsWorkGroupStats }) {
               <td data-numeric>{fmt(totalItems)}건</td>
               <td data-numeric>{pct(overall.planned)}%</td>
               <td data-numeric>{pct(overall.actual)}%</td>
-              <td data-numeric>{overall.planned === 0 ? "-" : `${Math.round((overall.actual / overall.planned) * 100)}%`}</td>
+              <td data-numeric>{overall.planned === 0 ? "-" : `${pct(overall.progressIndex)}%`}</td>
               <td data-numeric><Link className="table-link" href="/wbs/group-tasks?delayed=1">{pct(delayRate)}%</Link> <small>({fmt(delayedCount)}/{fmt(delayTrackedCount)})</small></td>
               <td>{overallDelayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
             </tr></tfoot>

@@ -171,6 +171,52 @@ export async function listWeeklyReportSummaries(projectId: string, filters: { q?
   return { rows: weeks.map(reportSummary), total, page, pageSize, pageCount };
 }
 
+export type WeeklyReportTargetModule = {
+  id: string;
+  code: string;
+  label: string;
+  color: string | null;
+  sortOrder: number;
+};
+
+export type WeeklyReportTargetInfo = {
+  rootProjectId: string;
+  isRoot: boolean;
+  modules: WeeklyReportTargetModule[];
+  missingInRootLabels: string[];
+};
+
+export async function getWeeklyReportTargetModules(projectId: string): Promise<WeeklyReportTargetInfo> {
+  const originalProjectId = projectId;
+  const rootProjectId = await resolveRootProjectId(projectId);
+  const prisma = getPrisma();
+
+  const rootModules = await prisma.groups.findMany({
+    where: { projectId: rootProjectId, groupType: "WORK_MODULE", isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+    select: { id: true, code: true, label: true, color: true, sortOrder: true },
+  });
+
+  let missingInRootLabels: string[] = [];
+  if (originalProjectId !== rootProjectId) {
+    const subModules = await prisma.groups.findMany({
+      where: { projectId: originalProjectId, groupType: "WORK_MODULE", isActive: true },
+      select: { code: true, label: true },
+    });
+    const rootCodeSet = new Set(rootModules.map((m) => m.code.toUpperCase()));
+    missingInRootLabels = subModules
+      .filter((sm) => !rootCodeSet.has(sm.code.toUpperCase()))
+      .map((sm) => sm.label);
+  }
+
+  return {
+    rootProjectId,
+    isRoot: originalProjectId === rootProjectId,
+    modules: rootModules,
+    missingInRootLabels,
+  };
+}
+
 const generationSchema = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12), weekOfMonth: z.number().int().min(1).max(5) });
 export async function generateWeeklyReport(projectId: string, userId: string, input: unknown) {
   const originalProjectId = projectId;
