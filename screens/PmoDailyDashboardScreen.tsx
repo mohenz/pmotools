@@ -19,9 +19,9 @@ export function PmoDailyDashboardScreen({ data, overdueActions }: { data: PmoDai
       <section aria-label="오늘의 TASK">
         <h2 className="pmo-dash-title">1. 오늘의 TASK</h2>
         <div className="kpi-grid pmo-dash-kpis">
-          <Link className="kpi" href="/wbs?status=in_progress"><span>진행</span><strong>{data.taskSummary.inProgress}</strong><small>계획기간 도래 · 미종료 · 지연 제외</small></Link>
-          <Link className="kpi" href={`/wbs?actualDueDateFrom=${data.today}&actualDueDateTo=${data.today}`}><span>종료</span><strong>{data.taskSummary.doneToday}</strong><small>오늘 실적종료일 등록</small></Link>
-          <Link className="kpi" href="/wbs?delayed=y"><span>지연</span><strong className={data.taskSummary.delayed ? "critical" : ""}>{data.taskSummary.delayed}</strong><small>계획일 경과 · 미착수/미종료</small></Link>
+          <Link className="kpi" href="/mp-wbs?status=in_progress"><span>진행</span><strong>{data.taskSummary.inProgress}</strong><small>계획기간 도래 · 미종료 · 지연 제외</small></Link>
+          <Link className="kpi" href={`/mp-wbs?actualDueDateFrom=${data.today}&actualDueDateTo=${data.today}`}><span>종료</span><strong>{data.taskSummary.doneToday}</strong><small>오늘 실적종료일 등록</small></Link>
+          <Link className="kpi" href="/mp-wbs?delayed=y"><span>지연</span><strong className={data.taskSummary.delayed ? "critical" : ""}>{data.taskSummary.delayed}</strong><small>계획일 경과 · 미착수/미종료</small></Link>
         </div>
       </section>
 
@@ -50,7 +50,7 @@ export function PmoDailyDashboardScreen({ data, overdueActions }: { data: PmoDai
         <div className="table-wrap"><table><thead><tr><th>업무그룹</th><th>Task</th><th>Task명</th><th>작업자</th><th>계획종료일</th><th>지연일수</th></tr></thead>
           <tbody>{data.delayedGroups.flatMap((group) => group.tasks.map((task, index) => <tr key={task.id}>
             {index === 0 && <td rowSpan={group.tasks.length} className="pmo-dash-group"><strong>{group.groupLabel}</strong> <small>{group.tasks.length}건</small></td>}
-            <td className="mono"><Link className="table-link" href={`/wbs/${task.id}`}>{task.code}</Link></td><td>{task.name}</td><td>{task.ownerName ?? "-"}</td><td>{dot(task.dueDate)}</td><td data-numeric className={task.delayDays ? "critical" : undefined}>{task.delayDays === null ? "-" : `${task.delayDays}일`}</td>
+            <td className="mono"><Link className="table-link" href={`/mp-wbs/${task.id}`}>{task.code}</Link></td><td>{task.name}</td><td>{task.ownerName ?? "-"}</td><td>{dot(task.dueDate)}</td><td data-numeric className={task.delayDays ? "critical" : undefined}>{task.delayDays === null ? "-" : `${task.delayDays}일`}</td>
           </tr>))}</tbody>
         </table>{!delayedTotal && <p className="empty">지연 TASK가 없습니다.</p>}</div>
       </section>
@@ -74,6 +74,6 @@ export function PmoDailyDashboardScreen({ data, overdueActions }: { data: PmoDai
 
 function TaskList({ title, tasks }: { title: string; tasks: PmoHomeTask[] }) {
   return <div className="pmo-dash-tasks"><h4>{title} <small>{tasks.length}건</small></h4>
-    {tasks.length ? <ul>{tasks.map((task) => <li key={task.id}><Link className="table-link" href={`/wbs/${task.id}`}><span className="mono">{task.code}</span> {task.name}</Link><span>{task.ownerName ?? "-"}</span><span className={`badge ${TASK_STATE[task.state].tone}`}>{TASK_STATE[task.state].label}</span></li>)}</ul> : <p className="pmo-dash-none">해당 TASK 없음</p>}
+    {tasks.length ? <ul>{tasks.map((task) => <li key={task.id}><Link className="table-link" href={`/mp-wbs/${task.id}`}><span className="mono">{task.code}</span> {task.name}</Link><span>{task.ownerName ?? "-"}</span><span className={`badge ${TASK_STATE[task.state].tone}`}>{TASK_STATE[task.state].label}</span></li>)}</ul> : <p className="pmo-dash-none">해당 TASK 없음</p>}
   </div>;
 }
