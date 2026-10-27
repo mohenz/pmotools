@@ -63,12 +63,12 @@ export async function searchAll(projectId: string, query: string, limitPerGroup:
   ]);
 
   const groups: SearchResultGroup[] = [
-    { type: "user", label: "사용자", items: members.map((member) => ({ id: member.user.id, title: member.user.name, snippet: member.user.department || member.user.jobTitle || "", meta: member.user.userId, href: `/wbs/by-owner/${member.user.userId}` })) },
-    { type: "wbs", label: "WBS Task", items: wbsItems.map((item) => ({ id: item.id, title: item.name, snippet: snippetOf(item.description), meta: item.displayId, href: `/wbs/${item.id}` })) },
+    { type: "user", label: "사용자", items: members.map((member) => ({ id: member.user.id, title: member.user.name, snippet: member.user.department || member.user.jobTitle || "", meta: member.user.userId, href: `/mp-wbs/by-owner/${member.user.userId}` })) },
+    { type: "wbs", label: "WBS Task", items: wbsItems.map((item) => ({ id: item.id, title: item.name, snippet: snippetOf(item.description), meta: item.displayId, href: `/mp-wbs/${item.id}` })) },
     { type: "issue", label: "이슈", items: issues.map((item) => ({ id: item.id, title: item.title, snippet: snippetOf(item.description || item.responseContent), meta: item.displayId, href: `/issues/${item.id}` })) },
     { type: "requirement", label: "요구사항", items: requirements.map((item) => ({ id: item.id, title: item.title, snippet: snippetOf(item.content), meta: item.displayId, href: `/requirements/${item.id}` })) },
     { type: "management-task", label: "관리업무", items: managementTasks.map((item) => ({ id: item.id, title: item.name, snippet: snippetOf(item.purpose || item.impactAnalysis), meta: item.displayId, href: `/management-tasks/${item.id}` })) },
-    { type: "work-log", label: "WBS상세내용", items: workLogs.map((item) => ({ id: item.id, title: snippetOf(item.workContent, 40), snippet: snippetOf(item.referenceContent || item.notes), meta: `${dateStr(item.workDate)} · ${item.displayId}`, href: `/work-logs/${item.id}` })) },
+    { type: "work-log", label: "WBS상세내용", items: workLogs.map((item) => ({ id: item.id, title: snippetOf(item.workContent, 40), snippet: snippetOf(item.referenceContent || item.notes), meta: `${dateStr(item.workDate)} · ${item.displayId}`, href: `/mp-work-logs/${item.id}` })) },
     { type: "pmo-daily", label: "PMO Daily", items: delayedTasks.map((item) => ({ id: item.id, title: snippetOf(item.description, 40), snippet: snippetOf(item.delayReason || item.responsePlan), meta: `${dateStr(item.snapshot.reportDate)} · ${item.displayId}`, href: `/pmo-daily/${dateStr(item.snapshot.reportDate)}` })) },
     { type: "announcement", label: "공지사항", items: announcements.map((item) => ({ id: item.id, title: item.title, snippet: snippetOf(item.content), meta: dateStr(item.publishedAt), href: `/announcements/${item.id}` })) },
   ];
