@@ -2,7 +2,7 @@
 import { WbsStageChart } from "@/components/WbsStageChart";
 import type { WbsStats } from "@/lib/server/mp/wbs";
 
-const pct = (value: number) => { const p = value * 100; return p > 0 && p < 1 ? p.toFixed(1) : String(Math.round(p)); };
+const pct = (value: number) => (Number.isFinite(value) ? (value * 100).toFixed(1) : "0.0");
 const fmt = (value: number) => value.toLocaleString("ko-KR");
 
 export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
@@ -28,7 +28,7 @@ export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
               <td data-numeric>{fmt(stage.itemCount)}건</td>
               <td data-numeric>{fmt(stage.plannedCount)}건</td>
               <td data-numeric>{fmt(stage.actualCount)}건</td>
-              <td data-numeric>{stage.scheduleProgress}%</td>
+              <td data-numeric>{pct(stage.planned === 0 ? 0 : stage.actual / stage.planned)}%</td>
               <td>{stage.delayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
               <td data-numeric>{pct(stage.planned)}%</td>
               <td data-numeric>{pct(stage.actual)}%</td>
@@ -40,7 +40,7 @@ export function WbsStatsScreen({ stats }: { stats: WbsStats }) {
               <td data-numeric>{fmt(itemCount)}건</td>
               <td data-numeric>{fmt(stats.plannedCount)}건</td>
               <td data-numeric>{fmt(stats.actualCount)}건</td>
-              <td data-numeric>{stats.scheduleProgress}%</td>
+              <td data-numeric>{pct(overall.progressIndex)}%</td>
               <td>{overallDelayed ? <span className="badge band-red">지연</span> : <span className="badge band-green">정상</span>}</td>
               <td data-numeric>{pct(overall.planned)}%</td>
               <td data-numeric>{pct(overall.actual)}%</td>

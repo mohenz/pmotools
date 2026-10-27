@@ -22,8 +22,8 @@ export function WbsStageChart({ stages }: { stages: WbsStageChartDatum[] }) {
       data: {
         labels: stages.map((s) => (s.delayed ? `⚠ ${s.stage}` : s.stage)),
         datasets: [
-          { label: "예상공정율", data: stages.map((s) => Math.round(s.planned * 100)), backgroundColor: planned, borderRadius: 4, maxBarThickness: 24 },
-          { label: "공정율", data: stages.map((s) => Math.round(s.actual * 100)), backgroundColor: actual, borderRadius: 4, maxBarThickness: 24 },
+          { label: "예상공정율", data: stages.map((s) => Number((s.planned * 100).toFixed(1))), backgroundColor: planned, borderRadius: 4, maxBarThickness: 24 },
+          { label: "공정율", data: stages.map((s) => Number((s.actual * 100).toFixed(1))), backgroundColor: actual, borderRadius: 4, maxBarThickness: 24 },
         ],
       },
       options: {
@@ -38,7 +38,7 @@ export function WbsStageChart({ stages }: { stages: WbsStageChartDatum[] }) {
           legend: { position: "top", align: "end", labels: { color: foreground, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rect" } },
           tooltip: {
             backgroundColor: card, titleColor: foreground, bodyColor: foreground, borderColor: border, borderWidth: 1, padding: 8,
-            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%` },
+            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(1)}%` },
           },
         },
       },
