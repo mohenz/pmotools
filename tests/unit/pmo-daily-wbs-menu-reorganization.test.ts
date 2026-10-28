@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 describe("PMO Daily - WBS 메뉴 재구조화 (IA Reorganization) 단위 테스트", () => {
   const isPmoDailyWbsSubPath = (path: string) => {
     return (
+      path.startsWith("/mp-wbs/new") || path.startsWith("/wbs/new") ||
       path.startsWith("/mp-wbs/gantt") || path.startsWith("/wbs/gantt") ||
       path.startsWith("/mp-wbs/delay-history") || path.startsWith("/wbs/delay-history") ||
       path.startsWith("/mp-wbs/weekly-stats") || path.startsWith("/wbs/weekly-stats") ||
@@ -34,8 +35,10 @@ describe("PMO Daily - WBS 메뉴 재구조화 (IA Reorganization) 단위 테스�
   };
 
   describe("1. isPmoDailyWbsSubPath 판정 테스트", () => {
-    it("이동 대상 5대 메뉴 경로는 모두 PMO Daily 하위 경로로 판정되어야 한다", () => {
+    it("이동 대상 WBS 관리 메뉴(WBS 항목 등록 포함) 경로는 모두 PMO Daily 하위 경로로 판정되어야 한다", () => {
       const movedPaths = [
+        "/mp-wbs/new",
+        "/wbs/new",
         "/mp-wbs/gantt",
         "/wbs/gantt",
         "/mp-wbs/delay-history",
@@ -63,8 +66,6 @@ describe("PMO Daily - WBS 메뉴 재구조화 (IA Reorganization) 단위 테스�
       const wbsCorePaths = [
         "/mp-wbs",
         "/wbs",
-        "/mp-wbs/new",
-        "/wbs/new",
         "/mp-wbs/stats",
         "/wbs/stats",
         "/mp-wbs/123",
@@ -79,6 +80,13 @@ describe("PMO Daily - WBS 메뉴 재구조화 (IA Reorganization) 단위 테스�
   });
 
   describe("2. 도구 활성화(toolActive) 거버넌스 테스트", () => {
+    it("WBS 항목 등록(/new) 접속 시 PMO Daily가 활성화되고 WBS는 비활성화되어야 한다", () => {
+      expect(getToolActive("/mp-wbs/new", "pmo-daily", "/pmo-daily")).toBe(true);
+      expect(getToolActive("/mp-wbs/new", "wbs2", "/mp-wbs")).toBe(false);
+      expect(getToolActive("/wbs/new", "pmo-daily", "/pmo-daily")).toBe(true);
+      expect(getToolActive("/wbs/new", "wbs", "/wbs")).toBe(false);
+    });
+
     it("간트차트 접속 시 PMO Daily가 활성화되고 WBS는 비활성화되어야 한다", () => {
       const path = "/mp-wbs/gantt";
       expect(getToolActive(path, "pmo-daily", "/pmo-daily")).toBe(true);
@@ -125,6 +133,13 @@ describe("PMO Daily - WBS 메뉴 재구조화 (IA Reorganization) 단위 테스�
 
   describe("3. 탭 active 하이라이트 매칭 테스트", () => {
     const currentToolHref = "/pmo-daily";
+
+    it("WBS 항목 등록 탭은 /mp-wbs/new 및 /wbs/new에서 active여야 한다", () => {
+      const tabHref = "/mp-wbs/new";
+      expect(checkTabActive("/mp-wbs/new", tabHref, currentToolHref)).toBe(true);
+      expect(checkTabActive("/wbs/new", tabHref, currentToolHref)).toBe(true);
+      expect(checkTabActive("/mp-wbs/gantt", tabHref, currentToolHref)).toBe(false);
+    });
 
     it("간트차트 탭은 /mp-wbs/gantt 및 /wbs/gantt에서 active여야 한다", () => {
       const tabHref = "/mp-wbs/gantt";
