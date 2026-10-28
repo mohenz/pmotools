@@ -3,19 +3,53 @@ import type { DailyTaskState } from "@/lib/domain/pmo-daily";
 import { meetingActionStatusLabel, meetingActionStatusTone } from "@/lib/domain/meeting-action-items";
 import type { OverdueMeetingActionItems } from "@/lib/server/meeting-action-items";
 import type { PmoDailyHomeDashboard, PmoHomeTask } from "@/lib/server/pmo-daily";
+import type { WbsStats } from "@/lib/server/wbs";
 
 const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 const dot = (value: string | null) => (value ? value.replaceAll("-", ".") : "-");
 const dayLabel = (date: string) => `${date.slice(5).replace("-", ".")} (${WEEKDAY[new Date(`${date}T00:00:00Z`).getUTCDay()]})`;
+const pct = (value: number) => (Number.isFinite(value) ? (value * 100).toFixed(1) : "0.0");
+const fmt = (value: number) => value.toLocaleString("ko-KR");
 const TASK_STATE: Record<DailyTaskState, { label: string; tone: string }> = { done: { label: "종료", tone: "band-green" }, delayed: { label: "지연", tone: "band-red" }, in_progress: { label: "진행", tone: "" }, waiting: { label: "대기", tone: "" } };
 const ISSUE_STATUS: Record<string, string> = { OPEN: "발생", IN_PROGRESS: "진행" };
 const IMPORTANCE: Record<string, { label: string; tone: string }> = { high: { label: "상", tone: "band-red" }, medium: { label: "중", tone: "band-yellow" }, low: { label: "하", tone: "" } };
 
-export function PmoDailyDashboardScreen({ data, overdueActions }: { data: PmoDailyHomeDashboard; overdueActions: OverdueMeetingActionItems }) {
+export function PmoDailyDashboardScreen({ data, overdueActions, wbsStats }: { data: PmoDailyHomeDashboard; overdueActions: OverdueMeetingActionItems; wbsStats?: WbsStats }) {
   const delayedTotal = data.delayedGroups.reduce((sum, group) => sum + group.tasks.length, 0);
   return <>
     <header className="topbar"><div><h1>PMO Daily 대시보드</h1><p>{data.today} ({WEEKDAY[new Date(`${data.today}T00:00:00Z`).getUTCDay()]}) 기준 · WBS·캘린더·회의실·이슈 실시간 집계</p></div><div className="topbar-actions"><Link className="button secondary" href="/pmo-daily">일자별 목록</Link><Link className="button secondary" href={`/pmo-daily/new?date=${data.today}`}>오늘 PMO Daily 작성</Link></div></header>
     <div className="content pmo-daily-content">
+      {wbsStats && (
+        <section aria-label="WBS 공정 통계">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <h2 className="pmo-dash-title" style={{ margin: 0 }}>WBS 공정 통계</h2>
+            <Link className="table-link" href="/mp-wbs/stats" style={{ fontSize: 12 }}>WBS 통계 상세 →</Link>
+          </div>
+          <div className="kpi-grid">
+            <Link className="kpi" href="/mp-wbs/stats">
+              <span>예상공정율</span>
+              <strong>{pct(wbsStats.overall.planned)}%</strong>
+              <small>계획종료 도래 ÷ 전체 ({fmt(wbsStats.plannedCount)}/{fmt(wbsStats.itemCount)}건)</small>
+            </Link>
+            <Link className="kpi" href="/mp-wbs/stats">
+              <span>공정율</span>
+              <strong>{pct(wbsStats.overall.actual)}%</strong>
+              <small>완료 ÷ 전체</small>
+            </Link>
+            <Link className="kpi" href="/mp-wbs/stats">
+              <span>진척율</span>
+              <strong className={wbsStats.overall.progressIndex < 1 ? "critical" : undefined}>{pct(wbsStats.overall.progressIndex)}%</strong>
+              <small>공정율 ÷ 예상공정율</small>
+            </Link>
+            <Link className="kpi" href="/mp-wbs/stats">
+              <span>전체 지연율</span>
+              <strong className={wbsStats.delayRate > 0 ? "critical" : undefined}>{pct(wbsStats.delayRate)}%</strong>
+              <small>지연 {fmt(wbsStats.delayedCount)}/{fmt(wbsStats.delayTrackedCount)}건</small>
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section aria-label="오늘의 TASK">
         <h2 className="pmo-dash-title">1. 오늘의 TASK</h2>
         <div className="kpi-grid pmo-dash-kpis">

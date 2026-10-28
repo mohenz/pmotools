@@ -1,6 +1,7 @@
 import { requirePmPmoContext } from "@/lib/server/context";
 import { listOverdueMeetingActionItems } from "@/lib/server/meeting-action-items";
 import { getPmoDailyHomeDashboard } from "@/lib/server/pmo-daily";
+import { getWbsStats } from "@/lib/server/wbs";
 import { PmoDailyDashboardScreen } from "@/screens/PmoDailyDashboardScreen";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,10 @@ function todayInKorea() {
 export default async function PmoDailyDashboardPage() {
   const { projectId, userId } = await requirePmPmoContext();
   const today = todayInKorea();
-  const [data, overdueActions] = await Promise.all([getPmoDailyHomeDashboard(projectId, today), listOverdueMeetingActionItems(projectId, userId, today)]);
-  return <PmoDailyDashboardScreen data={data} overdueActions={overdueActions} />;
+  const [data, overdueActions, wbsStats] = await Promise.all([
+    getPmoDailyHomeDashboard(projectId, today),
+    listOverdueMeetingActionItems(projectId, userId, today),
+    getWbsStats(projectId),
+  ]);
+  return <PmoDailyDashboardScreen data={data} overdueActions={overdueActions} wbsStats={wbsStats} />;
 }

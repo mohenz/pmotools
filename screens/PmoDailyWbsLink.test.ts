@@ -141,4 +141,53 @@ describe("PMO Daily WBS Links Verification", () => {
     // Ensure zero legacy /wbs/ links
     expect(html).not.toMatch(/href="\/wbs[\/?]/);
   });
+
+  it("PmoDailyDashboardScreen renders WBS statistics panel with 4 KPI cards when wbsStats is provided", () => {
+    const mockHomeData: PmoDailyHomeDashboard = {
+      today: "2026-10-27",
+      taskSummary: { inProgress: 15, doneToday: 4, delayed: 2 },
+      days: [],
+      meetingDays: [],
+      delayedGroups: [],
+      issues: [],
+    };
+    const mockOverdueActions: OverdueMeetingActionItems = { total: 0, rows: [] };
+    const mockWbsStats = {
+      overall: {
+        planned: 0.8524,
+        actual: 0.7245,
+        progressIndex: 0.8499,
+      },
+      itemCount: 120,
+      plannedCount: 102,
+      actualCount: 87,
+      scheduleProgress: 85,
+      delayedCount: 5,
+      delayTrackedCount: 95,
+      delayRate: 0.05263,
+      stages: [],
+    };
+
+    const rawHtml = renderToString(React.createElement(PmoDailyDashboardScreen, { data: mockHomeData, overdueActions: mockOverdueActions, wbsStats: mockWbsStats as any }));
+    const html = rawHtml.replace(/<!-- -->/g, "");
+
+    // Header and link
+    expect(html).toContain("WBS 공정 통계");
+    expect(html).toContain('href="/mp-wbs/stats"');
+
+    // 4 KPI labels and formatted values
+    expect(html).toContain("예상공정율");
+    expect(html).toContain("85.2%");
+    expect(html).toContain("102/120건");
+
+    expect(html).toContain("공정율");
+    expect(html).toContain("72.5%");
+
+    expect(html).toContain("진척율");
+    expect(html).toContain("85.0%");
+
+    expect(html).toContain("전체 지연율");
+    expect(html).toContain("5.3%");
+    expect(html).toContain("5/95건");
+  });
 });
