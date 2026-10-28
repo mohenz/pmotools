@@ -26,6 +26,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
   const isPmoDailyWbsSubPath = (path: string) => {
     return (
+      path.startsWith("/mp-wbs/new") || path.startsWith("/wbs/new") ||
       path.startsWith("/mp-wbs/gantt") || path.startsWith("/wbs/gantt") ||
       path.startsWith("/mp-wbs/delay-history") || path.startsWith("/wbs/delay-history") ||
       path.startsWith("/mp-wbs/weekly-stats") || path.startsWith("/wbs/weekly-stats") ||
@@ -96,9 +97,9 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     const moduleTabs: Record<string, {href:string;label:string}[]> = {
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks": [...(hasRestrictedToolAccess?[{href:"/management-tasks/dashboard",label:"대시보드"}]:[]),{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"},...(hasRestrictedToolAccess?[{href:"/action-items",label:"액션아이템목록조회"}]:[])],
-      "/wbs": [{href:"/wbs",label:"전체 목록"},...(isManager?[{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      "/wbs": [{href:"/wbs",label:"전체 목록"},...(isManager?[{href:"/wbs/stats",label:"통계"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       // 다중 프로젝트 메뉴(WBS2 계열) — 원본 탭과 같은 구성, 경로만 분리. 권한 탭 노출은 화면 표시용이며 실제 권한은 각 화면이 선택 프로젝트 역할로 다시 검사한다.
-      "/mp-wbs": [{href:"/mp-wbs",label:"전체 목록"},...(isManager?[{href:"/mp-wbs/new",label:"WBS 항목 등록"},{href:"/mp-wbs/stats",label:"통계"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      "/mp-wbs": [{href:"/mp-wbs",label:"전체 목록"},...(isManager?[{href:"/mp-wbs/stats",label:"통계"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       "/mp-work-logs": [{href:"/mp-work-logs",label:"WBS상세내용 목록"},{href:"/mp-work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/mp-work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/mp-requirements": [{href:"/mp-requirements",label:"요구사항정의서"},{href:"/mp-requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/mp-requirements/changes",label:"요구사항변경관리"},{href:"/mp-requirements/excel",label:"엑셀 관리"},{href:"/manuals/requirements-excel",label:"사용 메뉴얼"}]:[])],
       "/meeting-minutes": [{href:"/meeting-minutes",label:"전체 목록"},{href:"/meeting-minutes/new",label:"회의록 작성"},{href:"/meeting-minutes/action-items",label:"Action Item"}],
@@ -109,6 +110,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
         {href:"/pmo-daily/portfolio",label:"프로젝트 포트폴리오"},
         {href:`${wbsBase}/gantt`,label:"간트 차트"},
         ...(isManager?[
+          {href:`${wbsBase}/new`,label:"WBS 항목 등록"},
           {href:`${wbsBase}/delay-history`,label:"지연 이력"},
           {href:`${wbsBase}/weekly-stats`,label:"주간 통계"},
           {href:`${wbsBase}/group-stats`,label:"업무그룹별 통계"},

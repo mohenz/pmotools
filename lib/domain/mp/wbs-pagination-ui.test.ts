@@ -129,9 +129,9 @@ describe("WbsListScreen Pagination UI", () => {
     const path = require("path");
 
     const navSource = fs.readFileSync(path.resolve(__dirname, "../../../components/AppNavigation.tsx"), "utf8");
-    // WBS 항목 등록이 무조건 노출되지 않고 isManager 조건부 배열 내부에 포함되어 있는지 검증
-    expect(navSource).not.toMatch(/"\/mp-wbs":\s*\[[^\]]*\{href:"\/mp-wbs\/new",label:"WBS 항목 등록"\}[^\]]*,\.\.\.\(isManager/);
-    expect(navSource).toMatch(/\.\.\.\(isManager\?\[\{href:"\/mp-wbs\/new",label:"WBS 항목 등록"\}/);
+    // WBS 항목 등록이 WBS 메뉴에 직접 노출되지 않고 PMO Daily의 isManager 조건부 배열 내부에 포함되어 있는지 검증
+    expect(navSource).not.toMatch(/"\/mp-wbs":\s*\[[^\]]*label:"WBS 항목 등록"/);
+    expect(navSource).toMatch(/\.\.\.\(isManager\?\[\s*\{href:`\$\{wbsBase\}\/new`,label:"WBS 항목 등록"\}/);
 
     const newPageSource = fs.readFileSync(path.resolve(__dirname, "../../../app/mp-wbs/new/page.tsx"), "utf8");
     // URL 직접 접근 방어를 위해 requireManagerContext() 호출 확인 — [WBS2] 복사본은 선택 프로젝트 기준 mp/context의 가드를 써야 함
