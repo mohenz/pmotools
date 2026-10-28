@@ -23,7 +23,23 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
   const isAdmin = isSuperAdmin || role === "ADMIN";
   const isManager = isAdmin || role === "OPERATOR";
   const settingsActive = pathname.startsWith("/settings") || pathname.startsWith("/project-settings") || pathname.startsWith("/weeks") || pathname.startsWith("/activity-logs");
+  const isPmoDailyWbsSubPath = (path: string) => {
+    return (
+      path.startsWith("/mp-wbs/gantt") || path.startsWith("/wbs/gantt") ||
+      path.startsWith("/mp-wbs/delay-history") || path.startsWith("/wbs/delay-history") ||
+      path.startsWith("/mp-wbs/weekly-stats") || path.startsWith("/wbs/weekly-stats") ||
+      path.startsWith("/mp-wbs/group-stats") || path.startsWith("/wbs/group-stats") ||
+      path.startsWith("/mp-wbs/group-tasks") || path.startsWith("/wbs/group-tasks") ||
+      path.startsWith("/mp-wbs/manage") || path.startsWith("/wbs/manage") ||
+      path.startsWith("/mp-wbs/owner-conflicts") || path.startsWith("/wbs/owner-conflicts")
+    );
+  };
   const toolActive = (key: string, href: string) => {
+    if (key === "pmo-daily") return pathname.startsWith("/pmo-daily") || isPmoDailyWbsSubPath(pathname);
+    if (key === "wbs" || key === "wbs2") {
+      if (isPmoDailyWbsSubPath(pathname)) return false;
+      return pathname.startsWith(href);
+    }
     if (key === "issues") return pathname.startsWith("/issues");
     if (key === "management-tasks") return pathname.startsWith("/management-tasks") || pathname.startsWith("/action-items");
     return pathname.startsWith(href);
@@ -74,16 +90,30 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
 
   const currentTool = tools.find((tool) => tool.active);
   if (currentTool && currentTool.key !== "issues") {
+    const wbsBase = menuPrefs.some((m) => m.key === "wbs2") || !menuPrefs.some((m) => m.key === "wbs") ? "/mp-wbs" : "/wbs";
     const moduleTabs: Record<string, {href:string;label:string}[]> = {
       "/portfolio": [{href:"/portfolio",label:"프로젝트 현황"},{href:"/calendar",label:"캘린더"}],
       "/management-tasks": [...(hasRestrictedToolAccess?[{href:"/management-tasks/dashboard",label:"대시보드"}]:[]),{href:"/management-tasks/new",label:"관리업무항목 등록"},{href:"/management-tasks",label:"전체 목록"},...(hasRestrictedToolAccess?[{href:"/action-items",label:"액션아이템목록조회"}]:[])],
-      "/wbs": [{href:"/wbs",label:"전체 목록"},...(isManager?[{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"},{href:"/wbs/group-stats",label:"업무그룹별 통계"},{href:"/wbs/weekly-stats",label:"주간 통계"},{href:"/wbs/delay-history",label:"지연 이력"},{href:"/wbs/manage",label:"데이터 관리"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      "/wbs": [{href:"/wbs",label:"전체 목록"},...(isManager?[{href:"/wbs/new",label:"WBS 항목 등록"},{href:"/wbs/stats",label:"통계"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       // 다중 프로젝트 메뉴(WBS2 계열) — 원본 탭과 같은 구성, 경로만 분리. 권한 탭 노출은 화면 표시용이며 실제 권한은 각 화면이 선택 프로젝트 역할로 다시 검사한다.
-      "/mp-wbs": [{href:"/mp-wbs",label:"전체 목록"},{href:"/mp-wbs/gantt",label:"간트 차트"},...(isManager?[{href:"/mp-wbs/new",label:"WBS 항목 등록"},{href:"/mp-wbs/stats",label:"통계"},{href:"/mp-wbs/group-stats",label:"업무그룹별 통계"},{href:"/mp-wbs/weekly-stats",label:"주간 통계"},{href:"/mp-wbs/delay-history",label:"지연 이력"},{href:"/mp-wbs/manage",label:"데이터 관리"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
+      "/mp-wbs": [{href:"/mp-wbs",label:"전체 목록"},...(isManager?[{href:"/mp-wbs/new",label:"WBS 항목 등록"},{href:"/mp-wbs/stats",label:"통계"}]:[]),{href:"/manuals/wbs",label:"사용 메뉴얼"}],
       "/mp-work-logs": [{href:"/mp-work-logs",label:"WBS상세내용 목록"},{href:"/mp-work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/mp-work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/mp-requirements": [{href:"/mp-requirements",label:"요구사항정의서"},{href:"/mp-requirements/statistics",label:"요구사항통계"},...(isManager?[{href:"/mp-requirements/changes",label:"요구사항변경관리"},{href:"/mp-requirements/excel",label:"엑셀 관리"},{href:"/manuals/requirements-excel",label:"사용 메뉴얼"}]:[])],
       "/meeting-minutes": [{href:"/meeting-minutes",label:"전체 목록"},{href:"/meeting-minutes/new",label:"회의록 작성"},{href:"/meeting-minutes/action-items",label:"Action Item"}],
-      "/pmo-daily": [{href:"/pmo-daily/dashboard",label:"대시보드"},{href:"/pmo-daily",label:"일자별 목록"},{href:"/pmo-daily/new",label:"신규 작성"},{href:"/pmo-daily/portfolio",label:"프로젝트 포트폴리오"},{href:"/calendar",label:"일정관리"}],
+      "/pmo-daily": [
+        {href:"/pmo-daily/dashboard",label:"대시보드"},
+        {href:"/pmo-daily",label:"일자별 목록"},
+        {href:"/pmo-daily/new",label:"신규 작성"},
+        {href:"/pmo-daily/portfolio",label:"프로젝트 포트폴리오"},
+        {href:`${wbsBase}/gantt`,label:"간트 차트"},
+        ...(isManager?[
+          {href:`${wbsBase}/delay-history`,label:"지연 이력"},
+          {href:`${wbsBase}/weekly-stats`,label:"주간 통계"},
+          {href:`${wbsBase}/group-stats`,label:"업무그룹별 통계"},
+          {href:`${wbsBase}/manage`,label:"데이터 관리"}
+        ]:[]),
+        {href:"/calendar",label:"일정관리"}
+      ],
       "/work-logs": [{href:"/work-logs",label:"WBS상세내용 목록"},{href:"/work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],
       "/weekly-progress": [{href:"/weekly-progress",label:"실적 입력·조회"},...(isManager?[{href:"/portfolio",label:"공정률 현황"}]:[]),{href:"/api/v1/work-export?type=progress",label:"Excel용 CSV"}],
@@ -96,7 +126,11 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/manuals": [{href:"/manuals",label:"전체 메뉴얼"},{href:"/manuals/pmo-daily",label:"PMO Daily"},{href:"/manuals/work-logs",label:"WBS상세내용"},{href:"/manuals/weekly-report",label:"위클리리포트"},{href:"/manuals/announcements",label:"공지사항"},{href:"/manuals/calendar",label:"캘린더"},{href:"/manuals/meeting-rooms",label:"회의실"},{href:"/manuals/wbs",label:"WBS"},{href:"/manuals/requirements-excel",label:"요구사항관리 엑셀관리"}],
     };
     return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=>{
-      const isActive = pathname === tab.href || (tab.href !== currentTool.href && pathname.startsWith(`${tab.href}/`));
+      const normPath = pathname.replace(/^\/wbs(?=\/|$)/, "/mp-wbs");
+      const normTab = tab.href.replace(/^\/wbs(?=\/|$)/, "/mp-wbs");
+      const isSubRoute = (normTab.includes("/group-stats") && normPath.includes("/group-tasks")) ||
+                         (normTab.includes("/manage") && normPath.includes("/owner-conflicts"));
+      const isActive = pathname === tab.href || normPath === normTab || (tab.href !== currentTool.href && normPath.startsWith(`${normTab}/`)) || isSubRoute;
       return <Link className={isActive ? "active" : ""} aria-current={isActive ? "page" : undefined} href={tab.href} key={tab.href}>{tab.label}</Link>;
     })}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }
