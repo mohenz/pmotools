@@ -95,7 +95,10 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/announcements": [{href:"/announcements",label:"공지사항 조회"},...(isManager?[{href:"/announcements/new",label:"공지사항 등록"}]:[])],
       "/manuals": [{href:"/manuals",label:"전체 메뉴얼"},{href:"/manuals/pmo-daily",label:"PMO Daily"},{href:"/manuals/work-logs",label:"WBS상세내용"},{href:"/manuals/weekly-report",label:"위클리리포트"},{href:"/manuals/announcements",label:"공지사항"},{href:"/manuals/calendar",label:"캘린더"},{href:"/manuals/meeting-rooms",label:"회의실"},{href:"/manuals/wbs",label:"WBS"},{href:"/manuals/requirements-excel",label:"요구사항관리 엑셀관리"}],
     };
-    return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
+    return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=>{
+      const isActive = pathname === tab.href || (tab.href !== currentTool.href && pathname.startsWith(`${tab.href}/`));
+      return <Link className={isActive ? "active" : ""} aria-current={isActive ? "page" : undefined} href={tab.href} key={tab.href}>{tab.label}</Link>;
+    })}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }
 
   if (currentTool?.key !== "issues") return null;

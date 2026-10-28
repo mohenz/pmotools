@@ -687,15 +687,29 @@ export type WbsDelayedTaskRow = {
   delayDays: number; groupLabel: string | null; ownerName: string | null; createdAt: string;
 };
 
-function clampPage(filters: { page?: number; pageSize?: number }, total: number) {
-  const pageSize = Math.min(100, Math.max(10, filters.pageSize ?? 20));
+export type WbsDelayedTaskListResult = {
+  rows: WbsDelayedTaskRow[];
+  total: number;
+  page: number;
+  pageSize: number | "all";
+  totalPages: number;
+};
+
+export function clampDelayHistoryPage(filters: { page?: number; pageSize?: number | "all" }, total: number) {
+  if (filters.pageSize === "all") {
+    return { pageSize: "all" as const, totalPages: 1, page: 1, isAll: true, take: undefined, skip: undefined };
+  }
+  const pageSize = Math.min(100, Math.max(10, typeof filters.pageSize === "number" ? filters.pageSize : 20));
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(totalPages, Math.max(1, filters.page ?? 1));
-  return { pageSize, totalPages, page };
+  return { pageSize, totalPages, page, isAll: false, take: pageSize, skip: (page - 1) * pageSize };
 }
 
 // wbsDelayedTask 로그 조회 — 등록 시점 스냅샷을 그대로 보여주고, 현재 WBS 항목으로 이동할 수 있게 path만 함께 읽는다.
-export async function listWbsDelayedTasks(projectId: string | string[], filters: { from?: string; to?: string; page?: number; pageSize?: number } = {}) {
+export async function listWbsDelayedTasks(
+  projectId: string | string[],
+  filters: { from?: string; to?: string; page?: number; pageSize?: number | "all" } = {}
+): Promise<WbsDelayedTaskListResult> {
   const prisma = getPrisma();
   const pIds = Array.isArray(projectId) ? projectId : [projectId];
   const where = {
@@ -703,10 +717,10 @@ export async function listWbsDelayedTasks(projectId: string | string[], filters:
     ...(filters.from || filters.to ? { createdAt: { ...(filters.from ? { gte: new Date(`${filters.from}T00:00:00.000Z`) } : {}), ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59.999Z`) } : {}) } } : {}),
   };
   const total = await prisma.wbsDelayedTask.count({ where });
-  const { pageSize, totalPages, page } = clampPage(filters, total);
+  const { pageSize, totalPages, page, skip, take } = clampDelayHistoryPage(filters, total);
   const rows = await prisma.wbsDelayedTask.findMany({
     where, include: { wbsItem: { select: { path: true } } }, orderBy: { createdAt: "desc" },
-    skip: (page - 1) * pageSize, take: pageSize,
+    skip, take,
   });
   return {
     rows: rows.map((row) => ({
@@ -717,6 +731,217 @@ export async function listWbsDelayedTasks(projectId: string | string[], filters:
     } satisfies WbsDelayedTaskRow)),
     total, page, pageSize, totalPages,
   };
+}
+
+export type WbsDelayedTaskStats = {
+  totalCount: number;
+  totalDelayDays: number;
+  avgDelayDays: number;
+  maxDelayDays: number;
+  affectedOwnersCount: number;
+  affectedGroupsCount: number;
+  rangeDistribution: {
+    range: string;
+    label: string;
+    count: number;
+    totalDays: number;
+    countRate: number;
+    badgeClass: string;
+  }[];
+  groupStats: {
+    groupLabel: string;
+    count: number;
+    countRate: number;
+    totalDelayDays: number;
+    avgDelayDays: number;
+    maxDelayDays: number;
+    daysRate: number;
+  }[];
+  ownerStats: {
+    ownerName: string;
+    groupLabel: string;
+    count: number;
+    totalDelayDays: number;
+    avgDelayDays: number;
+    maxDelayDays: number;
+  }[];
+  monthlyTrend: {
+    month: string;
+    count: number;
+    totalDelayDays: number;
+    avgDelayDays: number;
+  }[];
+  topDelayedTasks: {
+    id: string;
+    wbsItemId: string;
+    code: string | null;
+    name: string;
+    groupLabel: string | null;
+    ownerName: string | null;
+    plannedDueDate: string | null;
+    actualDueDate: string;
+    delayDays: number;
+    createdAt: string;
+  }[];
+};
+
+export function aggregateDelayedTaskStats(
+  rows: Array<{
+    id: string;
+    wbsItemId: string;
+    name: string;
+    plannedDueDate: Date | null;
+    actualDueDate: Date;
+    delayDays: number;
+    groupLabel: string | null;
+    ownerName: string | null;
+    createdAt: Date;
+    wbsItem: { path: string };
+  }>
+): WbsDelayedTaskStats {
+  const totalCount = rows.length;
+  const totalDelayDays = rows.reduce((sum, r) => sum + r.delayDays, 0);
+  const avgDelayDays = totalCount > 0 ? Number((totalDelayDays / totalCount).toFixed(1)) : 0;
+  const maxDelayDays = totalCount > 0 ? Math.max(...rows.map((r) => r.delayDays)) : 0;
+
+  const ownersSet = new Set<string>();
+  const groupsSet = new Set<string>();
+  for (const r of rows) {
+    if (r.ownerName) ownersSet.add(r.ownerName);
+    if (r.groupLabel) groupsSet.add(r.groupLabel);
+  }
+
+  const ranges = [
+    { range: "1~3일", label: "경미 (1~3일)", min: 1, max: 3, badgeClass: "band-blue" },
+    { range: "4~7일", label: "주의 (4~7일)", min: 4, max: 7, badgeClass: "band-yellow" },
+    { range: "8~14일", label: "경고 (8~14일)", min: 8, max: 14, badgeClass: "band-orange" },
+    { range: "15일 이상", label: "심각 (15일+)", min: 15, max: Infinity, badgeClass: "band-red" },
+  ];
+
+  const rangeDistribution = ranges.map((rng) => {
+    const matching = rows.filter((r) => r.delayDays >= rng.min && r.delayDays <= rng.max);
+    const count = matching.length;
+    const totalDays = matching.reduce((sum, r) => sum + r.delayDays, 0);
+    const countRate = totalCount > 0 ? Number(((count / totalCount) * 100).toFixed(1)) : 0;
+    return {
+      range: rng.range,
+      label: rng.label,
+      count,
+      totalDays,
+      countRate,
+      badgeClass: rng.badgeClass,
+    };
+  });
+
+  const groupMap = new Map<string, { count: number; totalDelayDays: number; maxDelayDays: number }>();
+  for (const r of rows) {
+    const label = r.groupLabel || "미지정";
+    const existing = groupMap.get(label) ?? { count: 0, totalDelayDays: 0, maxDelayDays: 0 };
+    existing.count += 1;
+    existing.totalDelayDays += r.delayDays;
+    existing.maxDelayDays = Math.max(existing.maxDelayDays, r.delayDays);
+    groupMap.set(label, existing);
+  }
+
+  const groupStats = [...groupMap.entries()]
+    .map(([groupLabel, data]) => ({
+      groupLabel,
+      count: data.count,
+      countRate: totalCount > 0 ? Number(((data.count / totalCount) * 100).toFixed(1)) : 0,
+      totalDelayDays: data.totalDelayDays,
+      avgDelayDays: Number((data.totalDelayDays / data.count).toFixed(1)),
+      maxDelayDays: data.maxDelayDays,
+      daysRate: totalDelayDays > 0 ? Number(((data.totalDelayDays / totalDelayDays) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.totalDelayDays - a.totalDelayDays || b.count - a.count);
+
+  const ownerMap = new Map<string, { groupLabel: string; count: number; totalDelayDays: number; maxDelayDays: number }>();
+  for (const r of rows) {
+    const name = r.ownerName || "미지정";
+    const existing = ownerMap.get(name) ?? { groupLabel: r.groupLabel || "-", count: 0, totalDelayDays: 0, maxDelayDays: 0 };
+    existing.count += 1;
+    existing.totalDelayDays += r.delayDays;
+    existing.maxDelayDays = Math.max(existing.maxDelayDays, r.delayDays);
+    if (r.groupLabel && existing.groupLabel === "-") {
+      existing.groupLabel = r.groupLabel;
+    }
+    ownerMap.set(name, existing);
+  }
+
+  const ownerStats = [...ownerMap.entries()]
+    .map(([ownerName, data]) => ({
+      ownerName,
+      groupLabel: data.groupLabel,
+      count: data.count,
+      totalDelayDays: data.totalDelayDays,
+      avgDelayDays: Number((data.totalDelayDays / data.count).toFixed(1)),
+      maxDelayDays: data.maxDelayDays,
+    }))
+    .sort((a, b) => b.totalDelayDays - a.totalDelayDays || b.count - a.count)
+    .slice(0, 10);
+
+  const monthMap = new Map<string, { count: number; totalDelayDays: number }>();
+  for (const r of rows) {
+    const ym = r.createdAt.toISOString().slice(0, 7);
+    const existing = monthMap.get(ym) ?? { count: 0, totalDelayDays: 0 };
+    existing.count += 1;
+    existing.totalDelayDays += r.delayDays;
+    monthMap.set(ym, existing);
+  }
+
+  const monthlyTrend = [...monthMap.entries()]
+    .map(([month, data]) => ({
+      month,
+      count: data.count,
+      totalDelayDays: data.totalDelayDays,
+      avgDelayDays: Number((data.totalDelayDays / data.count).toFixed(1)),
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  const topDelayedTasks = [...rows]
+    .sort((a, b) => b.delayDays - a.delayDays || b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 5)
+    .map((r) => ({
+      id: r.id,
+      wbsItemId: r.wbsItemId,
+      code: codeFromPath(r.wbsItem.path),
+      name: r.name,
+      groupLabel: r.groupLabel,
+      ownerName: r.ownerName,
+      plannedDueDate: dateStr(r.plannedDueDate),
+      actualDueDate: dateStr(r.actualDueDate)!,
+      delayDays: r.delayDays,
+      createdAt: r.createdAt.toISOString(),
+    }));
+
+  return {
+    totalCount,
+    totalDelayDays,
+    avgDelayDays,
+    maxDelayDays,
+    affectedOwnersCount: ownersSet.size,
+    affectedGroupsCount: groupsSet.size,
+    rangeDistribution,
+    groupStats,
+    ownerStats,
+    monthlyTrend,
+    topDelayedTasks,
+  };
+}
+
+export async function getWbsDelayedTaskStats(projectId: string | string[], filters: { from?: string; to?: string } = {}) {
+  const prisma = getPrisma();
+  const pIds = Array.isArray(projectId) ? projectId : [projectId];
+  const where = {
+    projectId: { in: pIds },
+    ...(filters.from || filters.to ? { createdAt: { ...(filters.from ? { gte: new Date(`${filters.from}T00:00:00.000Z`) } : {}), ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59.999Z`) } : {}) } } : {}),
+  };
+  const rows = await prisma.wbsDelayedTask.findMany({
+    where,
+    include: { wbsItem: { select: { path: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return aggregateDelayedTaskStats(rows);
 }
 
 const resolveOwnerAmbiguitySchema = z.object({ ownerUserId: z.string().uuid() });
