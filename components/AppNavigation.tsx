@@ -171,7 +171,10 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
         </div>
       );
     }
-    return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=><Link className={pathname===tab.href?"active":""} href={tab.href} key={tab.href}>{tab.label}</Link>)}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
+    return <div className="workspace-nav"><strong className="workspace-tool-name">{currentTool.label}</strong><nav className="tool-tabs" aria-label={`${currentTool.label} 기능`}>{moduleTabs[currentTool.href].map((tab)=>{
+      const isActive = pathname === tab.href || (tab.href !== currentTool.href && pathname.startsWith(`${tab.href}/`));
+      return <Link className={isActive ? "active" : ""} aria-current={isActive ? "page" : undefined} href={tab.href} key={tab.href}>{tab.label}</Link>;
+    })}</nav><Link className="mobile-global-link" href="/settings/system">설정</Link></div>;
   }
 
   if (currentTool?.key !== "issues") return null;

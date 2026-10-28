@@ -5,10 +5,21 @@ import { WbsDelayHistoryScreen } from "@/screens/mp/WbsDelayHistoryScreen";
 
 export const dynamic = "force-dynamic";
 
-export default async function WbsDelayHistoryPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; page?: string }> }) {
+export default async function WbsDelayHistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; page?: string; pageSize?: string }>;
+}) {
   const scope = await getMpScope();
   const q = await searchParams;
-  const filters = { from: q.from, to: q.to, page: q.page ? Number(q.page) : 1 };
+  const pageSizeParam = q.pageSize;
+  const pageSize: number | "all" = pageSizeParam === "all"
+    ? "all"
+    : typeof pageSizeParam === "string" && [20, 40, 60, 80, 100].includes(Number(pageSizeParam))
+    ? Number(pageSizeParam)
+    : 20;
+  const page = typeof q.page === "string" ? Number(q.page) || 1 : 1;
+  const filters = { from: q.from, to: q.to, page, pageSize };
   const targetId = scope.isTopLevel ? scope.projects.map((p) => p.id) : scope.context.projectId;
   const result = await listWbsDelayedTasks(targetId, filters);
   return <WbsDelayHistoryScreen result={result} filters={filters} />;
