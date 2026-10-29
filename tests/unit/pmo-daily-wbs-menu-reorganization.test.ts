@@ -173,4 +173,54 @@ describe("PMO Daily - WBS 메뉴 재구조화 (IA Reorganization) 단위 테스�
       expect(checkTabActive("/mp-wbs/gantt", tabHref, currentToolHref)).toBe(false);
     });
   });
+
+  describe("4. PMO Daily 하위 탭 순서 및 명칭 거버넌스 테스트 (2026-10-29)", () => {
+    const getPmoDailyTabs = (isManager: boolean, wbsBase = "/mp-wbs") => [
+      { href: "/pmo-daily/dashboard", label: "대시보드" },
+      { href: "/pmo-daily/portfolio", label: "프로젝트현황" },
+      { href: "/pmo-daily", label: "일자별 목록" },
+      { href: "/pmo-daily/new", label: "신규 작성" },
+      ...(isManager ? [
+        { href: `${wbsBase}/group-stats`, label: "업무그룹별 통계" },
+        { href: `${wbsBase}/weekly-stats`, label: "주간 통계" },
+      ] : []),
+      { href: `${wbsBase}/gantt`, label: "간트 차트" },
+      ...(isManager ? [
+        { href: `${wbsBase}/delay-history`, label: "지연 이력" },
+        { href: `${wbsBase}/manage`, label: "데이터 관리" },
+        { href: `${wbsBase}/new`, label: "WBS 항목 등록" },
+      ] : []),
+    ];
+
+    it("관리자(isManager=true) 기준 정확히 10개의 메뉴가 지정된 순서와 명칭대로 배치되어야 한다", () => {
+      const tabs = getPmoDailyTabs(true, "/mp-wbs");
+      expect(tabs.length).toBe(10);
+      expect(tabs.map(t => t.label)).toEqual([
+        "대시보드",
+        "프로젝트현황",
+        "일자별 목록",
+        "신규 작성",
+        "업무그룹별 통계",
+        "주간 통계",
+        "간트 차트",
+        "지연 이력",
+        "데이터 관리",
+        "WBS 항목 등록",
+      ]);
+    });
+
+    it("일정관리 메뉴는 완전히 제거되어야 한다", () => {
+      const tabs = getPmoDailyTabs(true);
+      expect(tabs.some(t => t.label === "일정관리")).toBe(false);
+      expect(tabs.some(t => t.href === "/calendar")).toBe(false);
+    });
+
+    it("기존 '프로젝트 포트폴리오'는 '프로젝트현황'으로 명칭이 변경되어야 한다", () => {
+      const tabs = getPmoDailyTabs(true);
+      expect(tabs.some(t => t.label === "프로젝트 포트폴리오")).toBe(false);
+      const portfolioTab = tabs.find(t => t.href === "/pmo-daily/portfolio");
+      expect(portfolioTab).toBeDefined();
+      expect(portfolioTab?.label).toBe("프로젝트현황");
+    });
+  });
 });

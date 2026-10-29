@@ -104,7 +104,7 @@ export function ProjectPortfolioScreen({ data }: { data: ProjectPortfolio }) {
 
   return <>
     <header className="topbar">
-      <div><h1>프로젝트 포트폴리오</h1><p>대표 프로젝트: {data.rootName} · 하위 {data.rows.length - 1}개 · 기준 {new Date(data.asOf).toLocaleString("ko-KR")}</p></div>
+      <div><h1>프로젝트현황</h1><p>대표 프로젝트: {data.rootName} · 하위 {data.rows.length - 1}개 · 기준 {new Date(data.asOf).toLocaleString("ko-KR")}</p></div>
       <div className="topbar-actions"><button type="button" className="button secondary" onClick={() => router.refresh()}>새로고침</button></div>
     </header>
     <div className="content project-portfolio">

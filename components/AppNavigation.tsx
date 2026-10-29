@@ -103,18 +103,19 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/meeting-minutes": [{href:"/meeting-minutes",label:"전체 목록"},{href:"/meeting-minutes/new",label:"회의록 작성"},{href:"/meeting-minutes/action-items",label:"Action Item"}],
       "/pmo-daily": [
         {href:"/pmo-daily/dashboard",label:"대시보드"},
+        {href:"/pmo-daily/portfolio",label:"프로젝트현황"},
         {href:"/pmo-daily",label:"일자별 목록"},
         {href:"/pmo-daily/new",label:"신규 작성"},
-        {href:"/pmo-daily/portfolio",label:"프로젝트 포트폴리오"},
+        ...(isManager?[
+          {href:`${wbsBase}/group-stats`,label:"업무그룹별 통계"},
+          {href:`${wbsBase}/weekly-stats`,label:"주간 통계"}
+        ]:[]),
         {href:`${wbsBase}/gantt`,label:"간트 차트"},
         ...(isManager?[
-          {href:`${wbsBase}/new`,label:"WBS 항목 등록"},
           {href:`${wbsBase}/delay-history`,label:"지연 이력"},
-          {href:`${wbsBase}/weekly-stats`,label:"주간 통계"},
-          {href:`${wbsBase}/group-stats`,label:"업무그룹별 통계"},
-          {href:`${wbsBase}/manage`,label:"데이터 관리"}
-        ]:[]),
-        {href:"/calendar",label:"일정관리"}
+          {href:`${wbsBase}/manage`,label:"데이터 관리"},
+          {href:`${wbsBase}/new`,label:"WBS 항목 등록"}
+        ]:[])
       ],
       "/work-logs": [{href:"/work-logs",label:"WBS상세내용 목록"},{href:"/work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],
