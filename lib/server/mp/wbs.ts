@@ -6,6 +6,7 @@ import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
 import { actualProgress, childPath, CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, rollupProgressByCount, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { scheduleProgress } from "@/lib/domain/pmo-daily";
+import { analyzeWorkload, type WorkloadAnalysis } from "@/lib/domain/wbs-workload";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
@@ -536,6 +537,34 @@ export function getWbsWorkGroupStats(projectId: string | string[]) {
   )();
 }
 
+// 배치량 분석 — 원본(lib/server/wbs.ts)과 같은 계산을 다중 프로젝트 범위로 수행한다. 업무그룹 라벨에 프로젝트 코드를 붙인다.
+async function loadWbsWorkload(projectId: string | string[]): Promise<WorkloadAnalysis> {
+  const projectIds = Array.isArray(projectId) ? projectId : [projectId];
+  const [items, { groupLabelByOwner, groupSortKeyByLabel }, projectRows] = await Promise.all([
+    listWbsItems(projectId), loadOwnerGroupLabels(projectId),
+    getPrisma().project.findMany({ where: { id: { in: projectIds } }, select: { code: true, name: true, sortOrder: true } }),
+  ]);
+  // 프로젝트 사이 순서는 설정 > 프로젝트 관리 > 전체 프로젝트 목록의 노출 순서(sortOrder, 같으면 이름순)를 따른다.
+  const projectRank = new Map(projectRows.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko")).map((project, index) => [project.code, index]));
+  const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
+  const leaves = items.filter((item) => !parentIds.has(item.id));
+  return analyzeWorkload((leaves as any[]).map((item) => {
+    const baseLabel = ownerGroupLabelOf(item, groupLabelByOwner);
+    const rank = String(projectRank.get(item.projectCode ?? "") ?? 9999).padStart(4, "0");
+    return {
+      ownerKey: item.ownerUserId, ownerName: item.ownerName, groupLabel: item.projectCode ? `[${item.projectCode}] ${baseLabel}` : baseLabel,
+      groupOrder: `${rank}·${groupSortKeyByLabel.get(baseLabel) ?? "￿"}`,
+      startDate: item.startDate, dueDate: item.dueDate, completed: item.actualProgress >= 1 || item.status === "completed", actualDueDate: item.actualDueDate,
+    };
+  }));
+}
+
+export function getWbsWorkload(projectId: string | string[]) {
+  const key = Array.isArray(projectId) ? [...projectId].sort().join(",") : projectId;
+  const rootId = Array.isArray(projectId) ? projectId[0] : projectId;
+  return unstable_cache(async () => loadWbsWorkload(projectId), ["mp-wbs-workload", key], { tags: [wbsTag(rootId)], revalidate: 30 })();
+}
+
 export type WbsWeeklyGroupStat = { groupLabel: string; totalCount: number; plannedCount: number; completedCount: number; delayedCount: number; achievementRate: number; progressRate: number };
 export type WbsWeeklyStats = { startDate: string; endDate: string; overall: WbsWeeklyGroupStat; groups: WbsWeeklyGroupStat[] };
 
@@ -584,6 +613,7 @@ async function loadWbsWeeklyStats(projectId: string | string[], startDate: strin
   }
 
   const leavesByGroup = new Map<string, typeof leaves>();
+  const projectCodeByLabel = new Map<string, string>();
   for (const item of leaves as any[]) {
     const baseLabel = ownerGroupLabelOf(item, groupLabelByOwner);
     const label = item.projectCode ? `[${item.projectCode}] ${baseLabel}` : baseLabel;
@@ -594,10 +624,18 @@ async function loadWbsWeeklyStats(projectId: string | string[], startDate: strin
     const bucket = leavesByGroup.get(label) ?? [];
     bucket.push(item);
     leavesByGroup.set(label, bucket);
+    if (item.projectCode) projectCodeByLabel.set(label, item.projectCode);
   }
+  // 프로젝트 사이 순서는 설정 > 프로젝트 관리 > 전체 프로젝트 목록의 노출 순서(sortOrder, 같으면 이름순)를 따른다.
+  const projectIds = Array.isArray(projectId) ? projectId : [projectId];
+  const projectRows = await getPrisma().project.findMany({ where: { id: { in: projectIds } }, select: { code: true, name: true, sortOrder: true } });
+  const projectRank = new Map(projectRows.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko")).map((project, index) => [project.code, index]));
+  const rankOf = (groupLabel: string) => projectRank.get(projectCodeByLabel.get(groupLabel) ?? "") ?? Number.MAX_SAFE_INTEGER;
   const groups = [...leavesByGroup.entries()]
     .map(([groupLabel, rows]) => ({ groupLabel, ...buildStat(rows) }))
     .sort((a, b) => {
+      const projectOrder = rankOf(a.groupLabel) - rankOf(b.groupLabel);
+      if (projectOrder !== 0) return projectOrder;
       const codeA = groupSortKeyByLabel.get(a.groupLabel);
       const codeB = groupSortKeyByLabel.get(b.groupLabel);
       if (codeA && codeB) return codeA.localeCompare(codeB);

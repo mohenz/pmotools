@@ -537,6 +537,14 @@ body.resizing-sidebar * {
 .matrix-cell.heat-2, .matrix-cell.heat-3 { background: var(--warning-bg); color: var(--warning); }
 .matrix-cell.heat-4 { background: var(--destructive-bg); color: var(--destructive); }
 .matrix-note { max-width: 310px; margin: 0; color: var(--muted-foreground); font-size: 13px; }
+/* WBS 배치량 분석 — 월별 부하 셀(과다/여유)과 막대 */
+.panel > .matrix-note { max-width: none; margin-top: 10px; }
+td.load-cell { text-align: right; font-family: var(--font-mono); font-size: 12px; }
+td.load-cell.heavy { background: var(--destructive-bg); color: var(--destructive); font-weight: 600; }
+td.load-cell.light { background: var(--info-bg); color: var(--info); }
+td.load-cell.empty { color: var(--muted-foreground); }
+.load-bar { display: inline-block; width: 80px; height: 8px; overflow: hidden; border-radius: var(--radius-full); background: var(--muted); vertical-align: middle; }
+.load-bar i { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
 .category-list { display: grid; gap: 10px; }
 .category-row { display: grid; grid-template-columns: 90px 1fr 26px; align-items: center; gap: 9px; font-size: 12px; }
 .category-row > div { height: 8px; overflow: hidden; border-radius: var(--radius-full); background: var(--muted); }

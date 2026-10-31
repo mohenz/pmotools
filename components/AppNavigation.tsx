@@ -31,6 +31,9 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       path.startsWith("/mp-wbs/delay-history") || path.startsWith("/wbs/delay-history") ||
       path.startsWith("/mp-wbs/weekly-stats") || path.startsWith("/wbs/weekly-stats") ||
       path.startsWith("/mp-wbs/group-stats") || path.startsWith("/wbs/group-stats") ||
+      path.startsWith("/mp-wbs/analysis") || path.startsWith("/wbs/analysis") ||
+      path.startsWith("/mp-wbs/productivity") || path.startsWith("/wbs/productivity") ||
+      path.startsWith("/mp-wbs/workload") || path.startsWith("/wbs/workload") ||
       path.startsWith("/mp-wbs/group-tasks") || path.startsWith("/wbs/group-tasks") ||
       path.startsWith("/mp-wbs/manage") || path.startsWith("/wbs/manage") ||
       path.startsWith("/mp-wbs/owner-conflicts") || path.startsWith("/wbs/owner-conflicts")
@@ -107,17 +110,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
         {href:"/pmo-daily/dashboard",label:"대시보드"},
         {href:"/pmo-daily/portfolio",label:"프로젝트현황"},
         {href:"/pmo-daily",label:"일자별 목록"},
-        {href:"/pmo-daily/new",label:"신규 작성"},
-        ...(isManager?[
-          {href:`${wbsBase}/group-stats`,label:"업무그룹별 통계"},
-          {href:`${wbsBase}/weekly-stats`,label:"주간 통계"}
-        ]:[]),
-        {href:`${wbsBase}/gantt`,label:"간트 차트"},
-        ...(isManager?[
-          {href:`${wbsBase}/delay-history`,label:"지연 이력"},
-          {href:`${wbsBase}/manage`,label:"데이터 관리"},
-          {href:`${wbsBase}/new`,label:"WBS 항목 등록"}
-        ]:[])
+        {href:"/pmo-daily/new",label:"신규 작성"}
       ],
       "/work-logs": [{href:"/work-logs",label:"WBS상세내용 목록"},{href:"/work-logs/new",label:"WBS상세내용 작성"},...(canManageWorkLogs?[{href:"/work-logs/manage",label:"WBS상세내용 관리"}]:[]),{href:"/manuals/work-logs",label:"사용 메뉴얼"}],
       "/weekly-reports": [{href:"/weekly-reports",label:"리포트 목록"}],
@@ -131,7 +124,23 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
       "/manuals": [{href:"/manuals",label:"전체 메뉴얼"},{href:"/manuals/pmo-daily",label:"PMO Daily"},{href:"/manuals/work-logs",label:"WBS상세내용"},{href:"/manuals/weekly-report",label:"위클리리포트"},{href:"/manuals/announcements",label:"공지사항"},{href:"/manuals/calendar",label:"캘린더"},{href:"/manuals/meeting-rooms",label:"회의실"},{href:"/manuals/wbs",label:"WBS"},{href:"/manuals/requirements-excel",label:"요구사항관리 엑셀관리"}],
     };
     // 3단계 메뉴(2026-10-20): 상위 메뉴 → 좌측 패널의 하위 메뉴 묶음(예: 테스트 → 단위테스트) → 기능. 묶음이 없는 메뉴는 기존 탭 그대로.
+    // WBS 분석 묶음 — 간트 차트는 일반 사용자에게도 열려 있고 나머지는 관리자 전용이다.
+    const analysisTabs = (base: string) => [
+      ...(isManager ? [{href:`${base}/analysis`,label:"대시보드"}] : []),
+      {href:`${base}/gantt`,label:"간트 차트"},
+      ...(isManager ? [
+        {href:`${base}/weekly-stats`,label:"주간 통계"},
+        {href:`${base}/group-stats`,label:"업무그룹별 통계"},
+        {href:`${base}/delay-history`,label:"지연 이력"},
+        {href:`${base}/productivity`,label:"생산성"},
+        {href:`${base}/workload`,label:"인당부하"},
+        {href:`${base}/manage`,label:"데이터 관리"},
+        {href:`${base}/new`,label:"WBS 항목 등록"},
+      ] : []),
+    ];
     const moduleGroups: Record<string, {label:string;tabs:{href:string;label:string}[]}[]> = {
+      // WBS 분석(2026-11-01): PMO Daily 아래에 WBS 관련 화면을 'WBS 분석' 묶음으로 모은다.
+      "/pmo-daily": [{ label: "PMO Daily", tabs: moduleTabs["/pmo-daily"] }, { label: "WBS 분석", tabs: analysisTabs(wbsBase) }],
       "/mp-ut": [
         // 화면 2개 체계(2026-10-20 사용자 지시): 목록 + 정보확인/처리(신규 등록 포함). 이정표·설정은 메뉴에서 제외(경로는 유지).
         { label: "단위테스트", tabs: [{href:"/mp-ut",label:"단위테스트 목록"},{href:"/mp-ut/stats",label:"단위테스트 수행현황"}] },
@@ -140,7 +149,9 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
     };
     const groups = moduleGroups[currentTool.href];
     if (groups) {
-      const activeGroup = groups.find((g) => g.tabs.some((t) => pathname === t.href || pathname.startsWith(`${t.href}/`)));
+      // 상위 경로("/wbs")가 하위 경로("/wbs/workload")까지 일치하므로 가장 길게 일치하는 탭이 속한 묶음을 활성으로 본다.
+      const matchLength = (g: { tabs: { href: string }[] }) => Math.max(0, ...g.tabs.filter((t) => pathname === t.href || pathname.startsWith(`${t.href}/`)).map((t) => t.href.length));
+      const activeGroup = groups.reduce<(typeof groups)[number] | undefined>((best, g) => (matchLength(g) > (best ? matchLength(best) : 0) ? g : best), undefined);
 
       const toggleGroup = (label: string, currentExpanded: boolean) => {
         setExpandedGroups((prev) => ({
@@ -157,7 +168,7 @@ export function AppNavigation({ area, menuPrefs = [], canManageWorkLogs = false 
           </strong>
           <nav className="tool-tabs tool-tabs-grouped" aria-label={`${currentTool.label} 기능`}>
             {groups.map((g) => {
-              const isGroupActive = g.tabs.some((t) => pathname === t.href || pathname.startsWith(`${t.href}/`));
+              const isGroupActive = g === activeGroup;
               const isExpanded = expandedGroups[g.label] ?? isGroupActive;
 
               return (
