@@ -36,6 +36,20 @@ type OverrideData = { title?: string; description?: string; eventType?: string; 
 const isPriority = (value?: string): value is "HIGH" | "MEDIUM" | "LOW" => value === "HIGH" || value === "MEDIUM" || value === "LOW";
 const like = (query: string) => ({ contains: query, mode: "insensitive" }) as const;
 
+/** 기간 안의 국경일·공휴일(전사 공통 + 해당 프로젝트) — 날짜(YYYY-MM-DD) → 이름. WBS 영업일 계산과 같은 holidays 테이블을 쓴다. */
+export async function listCalendarHolidays(projectId: string, from: string, to: string): Promise<Record<string, string>> {
+  const rows = await getPrisma().holiday.findMany({
+    where: { OR: [{ projectId }, { projectId: null }], date: { gte: new Date(`${from}T00:00:00.000Z`), lte: new Date(`${to}T00:00:00.000Z`) } },
+    orderBy: [{ date: "asc" }],
+  });
+  const byDate: Record<string, string[]> = {};
+  for (const row of rows) {
+    const key = row.date.toISOString().slice(0, 10);
+    if (!byDate[key]?.includes(row.label)) (byDate[key] ??= []).push(row.label);
+  }
+  return Object.fromEntries(Object.entries(byDate).map(([key, labels]) => [key, labels.join(", ")]));
+}
+
 export async function listCalendarEvents(projectId: string, from: string, to: string, filters: CalendarSearchFilters = {}, viewerUserId?: string) {
   const prisma = getPrisma();
   const rangeFrom = new Date(`${from}T00:00:00.000Z`), rangeTo = new Date(`${to}T23:59:59.999Z`);

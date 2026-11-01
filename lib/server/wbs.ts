@@ -5,7 +5,7 @@ import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
 import { actualProgress, childPath, CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, rollupProgressByCount, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { scheduleProgress } from "@/lib/domain/pmo-daily";
-import { analyzeWorkload, type WorkloadAnalysis } from "@/lib/domain/wbs-workload";
+import { analyzeWorkload, type WorkloadAnalysis, type WorkloadTask } from "@/lib/domain/wbs-workload";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
@@ -467,15 +467,25 @@ export function getWbsWorkGroupStats(projectId: string) {
 
 // 배치량 분석 — leaf Task의 계획 일정(시작~종료)만으로 월별 배치량·담당자 간 편중을 계산한다. 완료 여부와 무관하게
 // 프로젝트 전체 기간의 "계획된 배치"를 보는 화면이라 완료 Task도 포함한다.
-async function loadWbsWorkload(projectId: string): Promise<WorkloadAnalysis> {
+async function loadWorkloadTasks(projectId: string): Promise<WorkloadTask[]> {
   const [items, { groupLabelByOwner, groupSortKeyByLabel }] = await Promise.all([listWbsItems(projectId), loadOwnerGroupLabels(projectId)]);
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  return analyzeWorkload(leaves.map((item) => ({ ownerKey: item.ownerUserId, ownerName: item.ownerName, groupLabel: ownerGroupLabelOf(item, groupLabelByOwner), groupOrder: groupSortKeyByLabel.get(ownerGroupLabelOf(item, groupLabelByOwner)), startDate: item.startDate, dueDate: item.dueDate, completed: item.actualProgress >= 1 || item.status === "completed", actualDueDate: item.actualDueDate })));
+  return leaves.map((item) => ({ ownerKey: item.ownerUserId, ownerName: item.ownerName, groupLabel: ownerGroupLabelOf(item, groupLabelByOwner), groupOrder: groupSortKeyByLabel.get(ownerGroupLabelOf(item, groupLabelByOwner)), startDate: item.startDate, dueDate: item.dueDate, completed: item.actualProgress >= 1 || item.status === "completed", actualDueDate: item.actualDueDate, taskCode: item.code, taskName: item.name, progress: item.actualProgress }));
+}
+
+async function loadWbsWorkload(projectId: string): Promise<WorkloadAnalysis> {
+  return analyzeWorkload(await loadWorkloadTasks(projectId));
 }
 
 export function getWbsWorkload(projectId: string) {
   return unstable_cache(loadWbsWorkload, ["wbs-workload"], { tags: [wbsTag(projectId)], revalidate: 30 })(projectId);
+}
+
+/** 생산성 상세 화면의 Task 목록 — 업무그룹 또는 담당자로 좁혀 필요한 건만 돌려준다(전체 Task를 캐시에 싣지 않는다). */
+export async function listWbsWorkloadTasks(projectId: string, filter: { groupLabel?: string; ownerKey?: string }): Promise<WorkloadTask[]> {
+  const tasks = await loadWorkloadTasks(projectId);
+  return tasks.filter((task) => (filter.groupLabel === undefined || task.groupLabel === filter.groupLabel) && (filter.ownerKey === undefined || task.ownerKey === filter.ownerKey));
 }
 
 export type WbsWeeklyGroupStat = { groupLabel: string; totalCount: number; plannedCount: number; completedCount: number; delayedCount: number; achievementRate: number; progressRate: number };

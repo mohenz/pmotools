@@ -6,7 +6,7 @@ import { revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
 import { actualProgress, childPath, CRITICAL_PATH_DEFAULT_MIN_WORKING_DAYS, isCriticalPathTarget, parseCriticalPathMinWorkingDays, codeFromPath, isSameOrDescendantPath, isWbsItemDelayed, levelOf, nextSegment, plannedProgress, progressIndex, rebasePath, rollupProgress, rollupProgressByCount, wbsDelayCompletion, wbsDelayRate, workingDays } from "@/lib/domain/wbs";
 import { scheduleProgress } from "@/lib/domain/pmo-daily";
-import { analyzeWorkload, type WorkloadAnalysis } from "@/lib/domain/wbs-workload";
+import { analyzeWorkload, type WorkloadAnalysis, type WorkloadTask } from "@/lib/domain/wbs-workload";
 import { getPrisma, actorNameOf, writeAuditLog } from "@/lib/server/db-pg";
 import { assertManager } from "@/lib/server/permissions";
 import { DomainError } from "@/lib/server/errors";
@@ -538,7 +538,7 @@ export function getWbsWorkGroupStats(projectId: string | string[]) {
 }
 
 // 배치량 분석 — 원본(lib/server/wbs.ts)과 같은 계산을 다중 프로젝트 범위로 수행한다. 업무그룹 라벨에 프로젝트 코드를 붙인다.
-async function loadWbsWorkload(projectId: string | string[]): Promise<WorkloadAnalysis> {
+async function loadWorkloadTasks(projectId: string | string[]): Promise<WorkloadTask[]> {
   const projectIds = Array.isArray(projectId) ? projectId : [projectId];
   const [items, { groupLabelByOwner, groupSortKeyByLabel }, projectRows] = await Promise.all([
     listWbsItems(projectId), loadOwnerGroupLabels(projectId),
@@ -548,15 +548,26 @@ async function loadWbsWorkload(projectId: string | string[]): Promise<WorkloadAn
   const projectRank = new Map(projectRows.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko")).map((project, index) => [project.code, index]));
   const parentIds = new Set(items.filter((item) => item.parentId).map((item) => item.parentId!));
   const leaves = items.filter((item) => !parentIds.has(item.id));
-  return analyzeWorkload((leaves as any[]).map((item) => {
+  return (leaves as any[]).map((item): WorkloadTask => {
     const baseLabel = ownerGroupLabelOf(item, groupLabelByOwner);
     const rank = String(projectRank.get(item.projectCode ?? "") ?? 9999).padStart(4, "0");
     return {
       ownerKey: item.ownerUserId, ownerName: item.ownerName, groupLabel: item.projectCode ? `[${item.projectCode}] ${baseLabel}` : baseLabel,
       groupOrder: `${rank}·${groupSortKeyByLabel.get(baseLabel) ?? "￿"}`,
       startDate: item.startDate, dueDate: item.dueDate, completed: item.actualProgress >= 1 || item.status === "completed", actualDueDate: item.actualDueDate,
+      taskCode: item.code, taskName: item.name, progress: item.actualProgress,
     };
-  }));
+  });
+}
+
+async function loadWbsWorkload(projectId: string | string[]): Promise<WorkloadAnalysis> {
+  return analyzeWorkload(await loadWorkloadTasks(projectId));
+}
+
+/** 생산성 상세 화면의 Task 목록 — 업무그룹 또는 담당자로 좁혀 필요한 건만 돌려준다(전체 Task를 캐시에 싣지 않는다). */
+export async function listWbsWorkloadTasks(projectId: string | string[], filter: { groupLabel?: string; ownerKey?: string }): Promise<WorkloadTask[]> {
+  const tasks = await loadWorkloadTasks(projectId);
+  return tasks.filter((task) => (filter.groupLabel === undefined || task.groupLabel === filter.groupLabel) && (filter.ownerKey === undefined || task.ownerKey === filter.ownerKey));
 }
 
 export function getWbsWorkload(projectId: string | string[]) {

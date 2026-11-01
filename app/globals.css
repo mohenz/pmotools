@@ -545,6 +545,28 @@ td.load-cell.light { background: var(--info-bg); color: var(--info); }
 td.load-cell.empty { color: var(--muted-foreground); }
 .load-bar { display: inline-block; width: 80px; height: 8px; overflow: hidden; border-radius: var(--radius-full); background: var(--muted); vertical-align: middle; }
 .load-bar i { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+.month-chart { padding: 8px 12px 0; overflow-x: auto; }
+.month-chart-inner { min-width: 420px; }
+.month-chart-plot { position: relative; display: flex; height: 200px; border-bottom: 1px solid var(--border); }
+.month-chart-col { position: relative; flex: 1 1 0; min-width: 0; padding: 0 3px; }
+.month-chart-bar { position: absolute; bottom: 0; left: 3px; right: 3px; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-sm, 4px) var(--radius-sm, 4px) 0 0; }
+.month-chart-bar i { display: block; min-height: 2px; }
+.month-chart-dot { position: absolute; left: 50%; width: 7px; height: 7px; margin: 0 0 -3.5px -3.5px; border-radius: 50%; background: var(--primary); opacity: 0.35; box-shadow: 0 0 0 2px var(--background, #fff); }
+.month-chart-total { position: absolute; left: 0; right: 0; margin-bottom: 6px; text-align: center; font-size: 11px; line-height: 1.2; color: var(--muted-foreground); }
+.month-chart-trend { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.month-chart-trend polyline { fill: none; stroke: var(--primary); stroke-opacity: 0.3; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.month-chart-axis { display: flex; padding-top: 4px; }
+.month-chart-axis span { flex: 1 1 0; min-width: 0; text-align: center; font-size: 11px; color: var(--muted-foreground); white-space: nowrap; }
+.month-chart i.done, .month-chart-legend i.done { background: var(--chart-success); }
+.month-chart i.overdue, .month-chart-legend i.overdue { background: var(--chart-destructive); }
+.month-chart i.open, .month-chart-legend i.open { background: var(--chart-planned); }
+.month-chart i.heavy, .month-chart-legend i.heavy { background: var(--chart-destructive); }
+.month-chart i.normal, .month-chart-legend i.normal { background: var(--chart-success); }
+.month-chart i.light, .month-chart-legend i.light { background: var(--chart-planned); }
+.month-chart-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 12px 12px; font-size: 12px; color: var(--muted-foreground); }
+.month-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.month-chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.month-chart-legend i.trend { height: 2px; border-radius: 0; background: var(--primary); opacity: 0.35; }
 .category-list { display: grid; gap: 10px; }
 .category-row { display: grid; grid-template-columns: 90px 1fr 26px; align-items: center; gap: 9px; font-size: 12px; }
 .category-row > div { height: 8px; overflow: hidden; border-radius: var(--radius-full); background: var(--muted); }
@@ -1000,6 +1022,11 @@ a.history-item:hover { background: var(--accent); }
 .task-card.band-yellow .task-score-panel { background: var(--warning); color: var(--warning-foreground); }
 .task-card.band-green .task-score-panel { background: var(--success); color: var(--success-foreground); }
 .kpi-grid.kpi-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.kpi-grid.kpi-grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.kpi-grid.kpi-grid-6 .kpi, .kpi-grid.kpi-compact .kpi { padding: 12px; }
+.kpi-grid.kpi-grid-6 .kpi > span, .kpi-grid.kpi-compact .kpi > span { white-space: nowrap; }
+.kpi-grid.kpi-grid-6 .kpi > strong, .kpi-grid.kpi-compact .kpi > strong { font-size: 22px; }
+.kpi-grid.kpi-compact { gap: 8px; }
 .kpi.project-score { transition: transform .12s, box-shadow .12s; }
 .kpi.project-score > span, .kpi.project-score > small { color: inherit; opacity: .82; }
 .kpi.project-score > strong { font: 900 30px/1.2 var(--font-mono); -webkit-text-stroke: 0.6px currentColor; }
@@ -1407,7 +1434,7 @@ a.history-item:hover { background: var(--accent); }
   .workspace-nav { padding: 0 16px; gap: 10px; }
   .mobile-global-link { display: block; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .kpi-grid.kpi-grid-5 { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid.kpi-grid-5, .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(2, 1fr); }
   .matrix-layout { align-items: stretch; flex-direction: column; }
   .matrix-note { max-width: none; }
   .detail-layout { grid-template-columns: 1fr; }
@@ -1456,7 +1483,7 @@ a.history-item:hover { background: var(--accent); }
   .message-row-sender, .message-row-schedule, .message-row-location-link { flex-basis: 100%; }
   .message-row-meta { flex-basis: 100%; justify-content: space-between; margin-left: 0; }
   .kpi-grid, .form-grid, .action-grid, .detail-summary dl { grid-template-columns: 1fr; }
-  .kpi-grid.kpi-grid-5 { grid-template-columns: 1fr; }
+  .kpi-grid.kpi-grid-5, .kpi-grid.kpi-grid-6 { grid-template-columns: 1fr; }
   .detail-summary dl > div:first-child { grid-column: auto; }
   .management-task-summary-table th { width: 130px; padding: 10px; }
   .management-task-summary-table td { padding: 10px 12px; }
@@ -2020,3 +2047,20 @@ a.history-item:hover { background: var(--accent); }
 .popup-main .form-panel {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
+.info-tip { position: relative; display: inline-flex; margin-left: 6px; vertical-align: middle; font: 400 13px/1.5 var(--font-sans); }
+.info-tip-button { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--muted-foreground); cursor: help; }
+.info-tip-button:hover, .info-tip-button:focus-visible { background: var(--muted); color: var(--foreground); }
+.info-tip-bubble { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; display: none; width: min(340px, 80vw); padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--foreground); box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, .12)); text-align: left; }
+.info-tip:hover .info-tip-bubble, .info-tip:focus-within .info-tip-bubble { display: block; }
+.info-tip-bubble ul { margin: 6px 0 0; padding-left: 16px; color: var(--muted-foreground); }
+.info-tip-bubble li + li { margin-top: 3px; }
+/* 캘린더 국경일·공휴일 — 날짜 숫자를 빨간색으로, 이름은 작게 덧붙인다(일정이 아니라 수정·삭제 대상이 아님). */
+.calendar-cell > .calendar-cell-head { display: flex; align-items: center; gap: 4px; min-width: 0; margin-bottom: 4px; }
+.calendar-cell-head .calendar-date { flex: none; margin-bottom: 0; }
+.calendar-holiday { min-width: 0; overflow: hidden; color: var(--destructive); font: 600 10px/1.3 var(--font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.calendar-cell.holiday .calendar-date, .calendar-time-daycol.holiday a, .calendar-time-daycol.holiday span:not(.calendar-holiday), .calendar-year-date.holiday { color: var(--destructive); }
+.calendar-time-daycol .calendar-holiday { display: block; font-style: normal; }
+.calendar-agenda-day.holiday > header { color: var(--destructive); }
+.calendar-agenda-day header .calendar-holiday { margin-left: 8px; font-size: 11px; }
+.calendar-year-date.holiday { font-weight: 700; }
+.calendar-legend i.holiday { border: 1.5px solid var(--destructive); background: transparent; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeWorkload, rateProductivity, type WorkloadTask } from "./wbs-workload";
+import { analyzeWorkload, monthlyTaskCounts, rateProductivity, taskStateOf, type WorkloadTask } from "./wbs-workload";
 
 const task = (ownerKey: string | null, startDate: string | null, dueDate: string | null, groupLabel = "개발", completed = false, actualDueDate: string | null = null): WorkloadTask => ({ ownerKey, ownerName: ownerKey, groupLabel, startDate, dueDate, completed, actualDueDate });
 
@@ -96,6 +96,40 @@ describe("rateProductivity", () => {
   it("does not rate samples that are too small to compare", () => {
     expect(rateProductivity({ dueRate: 1, grade: "C" })).toBeNull();
     expect(rateProductivity({ dueRate: null, grade: "D" })).toBeNull();
+  });
+});
+
+describe("taskStateOf", () => {
+  it("classifies done, overdue and open tasks against the as-of date", () => {
+    expect(taskStateOf({ completed: true, dueDate: "2026-01-01" }, "2026-11-01")).toBe("done");
+    expect(taskStateOf({ completed: false, dueDate: "2026-10-31" }, "2026-11-01")).toBe("overdue");
+    expect(taskStateOf({ completed: false, dueDate: "2026-11-01" }, "2026-11-01")).toBe("open");
+    expect(taskStateOf({ completed: false, dueDate: null }, "2026-11-01")).toBe("open");
+  });
+});
+
+describe("monthlyTaskCounts", () => {
+  it("splits tasks by due month, fills empty months and skips undated tasks", () => {
+    const rows = monthlyTaskCounts([
+      { completed: true, dueDate: "2026-09-10" },
+      { completed: false, dueDate: "2026-09-20" },
+      { completed: false, dueDate: "2026-11-30" },
+      { completed: false, dueDate: null },
+    ], "2026-11-01");
+    expect(rows).toEqual([
+      { month: "2026-09", done: 1, overdue: 1, open: 0, total: 2 },
+      { month: "2026-10", done: 0, overdue: 0, open: 0, total: 0 },
+      { month: "2026-11", done: 0, overdue: 0, open: 1, total: 1 },
+    ]);
+    expect(monthlyTaskCounts([], "2026-11-01")).toEqual([]);
+  });
+
+  it("uses a fixed month range and drops tasks outside it", () => {
+    const rows = monthlyTaskCounts([{ completed: true, dueDate: "2026-06-30" }, { completed: true, dueDate: "2026-08-03" }, { completed: false, dueDate: "2027-09-01" }], "2026-11-01", { from: "2026-07", to: "2027-08" });
+    expect(rows).toHaveLength(14);
+    expect(rows[0].month).toBe("2026-07");
+    expect(rows[13].month).toBe("2027-08");
+    expect(rows.reduce((sum, row) => sum + row.total, 0)).toBe(1);
   });
 });
 

@@ -1,6 +1,8 @@
 import Link from "next/link";
-import type { WorkloadAnalysis, WorkloadLevel, WorkloadPerf } from "@/lib/domain/wbs-workload";
-import { BALANCED_CV, HEAVY_RATIO, LIGHT_RATIO, NORMAL_CV, RATING_HIGH_MIN, RATING_MID_MIN, rateProductivity } from "@/lib/domain/wbs-workload";
+import type { ReactNode } from "react";
+import { InfoTip } from "@/components/InfoTip";
+import type { WorkloadAnalysis, WorkloadGroupRow, WorkloadLevel, WorkloadOwnerRow, WorkloadPerf, WorkloadTask } from "@/lib/domain/wbs-workload";
+import { BALANCED_CV, HEAVY_RATIO, LIGHT_RATIO, NORMAL_CV, RATING_HIGH_MIN, RATING_MID_MIN, monthlyTaskCounts, rateProductivity, TASK_CHART_RANGE, taskStateOf } from "@/lib/domain/wbs-workload";
 
 // WBS 분석 메뉴(대시보드·생산성·인당부하)의 세 화면. 원본(/wbs)과 다중 프로젝트(/mp-wbs)가 함께 쓰며,
 // 계산은 lib/domain/wbs-workload.ts, 데이터 조회만 경로별로 다르다.
@@ -41,9 +43,19 @@ const PerfHead = ({ showGrade = true }: { showGrade?: boolean }) => <>
   <th data-numeric>정시 완료율</th><th data-numeric>기한 경과 미완료</th><th data-numeric>부하당 월 처리</th>{showGrade ? <th>표본</th> : null}
 </>;
 
-function Header({ title, description }: { title: string; description: string }) {
-  return <header className="topbar"><div><h1>{title}</h1><p>{description}</p></div></header>;
+function Header({ title, description, tip }: { title: string; description: string; tip?: ReactNode }) {
+  return <header className="topbar"><div><h1>{title}{tip}</h1><p>{description}</p></div></header>;
 }
+
+const LOAD_TIP = <InfoTip label="인당 부하란?">
+  <strong>인당 부하</strong>란 한 사람이 한 달 동안 평균 몇 건의 Task를 동시에 진행하는지를 나타내는 값입니다.
+  <ul>
+    <li>계산: 그 달에 걸친 계획 Task의 영업일 합 ÷ 그 달 영업일 (주말만 제외, 공휴일 미반영)</li>
+    <li>예: 11월 내내 걸친 Task 2건 = 2.0, 한 건은 절반만 걸치면 1.5</li>
+    <li>과다는 그 달 배치 담당자 중앙값의 1.5배 이상, 여유는 0.5배 이하</li>
+    <li>계획 일정만으로 센 값이라 실제 투입 시간·공수·난이도는 반영하지 않으며, 담당자 미지정 Task는 제외됩니다.</li>
+  </ul>
+</InfoTip>;
 
 /** 대시보드 — 한눈에 보는 요약과 주의 대상. 세부는 생산성·인당부하 화면으로 연결한다. */
 export function WbsAnalysisDashboardScreen({ analysis, basePath }: { analysis: WorkloadAnalysis; basePath: string }) {
@@ -56,7 +68,7 @@ export function WbsAnalysisDashboardScreen({ analysis, basePath }: { analysis: W
     <Header title="WBS 분석 대시보드" description="계획 대비 업무 배분 현황과 처리 현황 요약" />
     <div className="content">
       {!months.length ? <section className="panel"><div className="empty">{EMPTY}</div></section> : <>
-        <section className="kpi-grid">
+        <section className="kpi-grid kpi-grid-6">
           <div className="kpi"><span>분석 기간</span><strong>{months.length}개월</strong><small>{analysis.rangeStart} ~ {analysis.rangeEnd}</small></div>
           <div className="kpi"><span>처리율</span><strong>{rate(analysis.perf.dueRate)}</strong><small>{analysis.asOf} 기준 기한 도래 {fmt(analysis.perf.due)}건 중 {fmt(analysis.perf.dueDone)}건 완료</small></div>
           <div className="kpi"><span>기한 경과 미완료</span><strong className={analysis.perf.overdue > 0 ? "critical" : undefined}>{fmt(analysis.perf.overdue)}건</strong><small>정시 완료율 {rate(analysis.perf.onTimeRate)}</small></div>
@@ -129,8 +141,92 @@ export function WbsAnalysisDashboardScreen({ analysis, basePath }: { analysis: W
   </>;
 }
 
+const TASK_STATE_BADGE = { done: ["band-green", "완료"], overdue: ["band-red", "기한 경과 미완료"], open: ["band-blue", "진행·예정"] } as const;
+
+/** 소속 WBS Task 현황 표 — 기한 경과 미완료 → 진행·예정 → 완료 순. 생산성·인당부하 상세가 함께 쓴다. */
+function TaskStatusPanel({ tasks, asOf, showOwner }: { tasks: WorkloadTask[]; asOf: string; showOwner: boolean }) {
+  const sorted = [...tasks].sort((a, b) => {
+    const order = { overdue: 0, open: 1, done: 2 } as const;
+    return order[taskStateOf(a, asOf)] - order[taskStateOf(b, asOf)] || (a.dueDate ?? "").localeCompare(b.dueDate ?? "") || (a.taskCode ?? "").localeCompare(b.taskCode ?? "");
+  });
+  return (
+    <section className="panel">
+      <div className="panel-head"><h2>WBS Task 현황</h2><span>{fmt(sorted.length)}건 · 기한 경과 미완료 → 진행·예정 → 완료 순</span></div>
+      {sorted.length ? <div className="table-wrap"><table>
+        <thead><tr><th>WBS 코드</th><th>Task</th>{showOwner ? <th>담당자</th> : null}<th>계획 시작</th><th>계획 종료</th><th>실적 종료</th><th data-numeric>진도율</th><th>상태</th></tr></thead>
+        <tbody>{sorted.map((task, index) => { const [tone, text] = TASK_STATE_BADGE[taskStateOf(task, asOf)]; return <tr key={`${task.taskCode ?? "task"}-${index}`}>
+          <td>{task.taskCode ?? "-"}</td>
+          <td>{task.taskName ?? "-"}</td>
+          {showOwner ? <td>{task.ownerName ?? "미지정"}</td> : null}
+          <td>{task.startDate ?? "-"}</td>
+          <td>{task.dueDate ?? "-"}</td>
+          <td>{task.actualDueDate ?? "-"}</td>
+          <td data-numeric>{task.progress === undefined ? "-" : pct(task.progress)}</td>
+          <td><span className={`badge ${tone}`}>{text}</span></td>
+        </tr>; })}</tbody>
+      </table></div> : <div className="empty">표시할 Task가 없습니다.</div>}
+      <p className="matrix-note">기한 경과 미완료 = 계획 종료일이 기준일({asOf}) 이전인데 완료되지 않은 Task. 일정이 입력되지 않은 Task는 생산성 계산에는 빠지지만 이 목록에는 함께 표시됩니다.</p>
+    </section>
+  );
+}
+
+/** 생산성 상세 — 업무그룹 또는 담당자 한 곳의 생산성 현황과 소속 WBS Task 현황. */
+export function WbsProductivityDetailScreen({ analysis, basePath, kind, row, tasks }: {
+  analysis: WorkloadAnalysis; basePath: string; kind: "group" | "owner";
+  row: { title: string; groupLabel: string; perf: WorkloadPerf; owners?: number }; tasks: WorkloadTask[];
+}) {
+  const { perf } = row;
+  const rating = rateProductivity(perf);
+  const monthly = monthlyTaskCounts(tasks, analysis.asOf, TASK_CHART_RANGE);
+  const outsideRange = tasks.filter((task) => task.dueDate && (task.dueDate.slice(0, 7) < TASK_CHART_RANGE.from || task.dueDate.slice(0, 7) > TASK_CHART_RANGE.to)).length;
+  const maxMonthTotal = Math.max(1, ...monthly.map((row) => row.total));
+  const groupHref =`${basePath}/productivity?group=${encodeURIComponent(row.groupLabel)}`;
+  return <>
+    <Header title={`${row.title} 생산성`} description={kind === "group" ? "업무그룹의 생산성 현황과 소속 WBS Task 현황" : `${row.groupLabel} · 담당자의 생산성 현황과 담당 WBS Task 현황`} />
+    <div className="content">
+      <div className="panel-head"><Link className="table-link" href={`${basePath}/productivity`}>← 생산성 분석으로</Link>{kind === "owner" ? <Link className="table-link" href={groupHref}>업무그룹 {row.groupLabel} 보기</Link> : null}</div>
+      <section className="kpi-grid kpi-grid-6">
+        <div className="kpi"><span>평가</span><strong>{rating ? RATING_BADGE[rating][1] : "평가 불가"}</strong><small>{GRADE_NOTE[perf.grade]} · 기한 도래 {fmt(perf.due)}건 기준</small></div>
+        <div className="kpi"><span>처리율</span><strong>{rate(perf.dueRate)}</strong><small>{analysis.asOf} 기준 기한 도래 {fmt(perf.due)}건 중 {fmt(perf.dueDone)}건 완료</small></div>
+        <div className="kpi"><span>영업일 가중 처리율</span><strong>{rate(perf.dayRate)}</strong><small>큰 Task를 더 크게 반영</small></div>
+        <div className="kpi"><span>정시 완료율</span><strong>{rate(perf.onTimeRate)}</strong><small>완료 {fmt(perf.doneDated)}건 중 계획 종료일 이내 {fmt(perf.doneOnTime)}건</small></div>
+        <div className="kpi"><span>기한 경과 미완료</span><strong className={perf.overdue > 0 ? "critical" : undefined}>{fmt(perf.overdue)}건</strong><small>배치 {fmt(perf.assigned)}건 · 완료 {fmt(perf.done)}건</small></div>
+        <div className="kpi"><span>부하당 월 처리</span><strong>{perf.throughput === null ? "-" : perf.throughput.toFixed(2)}</strong><small>{kind === "group" ? `${fmt(row.owners ?? 0)}명 합산` : "기준일까지 월 부하 대비 완료"}</small></div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head"><h2>월별 Task 수량</h2><span>계획 종료월 기준 · {TASK_CHART_RANGE.from} ~ {TASK_CHART_RANGE.to}{outsideRange ? ` · 기간 밖 ${fmt(outsideRange)}건 제외` : ""}</span></div>
+        {monthly.length ? <>
+          <div className="month-chart" role="img" aria-label={`계획 종료월별 Task 수량: ${monthly.map((row) => `${row.month} ${row.total}건`).join(", ")}`}>
+            <div className="month-chart-inner">
+              <div className="month-chart-plot">
+                {monthly.map((row) => { const top = (row.total / (maxMonthTotal * 1.15)) * 100; return <div className="month-chart-col" key={row.month} title={`${row.month} · 완료 ${row.done} · 기한 경과 미완료 ${row.overdue} · 진행·예정 ${row.open}`}>
+                  <div className="month-chart-bar" style={{ height: `${top}%` }}>
+                    {row.open ? <i className="open" style={{ flexGrow: row.open }} /> : null}
+                    {row.overdue ? <i className="overdue" style={{ flexGrow: row.overdue }} /> : null}
+                    {row.done ? <i className="done" style={{ flexGrow: row.done }} /> : null}
+                  </div>
+                  <span className="month-chart-dot" style={{ bottom: `${top}%` }} />
+                  <span className="month-chart-total" style={{ bottom: `${top}%` }}>{row.total || ""}</span>
+                </div>; })}
+                <svg className="month-chart-trend" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  <polyline vectorEffect="non-scaling-stroke" points={monthly.map((row, index) => `${((index + 0.5) / monthly.length) * 100},${100 - (row.total / (maxMonthTotal * 1.15)) * 100}`).join(" ")} />
+                </svg>
+              </div>
+              <div className="month-chart-axis">{monthly.map((row) => <span key={row.month}>{monthLabel(row.month)}</span>)}</div>
+            </div>
+          </div>
+          <div className="month-chart-legend"><span><i className="done" />완료</span><span><i className="overdue" />기한 경과 미완료</span><span><i className="open" />진행·예정</span><span><i className="trend" />월별 추이</span></div>
+        </> : <div className="empty">계획 종료일이 있는 Task가 없습니다.</div>}
+      </section>
+
+      <TaskStatusPanel tasks={tasks} asOf={analysis.asOf} showOwner={kind === "group"} />
+    </div>
+  </>;
+}
+
 /** 생산성 — 기준일까지 도래한 배치 대비 산출(그룹·담당자). */
-export function WbsProductivityScreen({ analysis }: { analysis: WorkloadAnalysis }) {
+export function WbsProductivityScreen({ analysis, basePath }: { analysis: WorkloadAnalysis; basePath: string }) {
   const { months, groups, owners } = analysis;
   return <>
     <Header title="WBS 생산성 분석" description="기한이 도래한 배치 대비 처리 현황 · 업무그룹과 담당자별" />
@@ -148,7 +244,7 @@ export function WbsProductivityScreen({ analysis }: { analysis: WorkloadAnalysis
           <div className="table-wrap"><table>
             <thead><tr><th>업무그룹</th><th data-numeric>인원</th><PerfHead showGrade={false} /><th>그룹 내 처리율 범위</th><th>평가</th></tr></thead>
             <tbody>{groups.map((group) => <tr key={group.groupLabel}>
-              <td>{group.groupLabel}</td>
+              <td><Link className="table-link" href={`${basePath}/productivity?group=${encodeURIComponent(group.groupLabel)}`}>{group.groupLabel}</Link></td>
               <td data-numeric>{fmt(group.owners)}명</td>
               <PerfCells perf={group.perf} showGrade={false} />
               <td>{group.rateMin === null || group.rateMax === null ? "-" : `${rate(group.rateMin)} ~ ${rate(group.rateMax)} (${group.rateCount}명)`}</td>
@@ -163,7 +259,7 @@ export function WbsProductivityScreen({ analysis }: { analysis: WorkloadAnalysis
           <div className="table-wrap"><table>
             <thead><tr><th>담당자</th><th>업무그룹</th><PerfHead /><th>평가</th></tr></thead>
             <tbody>{owners.map((owner) => <tr key={owner.ownerKey}>
-              <td>{owner.ownerName}</td>
+              <td><Link className="table-link" href={`${basePath}/productivity?owner=${encodeURIComponent(owner.ownerKey)}`}>{owner.ownerName}</Link></td>
               <td>{owner.groupLabel}</td>
               <PerfCells perf={owner.perf} />
               <RatingCell perf={owner.perf} />
@@ -177,7 +273,7 @@ export function WbsProductivityScreen({ analysis }: { analysis: WorkloadAnalysis
 }
 
 /** 인당부하 — 계획 일정만으로 본 월별 배치량과 그룹·담당자 간 편중. */
-export function WbsWorkloadScreen({ analysis }: { analysis: WorkloadAnalysis }) {
+export function WbsWorkloadScreen({ analysis, basePath }: { analysis: WorkloadAnalysis; basePath: string }) {
   const { months, timeline, groups, owners } = analysis;
   const maxPerOwner = Math.max(0, ...timeline.map((row) => row.perOwner));
   const levelClass = (level: WorkloadLevel | null) => (level === "heavy" ? "heavy" : level === "light" ? "light" : "");
@@ -189,10 +285,10 @@ export function WbsWorkloadScreen({ analysis }: { analysis: WorkloadAnalysis }) 
     return "normal";
   };
   return <>
-    <Header title="WBS 인당 부하 분석" description="프로젝트 시작부터 종료까지 계획 일정 기준 월별 업무 배분 현황과 그룹·담당자 간 편중" />
+    <Header title="WBS 인당 부하 분석" description="프로젝트 시작부터 종료까지 계획 일정 기준 월별 업무 배분 현황과 그룹·담당자 간 편중" tip={LOAD_TIP} />
     <div className="content">
       {!months.length ? <section className="panel"><div className="empty">{EMPTY}</div></section> : <>
-        <section className="kpi-grid">
+        <section className="kpi-grid kpi-grid-5 kpi-compact">
           <div className="kpi"><span>분석 기간</span><strong>{months.length}개월</strong><small>{analysis.rangeStart} ~ {analysis.rangeEnd}</small></div>
           <div className="kpi"><span>분석 Task</span><strong>{fmt(analysis.totalTasks)}건</strong><small>{analysis.excludedTasks ? `일정 미입력 ${fmt(analysis.excludedTasks)}건 제외` : "전 건 일정 입력"}</small></div>
           <div className="kpi"><span>담당자 미지정</span><strong className={analysis.unassignedTasks > 0 ? "critical" : undefined}>{fmt(analysis.unassignedTasks)}건</strong><small>부하 계산에서 빠지는 배치</small></div>
@@ -227,7 +323,7 @@ export function WbsWorkloadScreen({ analysis }: { analysis: WorkloadAnalysis }) 
           <div className="table-wrap"><table>
             <thead><tr><th>업무그룹</th><th data-numeric>인원</th><th data-numeric>Task</th>{months.map((month) => <th key={month} data-numeric>{monthLabel(month)}</th>)}<th data-numeric>최대</th></tr></thead>
             <tbody>{groups.map((group) => <tr key={group.groupLabel}>
-              <td>{group.groupLabel}</td>
+              <td><Link className="table-link" href={`${basePath}/workload?group=${encodeURIComponent(group.groupLabel)}`}>{group.groupLabel}</Link></td>
               <td data-numeric>{fmt(group.owners)}명</td>
               <td data-numeric>{fmt(group.tasks)}건</td>
               {group.loads.map((value, index) => <td key={months[index]} className={`load-cell ${value <= 0 ? "empty" : levelClass(groupLevel(value, index))}`}>{load(value)}</td>)}
@@ -242,7 +338,7 @@ export function WbsWorkloadScreen({ analysis }: { analysis: WorkloadAnalysis }) 
           <div className="table-wrap"><table>
             <thead><tr><th>담당자</th><th>업무그룹</th><th data-numeric>Task</th>{months.map((month) => <th key={month} data-numeric>{monthLabel(month)}</th>)}<th data-numeric>최대</th><th data-numeric>과다 월</th><th data-numeric>여유 월</th><th data-numeric>공백 월</th></tr></thead>
             <tbody>{owners.map((owner) => <tr key={owner.ownerKey}>
-              <td>{owner.ownerName}</td>
+              <td><Link className="table-link" href={`${basePath}/workload?owner=${encodeURIComponent(owner.ownerKey)}`}>{owner.ownerName}</Link></td>
               <td>{owner.groupLabel}</td>
               <td data-numeric>{fmt(owner.tasks)}건</td>
               {owner.loads.map((value, index) => <td key={months[index]} className={`load-cell ${value <= 0 ? "empty" : levelClass(owner.levels[index])}`}>{load(value)}</td>)}
@@ -255,6 +351,75 @@ export function WbsWorkloadScreen({ analysis }: { analysis: WorkloadAnalysis }) 
           <p className="matrix-note">과다 = 그 달 부하가 배치 담당자 중앙값의 {HEAVY_RATIO}배 이상, 여유 = {LIGHT_RATIO}배 이하(균형 판정: 변동계수 {BALANCED_CV} 이하 균형, {NORMAL_CV} 이하 보통). 공백 월 = 첫 배치와 마지막 배치 사이에 배치가 끊긴 달입니다. 계획 일정만으로 본 값이며 Task별 공수·난이도는 반영하지 않으므로 재배치 논의의 근거로만 사용하세요.</p>
         </section>
       </>}
+    </div>
+  </>;
+}
+
+const LEVEL_BADGE = { heavy: ["band-red", "과다"], normal: ["band-green", "적정"], light: ["band-blue", "여유"] } as const;
+
+/** 인당부하 상세 — 업무그룹 또는 담당자 한 곳의 월별 부하와 소속 WBS Task 현황. */
+export function WbsWorkloadDetailScreen({ analysis, basePath, group, owner, tasks }: {
+  analysis: WorkloadAnalysis; basePath: string; group?: WorkloadGroupRow; owner?: WorkloadOwnerRow; tasks: WorkloadTask[];
+}) {
+  const { months, timeline } = analysis;
+  const target = (group ?? owner)!;
+  const title = group ? group.groupLabel : owner!.ownerName;
+  const loads = target.loads;
+  // 판정 기준 — 업무그룹은 그 달 전체 인당 부하, 담당자는 그 달 배치 담당자 중앙값(인당부하 표와 같은 기준).
+  const baseline = timeline.map((row) => (group ? row.perOwner : row.median));
+  const levels: (WorkloadLevel | null)[] = group
+    ? loads.map((value, index) => (value <= 0 ? null : baseline[index] > 0 && value >= baseline[index] * HEAVY_RATIO ? "heavy" : baseline[index] > 0 && value <= baseline[index] * LIGHT_RATIO ? "light" : "normal"))
+    : owner!.levels;
+  const active = loads.filter((value) => value > 0);
+  const average = active.length ? active.reduce((sum, value) => sum + value, 0) / active.length : 0;
+  const heavy = levels.filter((level) => level === "heavy").length;
+  const light = levels.filter((level) => level === "light").length;
+  const scale = Math.max(0.01, ...loads, ...baseline) * 1.15;
+  const y = (value: number) => (value / scale) * 100;
+  const baselineName = group ? "전체 인당 부하" : "배치 담당자 중앙값";
+  return <>
+    <Header title={`${title} 인당 부하`} tip={LOAD_TIP} description={group ? "업무그룹의 월별 부하와 소속 WBS Task 현황" : `${owner!.groupLabel} · 담당자의 월별 부하와 담당 WBS Task 현황`} />
+    <div className="content">
+      <div className="panel-head"><Link className="table-link" href={`${basePath}/workload`}>← 인당부하 분석으로</Link>{owner ? <Link className="table-link" href={`${basePath}/workload?group=${encodeURIComponent(owner.groupLabel)}`}>업무그룹 {owner.groupLabel} 보기</Link> : null}</div>
+      <section className="kpi-grid kpi-grid-6">
+        {group ? <div className="kpi"><span>인원</span><strong>{fmt(group.owners)}명</strong><small>부하가 있는 담당자</small></div> : <div className="kpi"><span>공백 월</span><strong>{owner!.gapMonths ? fmt(owner!.gapMonths) : "-"}</strong><small>첫~마지막 배치 사이 끊긴 달</small></div>}
+        <div className="kpi"><span>Task</span><strong>{fmt(target.tasks)}건</strong><small>{group ? "업무그룹 소속 전체" : "담당 전체"}</small></div>
+        <div className="kpi"><span>최대 부하</span><strong>{load(target.peak)}</strong><small>{target.peakMonth ?? "-"}</small></div>
+        <div className="kpi"><span>평균 부하</span><strong>{load(average)}</strong><small>부하가 있는 {active.length}개월 평균</small></div>
+        <div className="kpi"><span>과다 월</span><strong className={heavy > 0 ? "critical" : undefined}>{heavy || "-"}</strong><small>비교값의 {HEAVY_RATIO}배 이상</small></div>
+        <div className="kpi"><span>여유 월</span><strong>{light || "-"}</strong><small>비교값의 {LIGHT_RATIO}배 이하</small></div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head"><h2>월별 부하</h2><span>{months[0]} ~ {months[months.length - 1]} · 선 = {baselineName}</span></div>
+        <div className="month-chart" role="img" aria-label={`월별 부하: ${months.map((month, index) => `${month} ${load(loads[index])}`).join(", ")}`}>
+          <div className="month-chart-inner">
+            <div className="month-chart-plot">
+              {months.map((month, index) => <div className="month-chart-col" key={month} title={`${month} · 부하 ${load(loads[index])} · ${baselineName} ${load(baseline[index])}`}>
+                <div className="month-chart-bar" style={{ height: `${y(loads[index])}%` }}>{loads[index] > 0 ? <i className={levels[index] ?? "normal"} style={{ flexGrow: 1 }} /> : null}</div>
+                <span className="month-chart-total" style={{ bottom: `${y(loads[index])}%` }}>{loads[index] > 0 ? loads[index].toFixed(1) : ""}</span>
+              </div>)}
+              <svg className="month-chart-trend" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <polyline vectorEffect="non-scaling-stroke" points={baseline.map((value, index) => `${((index + 0.5) / months.length) * 100},${100 - y(value)}`).join(" ")} />
+              </svg>
+            </div>
+            <div className="month-chart-axis">{months.map((month) => <span key={month}>{monthLabel(month)}</span>)}</div>
+          </div>
+        </div>
+        <div className="month-chart-legend"><span><i className="heavy" />과다</span><span><i className="normal" />적정</span><span><i className="light" />여유</span><span><i className="trend" />{baselineName}</span></div>
+        <div className="table-wrap"><table>
+          <thead><tr><th>월</th><th data-numeric>부하</th><th data-numeric>{baselineName}</th><th>판정</th></tr></thead>
+          <tbody>{months.map((month, index) => { const level = levels[index]; return <tr key={month}>
+            <td>{month}</td>
+            <td data-numeric>{load(loads[index])}</td>
+            <td data-numeric>{load(baseline[index])}</td>
+            <td>{level ? <span className={`badge ${LEVEL_BADGE[level][0]}`}>{LEVEL_BADGE[level][1]}</span> : "-"}</td>
+          </tr>; })}</tbody>
+        </table></div>
+        <p className="matrix-note">부하 = 그 달 {group ? "그룹원의 평균" : "한 사람"}이 평균 몇 건을 동시에 진행하는가(계획 영업일 기준). 과다·여유는 {baselineName} 대비 {HEAVY_RATIO}배 이상, {LIGHT_RATIO}배 이하입니다.</p>
+      </section>
+
+      <TaskStatusPanel tasks={tasks} asOf={analysis.asOf} showOwner={!!group} />
     </div>
   </>;
 }

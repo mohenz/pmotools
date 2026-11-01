@@ -10,7 +10,36 @@ export type WorkloadTask = {
   dueDate: string | null;
   completed: boolean;
   actualDueDate: string | null;
+  // 상세 화면(Task 목록)용 표시 정보 — 계산에는 쓰지 않는다.
+  taskCode?: string;
+  taskName?: string;
+  progress?: number; // 실적 진도율 0~1
 };
+
+/** 기준일 기준 Task 상태 — 완료 / 기한 경과 미완료 / 기한 도래 전 진행 중(미완료). */
+export type WorkloadTaskState = "done" | "overdue" | "open";
+export function taskStateOf(task: Pick<WorkloadTask, "completed" | "dueDate">, asOf: string): WorkloadTaskState {
+  if (task.completed) return "done";
+  return task.dueDate !== null && task.dueDate < asOf ? "overdue" : "open";
+}
+
+/** 생산성 상세 월별 그래프의 고정 기간(2026-07 ~ 2027-08). */
+export const TASK_CHART_RANGE = { from: "2026-07", to: "2027-08" } as const;
+export type WorkloadTaskMonth = { month: string; done: number; overdue: number; open: number; total: number };
+/** 계획 종료월별 Task 수량 — 첫 종료월~마지막 종료월을 빈 달 없이 이어서 완료·기한 경과 미완료·진행/예정으로 나눈다. 종료일이 없는 Task는 제외. */
+export function monthlyTaskCounts(tasks: Pick<WorkloadTask, "completed" | "dueDate">[], asOf: string, range?: { from: string; to: string }): WorkloadTaskMonth[] {
+  const due = tasks.filter((task): task is typeof task & { dueDate: string } => !!task.dueDate);
+  if (!due.length) return [];
+  const sorted = due.map((task) => task.dueDate.slice(0, 7)).sort();
+  const rows = new Map(monthsBetween(range?.from ?? sorted[0], range?.to ?? sorted[sorted.length - 1]).map((month) => [month, { month, done: 0, overdue: 0, open: 0, total: 0 }]));
+  for (const task of due) {
+    const row = rows.get(task.dueDate.slice(0, 7));
+    if (!row) continue; // 지정 기간 밖의 Task는 그래프에서 뺀다.
+    row[taskStateOf(task, asOf)] += 1;
+    row.total += 1;
+  }
+  return [...rows.values()];
+}
 
 // 산출 지표 — 기준일(asOf)까지 도래한 배치 대비 얼마나 끝냈는가. 공수 데이터가 없어 건수와 계획 영업일 두 가지로 센다.
 export type WorkloadGrade = "A" | "B" | "C" | "D";
